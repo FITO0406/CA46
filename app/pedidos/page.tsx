@@ -1,10 +1,42 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+
 export default function PedidosPage() {
-  const dummyPedidos = [
-    { id: 101, nombre: 'Carmen', pedido: '2kg de Merluza, limpia y en rodajas', estado: 'pendiente' },
-    { id: 102, nombre: 'Jose Luis', pedido: '1kg de Boquerones', estado: 'preparando' },
-  ];
+  const [pedidos, setPedidos] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchPedidos = async () => {
+      const { data } = await supabase
+        .from('pedidos')
+        .select('*')
+        .in('estado', ['pendiente', 'preparando'])
+        .order('creado_en', { ascending: true });
+      if (data) setPedidos(data);
+    };
+
+    fetchPedidos();
+
+    // Suscripción a nuevos pedidos o cambios de estado
+    const channel = supabase
+      .channel('pedidos-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
+        fetchPedidos();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  const actualizarEstado = async (id: number, nuevoEstado: string) => {
+    const { error } = await supabase
+      .from('pedidos')
+      .update({ estado: nuevoEstado })
+      .eq('id', id);
+    
+    if (error) alert('Error: ' + error.message);
+  };
 
   return (
     <div className="min-h-screen bg-slate-900 text-white p-4">
@@ -14,37 +46,52 @@ export default function PedidosPage() {
           <p className="text-slate-500 font-medium">Mostrador Pescadería R. Vicente</p>
         </div>
         <div className="text-right">
-          <div className="text-4xl font-mono font-bold">17:29</div>
-          <div className="text-xs text-slate-500 uppercase tracking-widest">Lunes, 4 de Mayo</div>
+          <div className="text-4xl font-mono font-bold">
+            {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </div>
         </div>
       </header>
 
       <main className="grid gap-4">
-        {dummyPedidos.map((p) => (
-          <div key={p.id} className="bg-slate-800 rounded-3xl p-6 flex flex-col md:flex-row gap-6 items-center border border-slate-700 shadow-xl">
-            <div className="bg-indigo-600/20 text-indigo-400 w-24 h-24 rounded-2xl flex items-center justify-center text-4xl font-black shrink-0">
-              #{p.id}
-            </div>
-            
-            <div className="flex-1 text-center md:text-left">
-              <h2 className="text-2xl font-bold mb-1 text-white">{p.nombre}</h2>
-              <p className="text-xl text-slate-300 leading-tight">{p.pedido}</p>
-            </div>
-
-            <div className="flex gap-3 w-full md:w-auto">
-              {p.estado === 'pendiente' && (
-                <button className="flex-1 md:w-48 py-6 bg-amber-500 text-black font-black text-2xl rounded-2xl hover:bg-amber-400 transition-all uppercase tracking-tighter">
-                  Empezar
-                </button>
-              )}
-              {p.estado === 'preparando' && (
-                <button className="flex-1 md:w-48 py-6 bg-emerald-500 text-white font-black text-2xl rounded-2xl animate-pulse uppercase tracking-tighter">
-                  ¿Listo?
-                </button>
-              )}
-            </div>
+        {pedidos.length === 0 ? (
+          <div className="text-center py-20 text-slate-500 text-2xl italic">
+            No hay pedidos pendientes. ¡A descansar! ☕
           </div>
-        ))}
+        ) : (
+          pedidos.map((p) => (
+            <div key={p.id} className="bg-slate-800 rounded-3xl p-6 flex flex-col md:flex-row gap-6 items-center border border-slate-700 shadow-xl transition-all">
+              <div className={`w-24 h-24 rounded-2xl flex items-center justify-center text-4xl font-black shrink-0 ${
+                p.estado === 'preparando' ? 'bg-amber-500 text-black' : 'bg-indigo-600/20 text-indigo-400'
+              }`}>
+                #{p.id}
+              </div>
+              
+              <div className="flex-1 text-center md:text-left">
+                <h2 className="text-2xl font-bold mb-1 text-white">{p.nombre_cliente}</h2>
+                <p className="text-xl text-slate-300 leading-tight">{p.contenido}</p>
+              </div>
+
+              <div className="flex gap-3 w-full md:w-auto">
+                {p.estado === 'pendiente' && (
+                  <button 
+                    onClick={() => actualizarEstado(p.id, 'preparando')}
+                    className="flex-1 md:w-48 py-6 bg-amber-500 text-black font-black text-2xl rounded-2xl hover:bg-amber-400 transition-all uppercase tracking-tighter"
+                  >
+                    Empezar
+                  </button>
+                )}
+                {p.estado === 'preparando' && (
+                  <button 
+                    onClick={() => actualizarEstado(p.id, 'listo')}
+                    className="flex-1 md:w-48 py-6 bg-emerald-500 text-white font-black text-2xl rounded-2xl animate-pulse uppercase tracking-tighter"
+                  >
+                    ¿Listo?
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
       </main>
     </div>
   );
