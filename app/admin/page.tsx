@@ -40,11 +40,22 @@ export default function AdminPage() {
   const [productos, setProductos] = useState<any[]>([]);
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevoPrecio, setNuevoPrecio] = useState('');
+  const [seccionSeleccionada, setSeccionSeleccionada] = useState('Por kilos');
+  const [otraSeccion, setOtraSeccion] = useState('');
+
+  const SECCIONES_FIJAS = [
+    'Por kilos', 
+    'Frescos', 
+    'Mariscos vivos', 
+    'Elaborados', 
+    'Recién cocidos', 
+    'Congelados'
+  ];
 
   // Cargar productos
   useEffect(() => {
     async function fetchProductos() {
-      const { data } = await supabase.from('productos').select('*').order('nombre');
+      const { data } = await supabase.from('productos').select('*').order('seccion').order('nombre');
       if (data) setProductos(data);
     }
     fetchProductos();
@@ -52,15 +63,24 @@ export default function AdminPage() {
 
   const addProducto = async () => {
     if (!nuevoNombre || !nuevoPrecio) return;
+    
+    const seccionFinal = seccionSeleccionada === 'Otros' ? otraSeccion : seccionSeleccionada;
+    if (!seccionFinal) return alert('Indica una sección');
+
     const { data, error } = await supabase
       .from('productos')
-      .insert([{ nombre: nuevoNombre, precio_kilo: parseFloat(nuevoPrecio) }])
+      .insert([{ 
+        nombre: nuevoNombre, 
+        precio_kilo: parseFloat(nuevoPrecio),
+        seccion: seccionFinal
+      }])
       .select();
     
     if (data) {
       setProductos([...productos, data[0]]);
       setNuevoNombre('');
       setNuevoPrecio('');
+      setOtraSeccion('');
     }
   };
 
@@ -119,7 +139,7 @@ export default function AdminPage() {
         <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 transition-all hover:shadow-md">
           <h2 className="text-2xl font-semibold text-slate-800 mb-6">Catálogo de Pescados</h2>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 bg-slate-50 p-6 rounded-2xl">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 bg-slate-50 p-6 rounded-2xl">
             <input 
               type="text" 
               placeholder="Nombre (ej: Merluza)" 
@@ -134,50 +154,85 @@ export default function AdminPage() {
               onChange={(e) => setNuevoPrecio(e.target.value)}
               className="p-3 rounded-xl border-slate-200"
             />
+            <div className="flex flex-col gap-2">
+              <select 
+                value={seccionSeleccionada}
+                onChange={(e) => setSeccionSeleccionada(e.target.value)}
+                className="p-3 rounded-xl border-slate-200 bg-white"
+              >
+                {SECCIONES_FIJAS.map(s => <option key={s} value={s}>{s}</option>)}
+                <option value="Otros">-- Otros (Nueva sección) --</option>
+              </select>
+              {seccionSeleccionada === 'Otros' && (
+                <input 
+                  type="text" 
+                  placeholder="Escribe la sección..." 
+                  value={otraSeccion}
+                  onChange={(e) => setOtraSeccion(e.target.value)}
+                  className="p-3 rounded-xl border-indigo-300 bg-indigo-50 animate-in fade-in zoom-in duration-200"
+                />
+              )}
+            </div>
             <button 
               onClick={addProducto}
-              className="bg-indigo-600 text-white p-3 rounded-xl font-bold hover:bg-indigo-700"
+              className="bg-indigo-600 text-white p-3 rounded-xl font-bold hover:bg-indigo-700 h-fit self-start"
             >
               + Añadir Producto
             </button>
           </div>
 
-          <div className="grid gap-3">
-            {productos.length === 0 ? (
+          <div className="space-y-8">
+            {Object.entries(
+              productos.reduce((acc: any, p) => {
+                const sec = p.seccion || 'Sin sección';
+                if (!acc[sec]) acc[sec] = [];
+                acc[sec].push(p);
+                return acc;
+              }, {})
+            ).sort(([a], [b]) => {
+              const order = [...SECCIONES_FIJAS, 'Otros'];
+              return order.indexOf(a) - order.indexOf(b);
+            }).map(([seccion, items]: any) => (
+              <div key={seccion} className="space-y-3">
+                <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest px-2">{seccion}</h3>
+                <div className="grid gap-3">
+                  {items.map((p: any) => (
+                    <div key={p.id} className={`flex justify-between items-center p-4 border rounded-2xl transition-all ${p.disponible ? 'bg-white border-slate-100 shadow-sm' : 'bg-slate-50 border-transparent opacity-60'}`}>
+                      <div className="flex items-center gap-4">
+                        <div className={`w-3 h-3 rounded-full ${p.disponible ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                        <div>
+                          <span className={`font-bold ${p.disponible ? 'text-slate-800' : 'text-slate-500 line-through'}`}>{p.nombre}</span>
+                          <span className="ml-4 text-indigo-600 font-mono text-sm">{p.precio_kilo} €/kg</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => toggleProducto(p.id, p.disponible)}
+                          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                            p.disponible 
+                            ? 'bg-rose-100 text-rose-600 hover:bg-rose-200' 
+                            : 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200'
+                          }`}
+                        >
+                          {p.disponible ? 'AGOTAR' : 'ACTIVAR'}
+                        </button>
+                        <button 
+                          onClick={() => deleteProducto(p.id)}
+                          className="p-2 text-slate-300 hover:text-rose-500"
+                        >
+                          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {productos.length === 0 && (
               <div className="p-4 border border-slate-100 rounded-2xl bg-slate-50 text-slate-400 italic text-center">
                 No hay productos en el catálogo.
               </div>
-            ) : (
-              productos.map((p) => (
-                <div key={p.id} className={`flex justify-between items-center p-4 border rounded-2xl transition-all ${p.disponible ? 'bg-white border-slate-100' : 'bg-slate-50 border-transparent opacity-60'}`}>
-                  <div className="flex items-center gap-4">
-                    <div className={`w-3 h-3 rounded-full ${p.disponible ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
-                    <div>
-                      <span className={`font-bold ${p.disponible ? 'text-slate-800' : 'text-slate-500 line-through'}`}>{p.nombre}</span>
-                      <span className="ml-4 text-indigo-600 font-mono">{p.precio_kilo} €/kg</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => toggleProducto(p.id, p.disponible)}
-                      className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                        p.disponible 
-                        ? 'bg-rose-100 text-rose-600 hover:bg-rose-200' 
-                        : 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200'
-                      }`}
-                    >
-                      {p.disponible ? 'AGOTAR' : 'ACTIVAR'}
-                    </button>
-                    <button 
-                      onClick={() => deleteProducto(p.id)}
-                      className="p-2 text-slate-300 hover:text-rose-500"
-                      title="Eliminar permanentemente"
-                    >
-                      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-                    </button>
-                  </div>
-                </div>
-              ))
             )}
           </div>
         </section>

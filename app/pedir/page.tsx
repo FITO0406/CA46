@@ -133,36 +133,55 @@ export default function PedirPage() {
           </button>
         )}
 
-        {/* PASO 3: CATÁLOGO */}
+        {/* PASO 3: CATÁLOGO AGRUPADO */}
         {step === 'ver_lista' && (
-          <div className="space-y-4">
-            <h3 className="font-black text-slate-400 uppercase tracking-widest text-sm px-2">Género Fresco del Día</h3>
-            {productos.map(p => (
-              <div key={p.id} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-xl font-bold">{p.nombre}</span>
-                  {/* Precio oculto para el cliente */}
-                </div>
-                <div className="grid grid-cols-4 gap-2">
-                  {[0.25, 0.5, 1].map(q => (
-                    <button 
-                      key={q}
-                      onClick={() => agregarAlCarrito(p, q)}
-                      className="bg-slate-50 hover:bg-[#075e54] hover:text-white p-2 rounded-xl text-xs font-bold transition-colors"
-                    >
-                      {q === 0.25 ? '1/4' : q === 0.5 ? '1/2' : '1'} kg
-                    </button>
-                  ))}
-                  <button 
-                    onClick={() => {
-                      const cant = prompt('¿Qué cantidad quieres? (ej: 2kg, 3 rodajas...)');
-                      if (cant) agregarAlCarrito(p, cant);
-                    }}
-                    className="bg-slate-100 p-2 rounded-xl text-xs font-bold"
-                  >
-                    Otra...
-                  </button>
-                </div>
+          <div className="space-y-8">
+            {Object.entries(
+              productos.reduce((acc: any, p) => {
+                const sec = p.seccion || 'Por kilos';
+                if (!acc[sec]) acc[sec] = [];
+                acc[sec].push(p);
+                return acc;
+              }, {})
+            ).sort(([a], [b]) => {
+              const order = ['Por kilos', 'Frescos', 'Mariscos vivos', 'Elaborados', 'Recién cocidos', 'Congelados'];
+              const idxA = order.indexOf(a);
+              const idxB = order.indexOf(b);
+              if (idxA === -1) return 1;
+              if (idxB === -1) return -1;
+              return idxA - idxB;
+            }).map(([seccion, items]: any) => (
+              <div key={seccion} className="space-y-4">
+                <h3 className="font-black text-slate-400 uppercase tracking-widest text-xs px-2 border-l-4 border-[#075e54] ml-1">
+                  {seccion}
+                </h3>
+                {items.map((p: any) => (
+                  <div key={p.id} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xl font-bold text-slate-800">{p.nombre}</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[0.25, 0.5, 1].map(q => (
+                        <button 
+                          key={q}
+                          onClick={() => agregarAlCarrito(p, q)}
+                          className="bg-slate-50 hover:bg-[#075e54] hover:text-white p-2 rounded-xl text-xs font-bold transition-colors"
+                        >
+                          {q === 0.25 ? '1/4' : q === 0.5 ? '1/2' : '1'} kg
+                        </button>
+                      ))}
+                      <button 
+                        onClick={() => {
+                          const cant = prompt('¿Qué cantidad quieres? (ej: 2kg, 3 rodajas...)');
+                          if (cant) agregarAlCarrito(p, cant);
+                        }}
+                        className="bg-slate-100 p-2 rounded-xl text-xs font-bold"
+                      >
+                        Otra...
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             ))}
           </div>
