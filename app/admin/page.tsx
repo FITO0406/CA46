@@ -64,7 +64,19 @@ export default function AdminPage() {
     }
   };
 
+  const toggleProducto = async (id: string, currentStatus: boolean) => {
+    const { error } = await supabase
+      .from('productos')
+      .update({ disponible: !currentStatus })
+      .eq('id', id);
+    
+    if (!error) {
+      setProductos(productos.map(p => p.id === id ? { ...p, disponible: !currentStatus } : p));
+    }
+  };
+
   const deleteProducto = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar este producto para siempre?')) return;
     const { error } = await supabase.from('productos').delete().eq('id', id);
     if (!error) {
       setProductos(productos.filter(p => p.id !== id));
@@ -105,12 +117,12 @@ export default function AdminPage() {
 
         {/* Gestión de Productos */}
         <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 transition-all hover:shadow-md">
-          <h2 className="text-2xl font-semibold text-slate-800 mb-6">Base de Datos de Productos</h2>
+          <h2 className="text-2xl font-semibold text-slate-800 mb-6">Catálogo de Pescados</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 bg-slate-50 p-6 rounded-2xl">
             <input 
               type="text" 
-              placeholder="Nombre del pescado" 
+              placeholder="Nombre (ej: Merluza)" 
               value={nuevoNombre}
               onChange={(e) => setNuevoNombre(e.target.value)}
               className="p-3 rounded-xl border-slate-200"
@@ -126,28 +138,44 @@ export default function AdminPage() {
               onClick={addProducto}
               className="bg-indigo-600 text-white p-3 rounded-xl font-bold hover:bg-indigo-700"
             >
-              Añadir al catálogo
+              + Añadir Producto
             </button>
           </div>
 
           <div className="grid gap-3">
             {productos.length === 0 ? (
               <div className="p-4 border border-slate-100 rounded-2xl bg-slate-50 text-slate-400 italic text-center">
-                No hay productos. Añade el primero arriba.
+                No hay productos en el catálogo.
               </div>
             ) : (
               productos.map((p) => (
-                <div key={p.id} className="flex justify-between items-center p-4 bg-white border border-slate-100 rounded-2xl hover:bg-slate-50 transition-colors">
-                  <div>
-                    <span className="font-bold text-slate-800">{p.nombre}</span>
-                    <span className="ml-4 text-indigo-600 font-mono">{p.precio_kilo} €/kg</span>
+                <div key={p.id} className={`flex justify-between items-center p-4 border rounded-2xl transition-all ${p.disponible ? 'bg-white border-slate-100' : 'bg-slate-50 border-transparent opacity-60'}`}>
+                  <div className="flex items-center gap-4">
+                    <div className={`w-3 h-3 rounded-full ${p.disponible ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                    <div>
+                      <span className={`font-bold ${p.disponible ? 'text-slate-800' : 'text-slate-500 line-through'}`}>{p.nombre}</span>
+                      <span className="ml-4 text-indigo-600 font-mono">{p.precio_kilo} €/kg</span>
+                    </div>
                   </div>
-                  <button 
-                    onClick={() => deleteProducto(p.id)}
-                    className="text-rose-400 hover:text-rose-600 p-2"
-                  >
-                    Eliminar
-                  </button>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => toggleProducto(p.id, p.disponible)}
+                      className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                        p.disponible 
+                        ? 'bg-rose-100 text-rose-600 hover:bg-rose-200' 
+                        : 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200'
+                      }`}
+                    >
+                      {p.disponible ? 'AGOTAR' : 'ACTIVAR'}
+                    </button>
+                    <button 
+                      onClick={() => deleteProducto(p.id)}
+                      className="p-2 text-slate-300 hover:text-rose-500"
+                      title="Eliminar permanentemente"
+                    >
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                    </button>
+                  </div>
                 </div>
               ))
             )}

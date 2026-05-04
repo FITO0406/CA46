@@ -27,14 +27,25 @@ export default function PedirPage() {
     fetchProductos();
 
     // Suscribirse a cambios en tiempo real en la configuración
-    const channel = supabase
+    const configChannel = supabase
       .channel('config-changes')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'configuracion' }, (payload) => {
         setTiendaAbierta(payload.new.tienda_abierta);
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    // Suscribirse a cambios en el catálogo de productos
+    const productsChannel = supabase
+      .channel('products-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'productos' }, () => {
+        fetchProductos();
+      })
+      .subscribe();
+
+    return () => { 
+      supabase.removeChannel(configChannel);
+      supabase.removeChannel(productsChannel);
+    };
   }, []);
 
   const enviarPedido = async () => {
