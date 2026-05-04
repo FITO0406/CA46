@@ -3,184 +3,208 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
+type Step = 'inicio' | 'ver_lista' | 'pedido';
+
 export default function PedirPage() {
+  const [step, setStep] = useState<Step>('inicio');
   const [nombre, setNombre] = useState('');
-  const [pedido, setPedido] = useState('');
   const [tiendaAbierta, setTiendaAbierta] = useState(false);
   const [productos, setProductos] = useState<any[]>([]);
-  const [tipoEntrega, setTipoEntrega] = useState<'recoger' | 'domicilio'>('recoger');
+  const [tipoEntrega, setTipoEntrega] = useState<'recoger' | 'domicilio' | null>(null);
   const [direccion, setDireccion] = useState('');
+  const [carrito, setCarrito] = useState<any[]>([]);
   const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
-    // ... (logic remains same, just ensuring we have the right states)
-    // Escuchar estado de la tienda
     const fetchTienda = async () => {
       const { data } = await supabase.from('configuracion').select('tienda_abierta').eq('id', 1).single();
       if (data) setTiendaAbierta(data.tienda_abierta);
     };
-
-    // Escuchar catálogo de productos
     const fetchProductos = async () => {
       const { data } = await supabase.from('productos').select('*').eq('disponible', true);
       if (data) setProductos(data);
     };
-
     fetchTienda();
     fetchProductos();
 
-    // Suscribirse a cambios en tiempo real en la configuración
-    const configChannel = supabase
-      .channel('config-changes')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'configuracion' }, (payload) => {
-        setTiendaAbierta(payload.new.tienda_abierta);
-      })
-      .subscribe();
+    const configChannel = supabase.channel('config-changes').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'configuracion' }, (payload) => {
+      setTiendaAbierta(payload.new.tienda_abierta);
+    }).subscribe();
 
-    // Suscribirse a cambios en el catálogo de productos
-    const productsChannel = supabase
-      .channel('products-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'productos' }, () => {
-        fetchProductos();
-      })
-      .subscribe();
-
-    return () => { 
-      supabase.removeChannel(configChannel);
-      supabase.removeChannel(productsChannel);
-    };
+    return () => { supabase.removeChannel(configChannel); };
   }, []);
 
-  const enviarPedido = async () => {
-    if (!nombre || !pedido || !tiendaAbierta) return;
-    if (tipoEntrega === 'domicilio' && !direccion) {
-      alert('Por favor, indica tu dirección para el envío.');
-      return;
-    }
+  const totalCarrito = carrito.reduce((acc, item) => acc + (item.precio_kilo * item.cantidad), 0);
+  const faltaParaMinimo = tipoEntrega === 'domicilio' ? Math.max(0, 30 - totalCarrito) : 0;
+  const puedePedir = tipoEntrega === 'recoger' || (tipoEntrega === 'domicilio' && totalCarrito >= 30 && direccion);
 
+  const agregarAlCarrito = (producto: any, cantidad: number | string) => {
+    const cantNum = typeof cantidad === 'string' ? 1 : cantidad; // Si es 'otra', ponemos 1 de base
+    setCarrito([...carrito, { ...producto, cantidad: cantNum, cantidadTexto: typeof cantidad === 'string' ? '' : `${cantidad}kg` }]);
+  };
+
+  const enviarPedido = async () => {
+    if (!puedePedir || !nombre) return;
     setEnviando(true);
+    
+    const contenidoTexto = carrito.map(item => `${item.nombre} (${item.cantidadTexto || item.cantidad + 'kg'})`).join(', ');
+    
     const { error } = await supabase
       .from('pedidos')
       .insert([{ 
         nombre_cliente: nombre, 
-        contenido: pedido, 
+        contenido: contenidoTexto, 
         estado: 'pendiente',
         tipo_entrega: tipoEntrega,
         direccion: tipoEntrega === 'domicilio' ? direccion : null
       }]);
     
     if (!error) {
-      alert('¡Pedido enviado con éxito! Estate atento a la pantalla.');
-      setPedido('');
-      setDireccion('');
-    } else {
-      alert('Error al enviar: ' + error.message);
+      alert('¡Pedido enviado con éxito!');
+      window.location.reload();
     }
     setEnviando(false);
   };
 
+  if (!tiendaAbierta) {
+    return (
+      <div className="min-h-screen bg-[#ece5dd] flex items-center justify-center p-6 text-center">
+        <div className="bg-white p-8 rounded-3xl shadow-xl max-w-sm">
+          <div className="text-6xl mb-4">🏠</div>
+          <h1 className="text-2xl font-bold text-slate-800 mb-2">Pescadería Cerrada</h1>
+          <p className="text-slate-500">Lo sentimos, Fito está ahora mismo fuera del mostrador. Vuelve más tarde.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#ece5dd] flex flex-col text-slate-900">
-      {/* Header tipo WhatsApp */}
-      <header className={`p-4 flex items-center gap-4 text-white shadow-md transition-colors ${tiendaAbierta ? 'bg-[#075e54]' : 'bg-slate-600'}`}>
-        <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center font-bold text-xl uppercase">
-          {nombre ? nombre[0] : 'PV'}
-        </div>
-        <div>
-          <h1 className="font-bold text-lg leading-tight">Pescadería R. Vicente</h1>
-          <p className="text-xs opacity-80 flex items-center gap-1">
-            <span className={`w-2 h-2 rounded-full ${tiendaAbierta ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`}></span>
-            {tiendaAbierta ? 'En línea (Tienda Abierta)' : 'Cerrado (No se reciben pedidos)'}
-          </p>
-        </div>
+    <div className="min-h-screen bg-[#ece5dd] flex flex-col text-slate-900 pb-20">
+      <header className="bg-[#075e54] p-4 text-white shadow-lg sticky top-0 z-50">
+        <h1 className="font-bold text-xl">Pescadería R. Vicente</h1>
+        <p className="text-xs opacity-80">Asistente de Pedidos Realtime</p>
       </header>
 
-      {/* Cuerpo del Chat / Catálogo */}
-      <main className="flex-1 p-4 space-y-4 overflow-y-auto">
-        <div className="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm max-w-[90%] text-slate-800">
-          <p className="text-sm">¡Hola! {tiendaAbierta ? 'Hoy tenemos género fresco. ¿Qué te preparo?' : 'Lo siento, ahora mismo estamos cerrados.'} 👋</p>
-        </div>
+      <main className="flex-1 p-4 max-w-xl mx-auto w-full space-y-6">
+        {/* PASO 1: NOMBRE Y TIPO */}
+        <section className="bg-white p-6 rounded-3xl shadow-sm space-y-4">
+          <h2 className="text-lg font-bold">¿Qué quieres hoy? 👋</h2>
+          <input 
+            type="text" 
+            placeholder="Escribe tu nombre..." 
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            className="w-full p-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-[#075e54]"
+          />
+          
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setTipoEntrega('recoger')}
+              className={`flex-1 p-4 rounded-2xl font-bold transition-all ${tipoEntrega === 'recoger' ? 'bg-[#075e54] text-white' : 'bg-slate-100 text-slate-500'}`}
+            >
+              Recogida
+            </button>
+            <button 
+              onClick={() => setTipoEntrega('domicilio')}
+              className={`flex-1 p-4 rounded-2xl font-bold transition-all ${tipoEntrega === 'domicilio' ? 'bg-[#075e54] text-white' : 'bg-slate-100 text-slate-500'}`}
+            >
+              A domicilio
+            </button>
+          </div>
 
-        {tiendaAbierta && productos.length > 0 && (
-          <div className="grid grid-cols-2 gap-2 mt-4">
+          {tipoEntrega === 'domicilio' && (
+            <input 
+              type="text" 
+              placeholder="Dirección completa..." 
+              value={direccion}
+              onChange={(e) => setDireccion(e.target.value)}
+              className="w-full p-4 bg-rose-50 rounded-2xl border-none focus:ring-2 focus:ring-rose-500"
+            />
+          )}
+        </section>
+
+        {/* PASO 2: VER LISTA */}
+        {tipoEntrega && nombre && step === 'inicio' && (
+          <button 
+            onClick={() => setStep('ver_lista')}
+            className="w-full bg-indigo-600 text-white p-6 rounded-3xl font-black text-xl shadow-xl animate-bounce"
+          >
+            ¿QUIERES LA LISTA DE HOY? 🐟
+          </button>
+        )}
+
+        {/* PASO 3: CATÁLOGO */}
+        {step === 'ver_lista' && (
+          <div className="space-y-4">
+            <h3 className="font-black text-slate-400 uppercase tracking-widest text-sm px-2">Género Fresco del Día</h3>
             {productos.map(p => (
-              <button 
-                key={p.id}
-                onClick={() => setPedido(prev => prev + (prev ? ', ' : '') + p.nombre)}
-                className="bg-white p-3 rounded-xl border border-slate-200 text-left shadow-sm hover:border-emerald-500 transition-colors"
-              >
-                <p className="font-bold text-sm">{p.nombre}</p>
-                <p className="text-xs text-emerald-600">{p.precio_kilo} €/kg</p>
-              </button>
+              <div key={p.id} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-xl font-bold">{p.nombre}</span>
+                  <span className="text-[#075e54] font-mono font-bold">{p.precio_kilo}€/kg</span>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {[0.25, 0.5, 1].map(q => (
+                    <button 
+                      key={q}
+                      onClick={() => agregarAlCarrito(p, q)}
+                      className="bg-slate-50 hover:bg-[#075e54] hover:text-white p-2 rounded-xl text-xs font-bold transition-colors"
+                    >
+                      {q === 0.25 ? '1/4' : q === 0.5 ? '1/2' : '1'} kg
+                    </button>
+                  ))}
+                  <button 
+                    onClick={() => {
+                      const cant = prompt('¿Qué cantidad quieres? (ej: 2kg, 3 rodajas...)');
+                      if (cant) agregarAlCarrito(p, cant);
+                    }}
+                    className="bg-slate-100 p-2 rounded-xl text-xs font-bold"
+                  >
+                    Otra...
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         )}
 
-        {/* Selector de Entrega */}
-        {tiendaAbierta && (
-          <div className="bg-white p-4 rounded-2xl shadow-sm space-y-3">
-            <p className="text-xs font-bold text-slate-400 uppercase">¿Cómo quieres recibirlo?</p>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => setTipoEntrega('recoger')}
-                className={`flex-1 py-3 rounded-xl font-bold transition-all ${tipoEntrega === 'recoger' ? 'bg-[#075e54] text-white' : 'bg-slate-100 text-slate-500'}`}
-              >
-                Recoger
-              </button>
-              <button 
-                onClick={() => setTipoEntrega('domicilio')}
-                className={`flex-1 py-3 rounded-xl font-bold transition-all ${tipoEntrega === 'domicilio' ? 'bg-[#075e54] text-white' : 'bg-slate-100 text-slate-500'}`}
-              >
-                A domicilio
-              </button>
+        {/* CARRITO Y TOTAL */}
+        {carrito.length > 0 && (
+          <section className="bg-white p-6 rounded-3xl shadow-xl border-2 border-[#075e54] space-y-4">
+            <h2 className="font-bold text-lg border-b pb-2">Tu Pedido:</h2>
+            <div className="space-y-2">
+              {carrito.map((item, i) => (
+                <div key={i} className="flex justify-between text-sm">
+                  <span>{item.nombre} ({item.cantidadTexto || item.cantidad + 'kg'})</span>
+                  <span className="font-bold">{(item.precio_kilo * item.cantidad).toFixed(2)}€</span>
+                </div>
+              ))}
             </div>
-            
-            {tipoEntrega === 'domicilio' && (
-              <input 
-                type="text" 
-                placeholder="Indica tu dirección completa" 
-                value={direccion}
-                onChange={(e) => setDireccion(e.target.value)}
-                className="w-full p-3 bg-slate-50 rounded-xl border-none focus:ring-1 focus:ring-emerald-500 text-sm"
-              />
+            <div className="pt-4 border-t flex justify-between items-center">
+              <span className="text-2xl font-black uppercase">Total:</span>
+              <span className="text-3xl font-black text-[#075e54]">{totalCarrito.toFixed(2)}€</span>
+            </div>
+
+            {tipoEntrega === 'domicilio' && faltaParaMinimo > 0 && (
+              <div className="bg-rose-50 p-4 rounded-2xl text-rose-600 text-center font-bold">
+                ¡Faltan {faltaParaMinimo.toFixed(2)}€ para llegar al mínimo de 30€!
+              </div>
             )}
-          </div>
+          </section>
         )}
       </main>
 
-      {/* Input de Pedido */}
-      <footer className="p-4 bg-[#f0f2f5] border-t border-slate-200">
-        <div className="max-w-4xl mx-auto space-y-3">
-          <input 
-            type="text" 
-            placeholder="¿Cómo te llamas?" 
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            disabled={!tiendaAbierta}
-            className="w-full p-4 rounded-xl border-none focus:ring-2 focus:ring-[#075e54] text-slate-800 shadow-sm disabled:opacity-50"
-          />
-          <div className="flex gap-2">
-            <textarea 
-              placeholder={tiendaAbierta ? "Escribe tu pedido aquí..." : "Tienda cerrada actualmente"}
-              value={pedido}
-              onChange={(e) => setPedido(e.target.value)}
-              disabled={!tiendaAbierta}
-              className="flex-1 p-4 rounded-xl border-none focus:ring-2 focus:ring-[#075e54] text-slate-800 shadow-sm resize-none disabled:opacity-50"
-              rows={2}
-            />
-            <button 
-              onClick={enviarPedido}
-              disabled={!tiendaAbierta || !nombre || !pedido || enviando}
-              className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all shrink-0 ${
-                tiendaAbierta && nombre && pedido ? 'bg-[#075e54] text-white hover:bg-[#054d44]' : 'bg-slate-300 text-slate-500'
-              }`}
-            >
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                <path d="M1.101 21.757L23.8 12.028 1.101 2.3l.011 7.912 13.623 1.816-13.623 1.817-.011 7.912z" />
-              </svg>
-            </button>
-          </div>
-        </div>
+      {/* BOTÓN FINAL FIJO */}
+      <footer className="fixed bottom-0 left-0 w-full p-4 bg-white/80 backdrop-blur-md border-t border-slate-200 z-[100]">
+        <button 
+          onClick={enviarPedido}
+          disabled={!puedePedir || enviando}
+          className={`w-full p-5 rounded-2xl font-black text-2xl uppercase tracking-tighter shadow-2xl transition-all ${
+            puedePedir ? 'bg-[#075e54] text-white' : 'bg-slate-300 text-slate-500 opacity-50'
+          }`}
+        >
+          {enviando ? 'Enviando...' : 'REALIZAR PEDIDO'}
+        </button>
       </footer>
     </div>
   );
