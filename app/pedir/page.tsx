@@ -141,7 +141,7 @@ export default function PedirPage() {
               <div key={p.id} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-xl font-bold">{p.nombre}</span>
-                  <span className="text-[#075e54] font-mono font-bold">{p.precio_kilo}€/kg</span>
+                  {/* Precio oculto para el cliente */}
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   {[0.25, 0.5, 1].map(q => (
@@ -168,28 +168,33 @@ export default function PedirPage() {
           </div>
         )}
 
-        {/* CARRITO Y TOTAL */}
+        {/* CARRITO Y TOTAL (SIN PRECIOS VISIBLES) */}
         {carrito.length > 0 && (
           <section className="bg-white p-6 rounded-3xl shadow-xl border-2 border-[#075e54] space-y-4">
-            <h2 className="font-bold text-lg border-b pb-2">Tu Pedido:</h2>
+            <h2 className="font-bold text-lg border-b pb-2">Tu Lista de Compra:</h2>
             <div className="space-y-2">
               {carrito.map((item, i) => (
                 <div key={i} className="flex justify-between text-sm">
-                  <span>{item.nombre} ({item.cantidadTexto || item.cantidad + 'kg'})</span>
-                  <span className="font-bold">{(item.precio_kilo * item.cantidad).toFixed(2)}€</span>
+                  <span className="font-medium text-slate-700">
+                    • {item.nombre} <span className="text-slate-400">({item.cantidadTexto || item.cantidad + 'kg'})</span>
+                  </span>
                 </div>
               ))}
             </div>
-            <div className="pt-4 border-t flex justify-between items-center">
-              <span className="text-2xl font-black uppercase">Total:</span>
-              <span className="text-3xl font-black text-[#075e54]">{totalCarrito.toFixed(2)}€</span>
-            </div>
 
-            {tipoEntrega === 'domicilio' && faltaParaMinimo > 0 && (
-              <div className="bg-rose-50 p-4 rounded-2xl text-rose-600 text-center font-bold">
-                ¡Faltan {faltaParaMinimo.toFixed(2)}€ para llegar al mínimo de 30€!
+            {tipoEntrega === 'domicilio' && faltaParaMinimo > 0 ? (
+              <div className="bg-rose-50 p-4 rounded-2xl text-rose-600 text-center font-bold text-sm">
+                Añade algo más para llegar al pedido mínimo de envío.
               </div>
-            )}
+            ) : tipoEntrega === 'domicilio' ? (
+              <div className="bg-emerald-50 p-4 rounded-2xl text-emerald-600 text-center font-bold text-sm">
+                ✅ Pedido mínimo alcanzado
+              </div>
+            ) : null}
+            
+            <p className="text-[10px] text-slate-400 italic text-center">
+              * El peso y precio final se confirmarán en el mostrador tras el pesaje exacto.
+            </p>
           </section>
         )}
       </main>
