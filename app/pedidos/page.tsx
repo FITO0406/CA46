@@ -39,73 +39,104 @@ export default function PedidosPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-4">
-      <header className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+      <header className="bg-slate-900 p-6 flex justify-between items-center border-b border-slate-800 shadow-xl">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-indigo-400">PEDIDOS EN COLA</h1>
-          <p className="text-slate-500 font-medium">Mostrador Pescadería R. Vicente</p>
+          <h1 className="text-4xl font-black tracking-tighter text-indigo-400 uppercase italic">Gestión de Pedidos</h1>
+          <p className="text-slate-500 font-bold">Pescadería R. Vicente - Panel Realtime</p>
         </div>
         <div className="text-right">
-          <div className="text-4xl font-mono font-bold">
+          <div className="text-5xl font-mono font-black text-white leading-none">
             {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </div>
         </div>
       </header>
 
-      <main className="grid gap-4">
-        {pedidos.length === 0 ? (
-          <div className="text-center py-20 text-slate-500 text-2xl italic">
-            No hay pedidos pendientes. ¡A descansar! ☕
+      <main className="flex-1 flex overflow-hidden">
+        {/* COLUMNA DOMICILIO (PRIORIDAD) */}
+        <section className="flex-1 border-r border-slate-800 flex flex-col bg-slate-900/30">
+          <div className="p-6 bg-rose-600/10 border-b border-rose-500/30 flex justify-between items-center">
+            <h2 className="text-2xl font-black text-rose-500 uppercase tracking-widest flex items-center gap-3">
+              <span className="w-4 h-4 bg-rose-500 rounded-full animate-ping"></span>
+              A Domicilio (Prioridad)
+            </h2>
+            <span className="bg-rose-500 text-white px-4 py-1 rounded-full font-black text-xl">
+              {pedidos.filter(p => p.tipo_entrega === 'domicilio').length}
+            </span>
           </div>
-        ) : (
-          pedidos.map((p) => (
-            <div key={p.id} className="bg-slate-800 rounded-3xl p-6 flex flex-col md:flex-row gap-6 items-center border border-slate-700 shadow-xl transition-all">
-              <div className={`w-24 h-24 rounded-2xl flex items-center justify-center text-4xl font-black shrink-0 ${
-                p.estado === 'preparando' ? 'bg-amber-500 text-black' : 'bg-indigo-600/20 text-indigo-400'
-              }`}>
-                #{p.id}
-              </div>
-              
-              <div className="flex-1 text-center md:text-left">
-                <div className="flex items-center gap-2 mb-1 justify-center md:justify-start">
-                  <h2 className="text-2xl font-bold text-white">{p.nombre_cliente}</h2>
-                  {p.tipo_entrega === 'domicilio' && (
-                    <span className="bg-rose-500 text-white text-xs px-2 py-1 rounded-lg font-black uppercase animate-pulse">
-                      ¡DOMICILIO!
-                    </span>
-                  )}
-                </div>
-                <p className="text-xl text-slate-300 leading-tight mb-2">{p.contenido}</p>
-                {p.tipo_entrega === 'domicilio' && (
-                  <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
-                    <p className="text-sm text-slate-500 uppercase font-bold tracking-widest mb-1">Dirección de entrega:</p>
-                    <p className="text-lg text-amber-400 font-bold">{p.direccion}</p>
-                  </div>
-                )}
-              </div>
+          
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {pedidos.filter(p => p.tipo_entrega === 'domicilio').map((p) => (
+              <OrderCard key={p.id} pedido={p} onUpdate={actualizarEstado} />
+            ))}
+            {pedidos.filter(p => p.tipo_entrega === 'domicilio').length === 0 && (
+              <p className="text-center py-20 text-slate-700 italic text-xl">Sin repartos pendientes</p>
+            )}
+          </div>
+        </section>
 
-              <div className="flex gap-3 w-full md:w-auto">
-                {p.estado === 'pendiente' && (
-                  <button 
-                    onClick={() => actualizarEstado(p.id, 'preparando')}
-                    className="flex-1 md:w-48 py-6 bg-amber-500 text-black font-black text-2xl rounded-2xl hover:bg-amber-400 transition-all uppercase tracking-tighter"
-                  >
-                    Empezar
-                  </button>
-                )}
-                {p.estado === 'preparando' && (
-                  <button 
-                    onClick={() => actualizarEstado(p.id, 'listo')}
-                    className="flex-1 md:w-48 py-6 bg-emerald-500 text-white font-black text-2xl rounded-2xl animate-pulse uppercase tracking-tighter"
-                  >
-                    ¿Listo?
-                  </button>
-                )}
-              </div>
-            </div>
-          ))
-        )}
+        {/* COLUMNA RECOGIDA */}
+        <section className="flex-1 flex flex-col">
+          <div className="p-6 bg-indigo-600/10 border-b border-indigo-500/30 flex justify-between items-center">
+            <h2 className="text-2xl font-black text-indigo-400 uppercase tracking-widest">Recoger en Tienda</h2>
+            <span className="bg-indigo-500 text-white px-4 py-1 rounded-full font-black text-xl">
+              {pedidos.filter(p => p.tipo_entrega !== 'domicilio').length}
+            </span>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {pedidos.filter(p => p.tipo_entrega !== 'domicilio').map((p) => (
+              <OrderCard key={p.id} pedido={p} onUpdate={actualizarEstado} />
+            ))}
+            {pedidos.filter(p => p.tipo_entrega !== 'domicilio').length === 0 && (
+              <p className="text-center py-20 text-slate-700 italic text-xl">Sin recogidas pendientes</p>
+            )}
+          </div>
+        </section>
       </main>
+    </div>
+  );
+}
+
+function OrderCard({ pedido, onUpdate }: { pedido: any, onUpdate: any }) {
+  return (
+    <div className={`rounded-3xl p-6 flex flex-col gap-4 border shadow-2xl transition-all ${
+      pedido.estado === 'preparando' 
+      ? 'bg-amber-500/10 border-amber-500/50' 
+      : 'bg-slate-800/50 border-slate-700'
+    }`}>
+      <div className="flex justify-between items-start">
+        <div>
+          <h3 className="text-3xl font-black text-white leading-tight uppercase">{pedido.nombre_cliente}</h3>
+          <p className="text-xl text-slate-300 font-medium mt-1">{pedido.contenido}</p>
+        </div>
+        <div className="text-2xl font-black text-slate-500">#{pedido.id}</div>
+      </div>
+
+      {pedido.tipo_entrega === 'domicilio' && (
+        <div className="bg-rose-500 p-4 rounded-2xl border-2 border-rose-400 shadow-lg">
+          <p className="text-xs font-black text-rose-100 uppercase tracking-widest mb-1">Dirección de Entrega:</p>
+          <p className="text-xl font-bold text-white leading-tight">{pedido.direccion}</p>
+        </div>
+      )}
+
+      <div className="flex gap-2 pt-2">
+        {pedido.estado === 'pendiente' ? (
+          <button 
+            onClick={() => onUpdate(pedido.id, 'preparando')}
+            className="flex-1 py-5 bg-amber-500 text-black font-black text-2xl rounded-2xl hover:bg-amber-400 uppercase tracking-tighter shadow-lg shadow-amber-900/20"
+          >
+            Empezar
+          </button>
+        ) : (
+          <button 
+            onClick={() => onUpdate(pedido.id, 'listo')}
+            className="flex-1 py-5 bg-emerald-500 text-white font-black text-2xl rounded-2xl animate-pulse uppercase tracking-tighter shadow-lg shadow-emerald-900/20"
+          >
+            ¿Listo?
+          </button>
+        )}
+      </div>
     </div>
   );
 }
