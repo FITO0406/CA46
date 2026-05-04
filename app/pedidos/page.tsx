@@ -67,8 +67,21 @@ export default function PedidosPage() {
               </div>
               
               <div className="flex-1 text-center md:text-left">
-                <h2 className="text-2xl font-bold mb-1 text-white">{p.nombre_cliente}</h2>
-                <p className="text-xl text-slate-300 leading-tight">{p.contenido}</p>
+                <div className="flex items-center gap-2 mb-1 justify-center md:justify-start">
+                  <h2 className="text-2xl font-bold text-white">{p.nombre_cliente}</h2>
+                  {p.tipo_entrega === 'domicilio' && (
+                    <span className="bg-rose-500 text-white text-xs px-2 py-1 rounded-lg font-black uppercase animate-pulse">
+                      ¡DOMICILIO!
+                    </span>
+                  )}
+                </div>
+                <p className="text-xl text-slate-300 leading-tight mb-2">{p.contenido}</p>
+                {p.tipo_entrega === 'domicilio' && (
+                  <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
+                    <p className="text-sm text-slate-500 uppercase font-bold tracking-widest mb-1">Dirección de entrega:</p>
+                    <p className="text-lg text-amber-400 font-bold">{p.direccion}</p>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3 w-full md:w-auto">

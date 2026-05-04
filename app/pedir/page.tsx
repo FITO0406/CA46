@@ -8,9 +8,12 @@ export default function PedirPage() {
   const [pedido, setPedido] = useState('');
   const [tiendaAbierta, setTiendaAbierta] = useState(false);
   const [productos, setProductos] = useState<any[]>([]);
+  const [tipoEntrega, setTipoEntrega] = useState<'recoger' | 'domicilio'>('recoger');
+  const [direccion, setDireccion] = useState('');
   const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
+    // ... (logic remains same, just ensuring we have the right states)
     // Escuchar estado de la tienda
     const fetchTienda = async () => {
       const { data } = await supabase.from('configuracion').select('tienda_abierta').eq('id', 1).single();
@@ -50,14 +53,26 @@ export default function PedirPage() {
 
   const enviarPedido = async () => {
     if (!nombre || !pedido || !tiendaAbierta) return;
+    if (tipoEntrega === 'domicilio' && !direccion) {
+      alert('Por favor, indica tu dirección para el envío.');
+      return;
+    }
+
     setEnviando(true);
     const { error } = await supabase
       .from('pedidos')
-      .insert([{ nombre_cliente: nombre, contenido: pedido, estado: 'pendiente' }]);
+      .insert([{ 
+        nombre_cliente: nombre, 
+        contenido: pedido, 
+        estado: 'pendiente',
+        tipo_entrega: tipoEntrega,
+        direccion: tipoEntrega === 'domicilio' ? direccion : null
+      }]);
     
     if (!error) {
       alert('¡Pedido enviado con éxito! Estate atento a la pantalla.');
       setPedido('');
+      setDireccion('');
     } else {
       alert('Error al enviar: ' + error.message);
     }
@@ -98,6 +113,37 @@ export default function PedirPage() {
                 <p className="text-xs text-emerald-600">{p.precio_kilo} €/kg</p>
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Selector de Entrega */}
+        {tiendaAbierta && (
+          <div className="bg-white p-4 rounded-2xl shadow-sm space-y-3">
+            <p className="text-xs font-bold text-slate-400 uppercase">¿Cómo quieres recibirlo?</p>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setTipoEntrega('recoger')}
+                className={`flex-1 py-3 rounded-xl font-bold transition-all ${tipoEntrega === 'recoger' ? 'bg-[#075e54] text-white' : 'bg-slate-100 text-slate-500'}`}
+              >
+                Recoger
+              </button>
+              <button 
+                onClick={() => setTipoEntrega('domicilio')}
+                className={`flex-1 py-3 rounded-xl font-bold transition-all ${tipoEntrega === 'domicilio' ? 'bg-[#075e54] text-white' : 'bg-slate-100 text-slate-500'}`}
+              >
+                A domicilio
+              </button>
+            </div>
+            
+            {tipoEntrega === 'domicilio' && (
+              <input 
+                type="text" 
+                placeholder="Indica tu dirección completa" 
+                value={direccion}
+                onChange={(e) => setDireccion(e.target.value)}
+                className="w-full p-3 bg-slate-50 rounded-xl border-none focus:ring-1 focus:ring-emerald-500 text-sm"
+              />
+            )}
           </div>
         )}
       </main>
