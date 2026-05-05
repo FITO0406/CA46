@@ -14,6 +14,7 @@ export default function PedirPage() {
   const [direccion, setDireccion] = useState('');
   const [carrito, setCarrito] = useState<any[]>([]);
   const [enviando, setEnviando] = useState(false);
+  const [tempPrep, setTempPrep] = useState<{[key: string]: string}>({});
 
   useEffect(() => {
     const fetchTienda = async () => {
@@ -38,13 +39,13 @@ export default function PedirPage() {
   const faltaParaMinimo = tipoEntrega === 'domicilio' ? Math.max(0, 30 - totalCarrito) : 0;
   const puedePedir = tipoEntrega === 'recoger' || (tipoEntrega === 'domicilio' && totalCarrito >= 30 && direccion);
 
-  const agregarAlCarrito = (producto: any, cantidad: number | string) => {
+  const agregarAlCarrito = (producto: any, cantidad: number | string, instruccion?: string) => {
     const cantNum = typeof cantidad === 'string' ? 1 : cantidad; // Si es 'otra', ponemos 1 de base
     setCarrito([...carrito, { 
       ...producto, 
       cantidad: cantNum, 
       cantidadTexto: typeof cantidad === 'string' ? '' : `${cantidad}kg`,
-      preparacion: '' 
+      preparacion: instruccion || '' 
     }]);
   };
 
@@ -172,7 +173,10 @@ export default function PedirPage() {
                       {[0.25, 0.5, 1].map(q => (
                         <button 
                           key={q}
-                          onClick={() => agregarAlCarrito(p, q)}
+                          onClick={() => {
+                            agregarAlCarrito(p, q, tempPrep[p.id]);
+                            setTempPrep({...tempPrep, [p.id]: ''});
+                          }}
                           className="bg-slate-50 hover:bg-[#075e54] hover:text-white p-2 rounded-xl text-xs font-bold transition-colors"
                         >
                           {q === 0.25 ? '1/4' : q === 0.5 ? '1/2' : '1'} kg
@@ -181,13 +185,29 @@ export default function PedirPage() {
                       <button 
                         onClick={() => {
                           const cant = prompt('¿Qué cantidad quieres? (ej: 2kg, 3 rodajas...)');
-                          if (cant) agregarAlCarrito(p, cant);
+                          if (cant) {
+                            agregarAlCarrito(p, cant, tempPrep[p.id]);
+                            setTempPrep({...tempPrep, [p.id]: ''});
+                          }
                         }}
                         className="bg-slate-100 p-2 rounded-xl text-xs font-bold"
                       >
                         Otra...
                       </button>
                     </div>
+
+                    {p.permite_preparacion && (
+                      <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-300">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-tighter ml-1 mb-1 block">¿Cómo lo quieres?</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ej: Limpio, rodajas, filetes..." 
+                          value={tempPrep[p.id] || ''}
+                          onChange={(e) => setTempPrep({...tempPrep, [p.id]: e.target.value})}
+                          className="w-full p-3 bg-slate-50 rounded-2xl text-xs border-none focus:ring-2 focus:ring-[#075e54] placeholder:text-slate-300"
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -201,29 +221,23 @@ export default function PedirPage() {
             <h2 className="font-bold text-lg border-b pb-2">Tu Lista de Compra:</h2>
             <div className="space-y-4">
               {carrito.map((item, i) => (
-                <div key={i} className="space-y-2 pb-3 border-b border-slate-50 last:border-0">
-                  <div className="flex justify-between items-center">
+                <div key={i} className="flex justify-between items-center py-2 border-b border-slate-50 last:border-0">
+                  <div className="flex flex-col">
                     <span className="font-bold text-slate-800">
                       • {item.nombre} <span className="text-slate-400 font-normal">({item.cantidadTexto || item.cantidad + 'kg'})</span>
                     </span>
-                    <button 
-                      onClick={() => setCarrito(carrito.filter((_, idx) => idx !== i))}
-                      className="text-rose-500 text-xs font-bold p-1"
-                    >
-                      Quitar
-                    </button>
+                    {item.preparacion && (
+                      <span className="text-[10px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full w-fit mt-1 font-bold">
+                        {item.preparacion}
+                      </span>
+                    )}
                   </div>
-                  <input 
-                    type="text" 
-                    placeholder="¿Cómo lo preparamos? (ej: limpio, rodajas...)" 
-                    value={item.preparacion}
-                    onChange={(e) => {
-                      const nuevoCarrito = [...carrito];
-                      nuevoCarrito[i].preparacion = e.target.value;
-                      setCarrito(nuevoCarrito);
-                    }}
-                    className="w-full p-3 bg-slate-50 rounded-2xl text-sm border-none focus:ring-2 focus:ring-[#075e54] placeholder:text-slate-300"
-                  />
+                  <button 
+                    onClick={() => setCarrito(carrito.filter((_, idx) => idx !== i))}
+                    className="text-rose-500 text-xs font-bold p-1"
+                  >
+                    Quitar
+                  </button>
                 </div>
               ))}
             </div>

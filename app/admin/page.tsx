@@ -42,6 +42,7 @@ export default function AdminPage() {
   const [nuevoPrecio, setNuevoPrecio] = useState('');
   const [seccionSeleccionada, setSeccionSeleccionada] = useState('Por kilos');
   const [otraSeccion, setOtraSeccion] = useState('');
+  const [permitePreparacion, setPermitePreparacion] = useState(true);
 
   const SECCIONES_FIJAS = [
     'Por kilos', 
@@ -72,7 +73,8 @@ export default function AdminPage() {
       .insert([{ 
         nombre: nuevoNombre, 
         precio_kilo: parseFloat(nuevoPrecio),
-        seccion: seccionFinal
+        seccion: seccionFinal,
+        permite_preparacion: permitePreparacion
       }])
       .select();
     
@@ -81,6 +83,18 @@ export default function AdminPage() {
       setNuevoNombre('');
       setNuevoPrecio('');
       setOtraSeccion('');
+      setPermitePreparacion(true);
+    }
+  };
+
+  const togglePreparacion = async (id: string, currentStatus: boolean) => {
+    const { error } = await supabase
+      .from('productos')
+      .update({ permite_preparacion: !currentStatus })
+      .eq('id', id);
+    
+    if (!error) {
+      setProductos(productos.map(p => p.id === id ? { ...p, permite_preparacion: !currentStatus } : p));
     }
   };
 
@@ -189,6 +203,16 @@ export default function AdminPage() {
                 />
               )}
             </div>
+            <div className="flex items-center gap-2 bg-white p-3 rounded-xl border border-slate-200">
+              <input 
+                type="checkbox" 
+                id="prep" 
+                checked={permitePreparacion}
+                onChange={(e) => setPermitePreparacion(e.target.checked)}
+                className="w-5 h-5 accent-indigo-600"
+              />
+              <label htmlFor="prep" className="text-sm font-medium text-slate-600">Permitir preparación personalizada</label>
+            </div>
             <button 
               onClick={addProducto}
               className="bg-indigo-600 text-white p-3 rounded-xl font-bold hover:bg-indigo-700 h-fit self-start"
@@ -246,7 +270,18 @@ export default function AdminPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 items-center">
+                        <button 
+                          onClick={() => togglePreparacion(p.id, p.permite_preparacion)}
+                          className={`px-3 py-2 rounded-xl text-[10px] font-black transition-all border-2 ${
+                            p.permite_preparacion 
+                            ? 'bg-amber-50 border-amber-200 text-amber-600' 
+                            : 'bg-slate-50 border-slate-100 text-slate-400 opacity-40'
+                          }`}
+                          title="¿Permitir instrucciones de limpieza/corte?"
+                        >
+                          PREPARACIÓN
+                        </button>
                         <button 
                           onClick={() => toggleProducto(p.id, p.disponible)}
                           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
