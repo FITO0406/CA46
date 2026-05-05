@@ -99,6 +99,12 @@ export default function PedidosPage() {
 }
 
 function OrderCard({ pedido, onUpdate }: { pedido: any, onUpdate: any }) {
+  const [itemsListo, setItemsListo] = useState<Record<number, boolean>>({});
+
+  const toggleItem = (idx: number) => {
+    setItemsListo(prev => ({ ...prev, [idx]: !prev[idx] }));
+  };
+
   return (
     <div className={`rounded-3xl p-6 flex flex-col gap-4 border shadow-2xl transition-all ${
       pedido.estado === 'preparando' 
@@ -106,27 +112,51 @@ function OrderCard({ pedido, onUpdate }: { pedido: any, onUpdate: any }) {
       : 'bg-slate-800/50 border-slate-700'
     }`}>
       <div className="flex justify-between items-start">
-        <div>
-          <h3 className="text-3xl font-black text-white leading-tight uppercase">{pedido.nombre_cliente}</h3>
-          <div className="text-xl text-slate-300 font-medium mt-1">
+        <div className="flex-1">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-3xl font-black text-white leading-tight uppercase">{pedido.nombre_cliente}</h3>
+            <div className="text-2xl font-black text-slate-500 font-mono">#{pedido.id}</div>
+          </div>
+          
+          <div className="space-y-3">
             {pedido.contenido.split(', ').map((item: string, idx: number) => {
               const hasPrep = item.includes('[PREP:');
-              if (hasPrep) {
-                const [name, prep] = item.split(' [PREP: ');
-                return (
-                  <div key={idx} className="mb-2 last:mb-0">
-                    <span className="text-white font-bold">{name}</span>
-                    <div className="mt-1 bg-amber-500/20 border border-amber-500/40 text-amber-400 p-2 rounded-xl text-sm font-black uppercase italic">
-                      ⚠️ {prep.replace(']', '')}
-                    </div>
+              const namePart = hasPrep ? item.split(' [PREP: ')[0] : item;
+              const prepPart = hasPrep ? item.split(' [PREP: ')[1].replace(']', '') : null;
+              const isChecked = itemsListo[idx];
+
+              return (
+                <div 
+                  key={idx} 
+                  onClick={() => toggleItem(idx)}
+                  className={`p-4 rounded-2xl border-2 transition-all cursor-pointer select-none active:scale-95 ${
+                    isChecked 
+                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-inner' 
+                    : 'bg-slate-900/50 border-slate-700 text-slate-300'
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <span className={`text-xl font-bold ${isChecked ? 'line-through opacity-50' : ''}`}>
+                      {namePart}
+                    </span>
+                    {isChecked && (
+                      <span className="bg-emerald-500 text-white p-1 rounded-full animate-in zoom-in">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      </span>
+                    )}
                   </div>
-                );
-              }
-              return <div key={idx} className="text-slate-400">{item}</div>;
+                  {prepPart && (
+                    <div className={`mt-2 p-2 rounded-xl text-sm font-black uppercase italic ${
+                      isChecked ? 'bg-slate-800/50 text-slate-500' : 'bg-amber-500/20 border border-amber-500/40 text-amber-400'
+                    }`}>
+                      ⚠️ {prepPart}
+                    </div>
+                  )}
+                </div>
+              );
             })}
           </div>
         </div>
-        <div className="text-2xl font-black text-slate-500">#{pedido.id}</div>
       </div>
 
       {pedido.tipo_entrega === 'domicilio' && (
