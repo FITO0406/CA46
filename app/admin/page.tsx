@@ -69,7 +69,7 @@ export default function AdminPage() {
     const seccionFinal = seccionSeleccionada === 'Otros' ? otraSeccion : seccionSeleccionada;
     if (!seccionFinal) return alert('Indica una sección');
 
-    // Intentamos insertar con el nuevo campo
+    // Intentamos insertar con todos los campos
     let { data, error } = await supabase
       .from('productos')
       .insert([{ 
@@ -81,9 +81,10 @@ export default function AdminPage() {
       }])
       .select();
     
-    // Si falla porque la columna no existe (error 42P1 o similar)
-    if (error && (error.code === '42703' || error.message.includes('permite_preparacion'))) {
-      console.warn('La columna permite_preparacion no existe. Reintentando sin ella...');
+    // Si falla porque faltan columnas en Supabase
+    if (error && (error.code === '42703' || error.message.includes('permite_preparacion') || error.message.includes('unidad_medida'))) {
+      console.warn('Faltan columnas en Supabase. Reintentando guardado básico...');
+      
       const fallback = await supabase
         .from('productos')
         .insert([{ 
@@ -92,8 +93,13 @@ export default function AdminPage() {
           seccion: seccionFinal
         }])
         .select();
+      
       data = fallback.data;
       error = fallback.error;
+
+      if (data) {
+        alert('⚠️ ATENCIÓN: El producto se ha creado pero NO se han guardado las opciones de "Piezas" o "Preparación" porque faltan las columnas en tu base de datos de Supabase. Por favor, añádelas para que funcione correctamente.');
+      }
     }
     
     if (data) {
@@ -104,28 +110,12 @@ export default function AdminPage() {
       setPermitePreparacion(true);
       setUnidadMedida('kg');
     } else if (error) {
-      // Fallback por si falta la columna permite_preparacion o unidad_medida
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from('productos')
-        .insert([{ 
-          nombre: nuevoNombre, 
-          precio_kilo: parseFloat(nuevoPrecio),
-          seccion: seccionFinal
-        }])
-        .select();
-      
-      if (fallbackData) {
-        setProductos([...productos, fallbackData[0]]);
-        setNuevoNombre('');
-        setNuevoPrecio('');
-        setOtraSeccion('');
-      }
+      alert('Error crítico: ' + error.message);
     }
   };
 
   const toggleUnidad = async (id: string, currentUnidad: string) => {
     const nextUnidad: 'kg' | 'pieza' = currentUnidad === 'kg' ? 'pieza' : 'kg';
-
     const { error } = await supabase
       .from('productos')
       .update({ unidad_medida: nextUnidad })
@@ -133,6 +123,8 @@ export default function AdminPage() {
     
     if (!error) {
       setProductos(productos.map(p => p.id === id ? { ...p, unidad_medida: nextUnidad } : p));
+    } else {
+      alert('No se pudo cambiar la unidad. Asegúrate de tener la columna "unidad_medida" en Supabase.');
     }
   };
 
@@ -145,7 +137,7 @@ export default function AdminPage() {
     if (!error) {
       setProductos(productos.map(p => p.id === id ? { ...p, permite_preparacion: !currentStatus } : p));
     } else {
-      alert('Error al cambiar estado de preparación: ' + error.message);
+      alert('No se pudo cambiar la preparación. Asegúrate de tener la columna "permite_preparacion" en Supabase.');
     }
   };
 
