@@ -43,7 +43,7 @@ export default function AdminPage() {
   const [seccionSeleccionada, setSeccionSeleccionada] = useState('Por kilos');
   const [otraSeccion, setOtraSeccion] = useState('');
   const [permitePreparacion, setPermitePreparacion] = useState(true);
-  const [unidadMedida, setUnidadMedida] = useState<'kg' | 'ud' | 'pieza'>('kg');
+  const [unidadMedida, setUnidadMedida] = useState<'kg' | 'pieza'>('kg');
 
   const SECCIONES_FIJAS = [
     'Por kilos', 
@@ -124,10 +124,7 @@ export default function AdminPage() {
   };
 
   const toggleUnidad = async (id: string, currentUnidad: string) => {
-    let nextUnidad: 'kg' | 'ud' | 'pieza' = 'kg';
-    if (currentUnidad === 'kg') nextUnidad = 'ud';
-    else if (currentUnidad === 'ud') nextUnidad = 'pieza';
-    else nextUnidad = 'kg';
+    const nextUnidad: 'kg' | 'pieza' = currentUnidad === 'kg' ? 'pieza' : 'kg';
 
     const { error } = await supabase
       .from('productos')
@@ -272,19 +269,13 @@ export default function AdminPage() {
                 onClick={() => setUnidadMedida('kg')}
                 className={`flex-1 p-3 rounded-xl font-bold border-2 transition-all ${unidadMedida === 'kg' ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400'}`}
               >
-                Kilos
-              </button>
-              <button 
-                onClick={() => setUnidadMedida('ud')}
-                className={`flex-1 p-3 rounded-xl font-bold border-2 transition-all ${unidadMedida === 'ud' ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400'}`}
-              >
-                Unidad
+                Venta por Kilos
               </button>
               <button 
                 onClick={() => setUnidadMedida('pieza')}
                 className={`flex-1 p-3 rounded-xl font-bold border-2 transition-all ${unidadMedida === 'pieza' ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400'}`}
               >
-                Piezas
+                Venta por Piezas
               </button>
             </div>
             <button 
@@ -330,9 +321,7 @@ export default function AdminPage() {
                               }}
                               className="w-16 p-1 text-indigo-600 font-mono text-sm bg-transparent focus:outline-none"
                             />
-                            <span className="text-indigo-400 font-mono text-xs mr-2">
-                              {p.unidad_medida === 'ud' ? '€/ud' : p.unidad_medida === 'pieza' ? '€ (por pieza/kg)' : '€/kg'}
-                            </span>
+                            <span className="text-indigo-400 font-mono text-xs mr-2">€/kg</span>
                             <button 
                               onClick={(e) => {
                                 const input = e.currentTarget.parentElement?.querySelector('input');
@@ -350,14 +339,12 @@ export default function AdminPage() {
                           <button 
                             onClick={() => toggleUnidad(p.id, p.unidad_medida || 'kg')}
                             className={`px-3 py-2 rounded-xl text-[10px] font-black transition-all border-2 ${
-                              p.unidad_medida === 'ud' 
-                              ? 'bg-purple-50 border-purple-200 text-purple-600' 
-                              : p.unidad_medida === 'pieza'
+                              p.unidad_medida === 'pieza'
                               ? 'bg-blue-50 border-blue-200 text-blue-600'
                               : 'bg-indigo-50 border-indigo-200 text-indigo-600'
                             }`}
                           >
-                            {p.unidad_medida === 'ud' ? 'UNIDAD' : p.unidad_medida === 'pieza' ? 'PIEZAS' : 'KILOS'}
+                            {p.unidad_medida === 'pieza' ? 'PIEZAS' : 'KILOS'}
                           </button>
                           <button 
                             onClick={() => togglePreparacion(p.id, p.permite_preparacion)}

@@ -166,34 +166,33 @@ export default function PedirPage() {
                 </h3>
                 {items.map((p: any) => (
                   <div key={p.id} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 space-y-3">
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-start">
                       <span className="text-xl font-bold text-slate-800">{p.nombre}</span>
+                      <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-xs font-black font-mono">
+                        {p.precio_kilo.toFixed(2)} €/kg
+                      </span>
                     </div>
                     <div className="grid grid-cols-4 gap-2">
-                      {(p.unidad_medida === 'ud' ? [1, 2, 4] : p.unidad_medida === 'pieza' ? [1, 2, 3] : [0.25, 0.5, 1]).map(q => (
+                      {(p.unidad_medida === 'pieza' ? [1, 2, 3] : [0.25, 0.5, 1]).map(q => (
                         <button 
                           key={q}
                           onClick={() => {
-                            let qTexto = '';
-                            if (p.unidad_medida === 'ud') qTexto = `${q} ud`;
-                            else if (p.unidad_medida === 'pieza') qTexto = `${q} pieza${q > 1 ? 's' : ''}`;
-                            else qTexto = `${q}kg`;
-
+                            const qTexto = p.unidad_medida === 'pieza' ? `${q} pieza${q > 1 ? 's' : ''}` : `${q}kg`;
                             agregarAlCarrito(p, q, tempPrep[p.id], qTexto);
                             setTempPrep({...tempPrep, [p.id]: ''});
                           }}
                           className="bg-slate-50 hover:bg-[#075e54] hover:text-white p-2 rounded-xl text-xs font-bold transition-colors"
                         >
-                          {p.unidad_medida === 'ud' ? `${q} ud` : p.unidad_medida === 'pieza' ? `${q} pza.` : (q === 0.25 ? '1/4' : q === 0.5 ? '1/2' : '1')} 
-                          {(!p.unidad_medida || p.unidad_medida === 'kg') && ' kg'}
+                          {p.unidad_medida === 'pieza' ? `${q} pza.` : (q === 0.25 ? '1/4' : q === 0.5 ? '1/2' : '1')} 
+                          {p.unidad_medida !== 'pieza' && ' kg'}
                         </button>
                       ))}
                       <button 
                         onClick={() => {
-                          const unitLabel = p.unidad_medida === 'ud' ? 'unidades' : p.unidad_medida === 'pieza' ? 'piezas' : 'kg';
+                          const unitLabel = p.unidad_medida === 'pieza' ? 'piezas' : 'kg';
                           const cant = prompt(`¿Cuántas ${unitLabel} quieres? (ej: 3, 5, 2kg, 3 rodajas...)`);
                           if (cant) {
-                            const unitSufijo = p.unidad_medida === 'ud' ? 'ud' : p.unidad_medida === 'pieza' ? 'piezas' : 'kg';
+                            const unitSufijo = p.unidad_medida === 'pieza' ? 'piezas' : 'kg';
                             const textoFinal = isNaN(Number(cant)) ? cant : `${cant} ${unitSufijo}`;
                             agregarAlCarrito(p, cant, tempPrep[p.id], textoFinal);
                             setTempPrep({...tempPrep, [p.id]: ''});
