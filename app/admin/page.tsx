@@ -68,7 +68,8 @@ export default function AdminPage() {
     const seccionFinal = seccionSeleccionada === 'Otros' ? otraSeccion : seccionSeleccionada;
     if (!seccionFinal) return alert('Indica una sección');
 
-    const { data, error } = await supabase
+    // Intentamos insertar con el nuevo campo
+    let { data, error } = await supabase
       .from('productos')
       .insert([{ 
         nombre: nuevoNombre, 
@@ -78,12 +79,29 @@ export default function AdminPage() {
       }])
       .select();
     
+    // Si falla porque la columna no existe (error 42P1 o similar)
+    if (error && (error.code === '42703' || error.message.includes('permite_preparacion'))) {
+      console.warn('La columna permite_preparacion no existe. Reintentando sin ella...');
+      const fallback = await supabase
+        .from('productos')
+        .insert([{ 
+          nombre: nuevoNombre, 
+          precio_kilo: parseFloat(nuevoPrecio),
+          seccion: seccionFinal
+        }])
+        .select();
+      data = fallback.data;
+      error = fallback.error;
+    }
+    
     if (data) {
       setProductos([...productos, data[0]]);
       setNuevoNombre('');
       setNuevoPrecio('');
       setOtraSeccion('');
       setPermitePreparacion(true);
+    } else if (error) {
+      alert('Error al añadir producto: ' + error.message);
     }
   };
 
@@ -95,6 +113,8 @@ export default function AdminPage() {
     
     if (!error) {
       setProductos(productos.map(p => p.id === id ? { ...p, permite_preparacion: !currentStatus } : p));
+    } else {
+      alert('Error al cambiar estado de preparación: ' + error.message);
     }
   };
 
