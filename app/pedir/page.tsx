@@ -40,6 +40,13 @@ export default function PedirPage() {
   const puedePedir = tipoEntrega === 'recoger' || (tipoEntrega === 'domicilio' && totalCarrito >= 30 && direccion);
 
   const agregarAlCarrito = (producto: any, cantidad: number | string, instruccion?: string, textoManual?: string) => {
+    // Comprobar si el producto ya está en el carrito
+    const yaEsta = carrito.find(i => i.id === producto.id);
+    if (yaEsta) {
+      const confirmar = confirm(`Ya tienes "${producto.nombre}" en tu carrito. ¿Estás seguro de que quieres añadirlo de nuevo?`);
+      if (!confirmar) return;
+    }
+
     const cantNum = typeof cantidad === 'string' ? 1 : cantidad; // Si es 'otra', ponemos 1 de base
     setCarrito([...carrito, { 
       ...producto, 
