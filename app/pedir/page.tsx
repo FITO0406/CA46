@@ -42,21 +42,23 @@ export default function PedirPage() {
   const puedePedir = tipoEntrega === 'recoger' || (tipoEntrega === 'domicilio' && totalCarrito >= 30 && direccion);
 
   const agregarAlCarrito = (producto: any, cantidad: number | string, instruccion?: string, textoManual?: string) => {
-    // Comprobar si el producto ya está en el carrito
-    const yaEsta = carrito.find(i => i.id === producto.id);
+    // Comprobar si el producto ya está en el carrito (usamos == para mayor seguridad de tipos)
+    const yaEsta = carrito.find(i => String(i.id) === String(producto.id));
+    
     if (yaEsta && !showConfirmModal) {
       setPendingItem({ producto, cantidad, instruccion: instruccion || '', textoManual: textoManual || '' });
       setShowConfirmModal(true);
       return;
     }
 
-    const cantNum = typeof cantidad === 'string' ? 1 : cantidad; // Si es 'otra', ponemos 1 de base
+    const cantNum = typeof cantidad === 'string' ? 1 : cantidad;
     setCarrito([...carrito, { 
       ...producto, 
       cantidad: cantNum, 
       cantidadTexto: textoManual || (typeof cantidad === 'string' ? '' : `${cantidad}kg`),
       preparacion: instruccion || '' 
     }]);
+    
     setShowConfirmModal(false);
     setPendingItem(null);
   };
@@ -297,9 +299,8 @@ export default function PedirPage() {
           {enviando ? 'Enviando...' : 'REALIZAR PEDIDO'}
         </button>
       </footer>
-      {/* MODAL DE CONFIRMACIÓN DE DUPLICADO */}
       {showConfirmModal && pendingItem && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-6 animate-in fade-in duration-300">
           <div className="bg-white rounded-[40px] p-8 max-w-sm w-full shadow-2xl animate-in zoom-in slide-in-from-bottom-10 duration-500">
             <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500">
               <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
