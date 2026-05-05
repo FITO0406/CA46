@@ -108,7 +108,23 @@ function OrderCard({ pedido, onUpdate }: { pedido: any, onUpdate: any }) {
       <div className="flex justify-between items-start">
         <div>
           <h3 className="text-3xl font-black text-white leading-tight uppercase">{pedido.nombre_cliente}</h3>
-          <p className="text-xl text-slate-300 font-medium mt-1">{pedido.contenido}</p>
+          <div className="text-xl text-slate-300 font-medium mt-1">
+            {pedido.contenido.split(', ').map((item: string, idx: number) => {
+              const hasPrep = item.includes('[PREP:');
+              if (hasPrep) {
+                const [name, prep] = item.split(' [PREP: ');
+                return (
+                  <div key={idx} className="mb-2 last:mb-0">
+                    <span className="text-white font-bold">{name}</span>
+                    <div className="mt-1 bg-amber-500/20 border border-amber-500/40 text-amber-400 p-2 rounded-xl text-sm font-black uppercase italic">
+                      ⚠️ {prep.replace(']', '')}
+                    </div>
+                  </div>
+                );
+              }
+              return <div key={idx} className="text-slate-400">{item}</div>;
+            })}
+          </div>
         </div>
         <div className="text-2xl font-black text-slate-500">#{pedido.id}</div>
       </div>
