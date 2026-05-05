@@ -197,14 +197,16 @@ export default function PedirPage() {
                     </div>
 
                     {p.permite_preparacion && (
-                      <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-300">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-tighter ml-1 mb-1 block">¿Cómo lo quieres?</label>
-                        <input 
-                          type="text" 
-                          placeholder="Ej: Limpio, rodajas, filetes..." 
+                      <div className="pt-3 animate-in fade-in slide-in-from-top-1 duration-300">
+                        <div className="flex items-center gap-2 mb-2 ml-1">
+                          <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md uppercase tracking-wider">Modo Preparación</span>
+                        </div>
+                        <textarea 
+                          placeholder="Escribe aquí: Limpio, en rodajas para freír, sin espinas..." 
                           value={tempPrep[p.id] || ''}
                           onChange={(e) => setTempPrep({...tempPrep, [p.id]: e.target.value})}
-                          className="w-full p-3 bg-slate-50 rounded-2xl text-xs border-none focus:ring-2 focus:ring-[#075e54] placeholder:text-slate-300"
+                          rows={2}
+                          className="w-full p-4 bg-slate-50 rounded-2xl text-sm border-2 border-transparent focus:border-indigo-500 focus:bg-white focus:outline-none transition-all placeholder:text-slate-300 resize-none"
                         />
                       </div>
                     )}
