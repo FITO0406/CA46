@@ -173,7 +173,7 @@ export default function PedirPage() {
                       </span>
                     </div>
                     <div className="grid grid-cols-4 gap-2">
-                      {(p.unidad_medida === 'pieza' ? [1, 2, 3] : [0.25, 0.5, 1]).map(q => (
+                      {(p.unidad_medida === 'pieza' ? [1, 2, 3] : [1, 2, 3]).map(q => (
                         <button 
                           key={q}
                           onClick={() => {
@@ -183,8 +183,7 @@ export default function PedirPage() {
                           }}
                           className="bg-slate-50 hover:bg-[#075e54] hover:text-white p-2 rounded-xl text-xs font-bold transition-colors"
                         >
-                          {p.unidad_medida === 'pieza' ? `${q} pza.` : (q === 0.25 ? '1/4' : q === 0.5 ? '1/2' : '1')} 
-                          {p.unidad_medida !== 'pieza' && ' kg'}
+                          {p.unidad_medida === 'pieza' ? `${q} pza.` : `${q} kg`}
                         </button>
                       ))}
                       <button 
