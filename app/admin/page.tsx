@@ -103,6 +103,22 @@ export default function AdminPage() {
     }
   };
 
+  const updatePrecio = async (id: string, nuevoPrecio: string) => {
+    const precio = parseFloat(nuevoPrecio);
+    if (isNaN(precio)) return;
+
+    const { error } = await supabase
+      .from('productos')
+      .update({ precio_kilo: precio })
+      .eq('id', id);
+    
+    if (!error) {
+      setProductos(productos.map(p => p.id === id ? { ...p, precio_kilo: precio } : p));
+    } else {
+      alert('Error al actualizar el precio: ' + error.message);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 p-6 md:p-12 text-slate-900">
       <header className="max-w-4xl mx-auto mb-10">
@@ -202,7 +218,32 @@ export default function AdminPage() {
                         <div className={`w-3 h-3 rounded-full ${p.disponible ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
                         <div>
                           <span className={`font-bold ${p.disponible ? 'text-slate-800' : 'text-slate-500 line-through'}`}>{p.nombre}</span>
-                          <span className="ml-4 text-indigo-600 font-mono text-sm">{p.precio_kilo} €/kg</span>
+                          <div className="inline-flex items-center ml-4 group bg-indigo-50/50 p-1 px-2 rounded-xl border border-transparent hover:border-indigo-100 transition-all">
+                            <input 
+                              type="number" 
+                              step="0.01"
+                              defaultValue={p.precio_kilo}
+                              onBlur={(e) => updatePrecio(p.id, e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  updatePrecio(p.id, (e.target as HTMLInputElement).value);
+                                  (e.target as HTMLInputElement).blur();
+                                }
+                              }}
+                              className="w-16 p-1 text-indigo-600 font-mono text-sm bg-transparent focus:outline-none"
+                            />
+                            <span className="text-indigo-400 font-mono text-xs mr-2">€/kg</span>
+                            <button 
+                              onClick={(e) => {
+                                const input = e.currentTarget.parentElement?.querySelector('input');
+                                if (input) updatePrecio(p.id, input.value);
+                              }}
+                              className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm transition-colors"
+                              title="Guardar precio"
+                            >
+                              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div className="flex gap-2">
