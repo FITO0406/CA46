@@ -10,8 +10,10 @@ export default function PedirPage() {
   const [nombre, setNombre] = useState('');
   const [tiendaAbierta, setTiendaAbierta] = useState(false);
   const [productos, setProductos] = useState<any[]>([]);
-  const [tipoEntrega, setTipoEntrega] = useState<'recoger' | 'domicilio' | null>(null);
+  const [tipoEntrega, setTipoEntrega] = useState<'recoger' | 'domicilio'>('recoger');
   const [direccion, setDireccion] = useState('');
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingItem, setPendingItem] = useState<{producto: any, cantidad: number | string, instruccion: string, textoManual: string} | null>(null);
   const [carrito, setCarrito] = useState<any[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [tempPrep, setTempPrep] = useState<{[key: string]: string}>({});
@@ -42,9 +44,10 @@ export default function PedirPage() {
   const agregarAlCarrito = (producto: any, cantidad: number | string, instruccion?: string, textoManual?: string) => {
     // Comprobar si el producto ya está en el carrito
     const yaEsta = carrito.find(i => i.id === producto.id);
-    if (yaEsta) {
-      const confirmar = confirm(`Ya tienes "${producto.nombre}" en tu carrito. ¿Estás seguro de que quieres añadirlo de nuevo?`);
-      if (!confirmar) return;
+    if (yaEsta && !showConfirmModal) {
+      setPendingItem({ producto, cantidad, instruccion: instruccion || '', textoManual: textoManual || '' });
+      setShowConfirmModal(true);
+      return;
     }
 
     const cantNum = typeof cantidad === 'string' ? 1 : cantidad; // Si es 'otra', ponemos 1 de base
@@ -54,6 +57,8 @@ export default function PedirPage() {
       cantidadTexto: textoManual || (typeof cantidad === 'string' ? '' : `${cantidad}kg`),
       preparacion: instruccion || '' 
     }]);
+    setShowConfirmModal(false);
+    setPendingItem(null);
   };
 
   const enviarPedido = async () => {
@@ -90,6 +95,37 @@ export default function PedirPage() {
           <h1 className="text-2xl font-bold text-slate-800 mb-2">Pescadería Cerrada</h1>
           <p className="text-slate-500">Lo sentimos, Fito está ahora mismo fuera del mostrador. Vuelve más tarde.</p>
         </div>
+        
+        {/* MODAL DE CONFIRMACIÓN DE DUPLICADO */}
+        {showConfirmModal && pendingItem && (
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+            <div className="bg-white rounded-[40px] p-8 max-w-sm w-full shadow-2xl animate-in zoom-in slide-in-from-bottom-10 duration-500">
+              <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500">
+                <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+              </div>
+              <h3 className="text-2xl font-black text-center text-slate-800 leading-tight mb-2 uppercase italic">
+                ¡Cuidado, Fito!
+              </h3>
+              <p className="text-center text-slate-500 font-medium mb-8">
+                Ya tienes <span className="text-indigo-600 font-bold">"{pendingItem.producto.nombre}"</span> en tu carrito. ¿Seguro que quieres añadir otro igual?
+              </p>
+              <div className="grid gap-3">
+                <button 
+                  onClick={() => agregarAlCarrito(pendingItem.producto, pendingItem.cantidad, pendingItem.instruccion, pendingItem.textoManual)}
+                  className="w-full bg-[#075e54] text-white p-5 rounded-2xl font-black text-lg shadow-lg shadow-emerald-200 active:scale-95 transition-all uppercase italic"
+                >
+                  Sí, añadir otro
+                </button>
+                <button 
+                  onClick={() => { setShowConfirmModal(false); setPendingItem(null); }}
+                  className="w-full bg-slate-100 text-slate-500 p-5 rounded-2xl font-black text-lg active:scale-95 transition-all uppercase italic"
+                >
+                  No, cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
