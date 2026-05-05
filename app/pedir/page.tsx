@@ -172,6 +172,24 @@ export default function PedirPage() {
                         {p.precio_kilo.toFixed(2)} €/kg
                       </span>
                     </div>
+                    {p.permite_preparacion !== false && (
+                      <div className="mb-4 animate-in fade-in slide-in-from-top-1 duration-300">
+                        <div className="flex items-center gap-2 mb-2 ml-1">
+                          <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md uppercase tracking-wider">1. ¿Cómo lo preparamos? (Opcional)</span>
+                        </div>
+                        <textarea 
+                          placeholder="Ej: Limpio, en rodajas, sin espinas..." 
+                          value={tempPrep[p.id] || ''}
+                          onChange={(e) => setTempPrep({...tempPrep, [p.id]: e.target.value})}
+                          rows={2}
+                          className="w-full p-4 bg-slate-50 rounded-2xl text-sm border-2 border-transparent focus:border-indigo-500 focus:bg-white focus:outline-none transition-all placeholder:text-slate-300 resize-none shadow-inner"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2 mb-2 ml-1">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{p.permite_preparacion !== false ? '2. Elige la cantidad' : 'Elige la cantidad'}</span>
+                    </div>
                     <div className="grid grid-cols-4 gap-2">
                       {(p.unidad_medida === 'pieza' ? [1, 2, 3] : [1, 2, 3]).map(q => (
                         <button 
@@ -181,7 +199,7 @@ export default function PedirPage() {
                             agregarAlCarrito(p, q, tempPrep[p.id], qTexto);
                             setTempPrep({...tempPrep, [p.id]: ''});
                           }}
-                          className="bg-slate-50 hover:bg-[#075e54] hover:text-white p-2 rounded-xl text-xs font-bold transition-colors"
+                          className="bg-slate-50 hover:bg-[#075e54] hover:text-white p-3 rounded-xl text-xs font-bold transition-all border border-slate-100 hover:shadow-lg active:scale-95"
                         >
                           {p.unidad_medida === 'pieza' ? `${q} pza.` : `${q} kg`}
                         </button>
@@ -197,26 +215,11 @@ export default function PedirPage() {
                             setTempPrep({...tempPrep, [p.id]: ''});
                           }
                         }}
-                        className="bg-slate-100 p-2 rounded-xl text-xs font-bold"
+                        className="bg-slate-100 p-3 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all active:scale-95"
                       >
                         Otra...
                       </button>
                     </div>
-
-                    {p.permite_preparacion !== false && (
-                      <div className="pt-3 animate-in fade-in slide-in-from-top-1 duration-300">
-                        <div className="flex items-center gap-2 mb-2 ml-1">
-                          <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md uppercase tracking-wider">Modo Preparación</span>
-                        </div>
-                        <textarea 
-                          placeholder="Escribe aquí: Limpio, en rodajas para freír, sin espinas..." 
-                          value={tempPrep[p.id] || ''}
-                          onChange={(e) => setTempPrep({...tempPrep, [p.id]: e.target.value})}
-                          rows={2}
-                          className="w-full p-4 bg-slate-50 rounded-2xl text-sm border-2 border-transparent focus:border-indigo-500 focus:bg-white focus:outline-none transition-all placeholder:text-slate-300 resize-none"
-                        />
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
