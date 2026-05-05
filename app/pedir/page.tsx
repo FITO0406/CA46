@@ -39,12 +39,12 @@ export default function PedirPage() {
   const faltaParaMinimo = tipoEntrega === 'domicilio' ? Math.max(0, 30 - totalCarrito) : 0;
   const puedePedir = tipoEntrega === 'recoger' || (tipoEntrega === 'domicilio' && totalCarrito >= 30 && direccion);
 
-  const agregarAlCarrito = (producto: any, cantidad: number | string, instruccion?: string) => {
+  const agregarAlCarrito = (producto: any, cantidad: number | string, instruccion?: string, textoManual?: string) => {
     const cantNum = typeof cantidad === 'string' ? 1 : cantidad; // Si es 'otra', ponemos 1 de base
     setCarrito([...carrito, { 
       ...producto, 
       cantidad: cantNum, 
-      cantidadTexto: typeof cantidad === 'string' ? '' : `${cantidad}kg`,
+      cantidadTexto: textoManual || (typeof cantidad === 'string' ? '' : `${cantidad}kg`),
       preparacion: instruccion || '' 
     }]);
   };
@@ -170,23 +170,27 @@ export default function PedirPage() {
                       <span className="text-xl font-bold text-slate-800">{p.nombre}</span>
                     </div>
                     <div className="grid grid-cols-4 gap-2">
-                      {[0.25, 0.5, 1].map(q => (
+                      {(p.unidad_medida === 'ud' ? [1, 2, 4] : [0.25, 0.5, 1]).map(q => (
                         <button 
                           key={q}
                           onClick={() => {
-                            agregarAlCarrito(p, q, tempPrep[p.id]);
+                            const qTexto = p.unidad_medida === 'ud' ? `${q} ud` : `${q}kg`;
+                            agregarAlCarrito(p, q, tempPrep[p.id], qTexto);
                             setTempPrep({...tempPrep, [p.id]: ''});
                           }}
                           className="bg-slate-50 hover:bg-[#075e54] hover:text-white p-2 rounded-xl text-xs font-bold transition-colors"
                         >
-                          {q === 0.25 ? '1/4' : q === 0.5 ? '1/2' : '1'} kg
+                          {p.unidad_medida === 'ud' ? `${q} ud` : q === 0.25 ? '1/4' : q === 0.5 ? '1/2' : '1'} 
+                          {p.unidad_medida !== 'ud' && ' kg'}
                         </button>
                       ))}
                       <button 
                         onClick={() => {
-                          const cant = prompt('¿Qué cantidad quieres? (ej: 2kg, 3 rodajas...)');
+                          const unitLabel = p.unidad_medida === 'ud' ? 'unidades' : 'kg';
+                          const cant = prompt(`¿Cuántas ${unitLabel} quieres? (ej: 3, 5, 2kg, 3 rodajas...)`);
                           if (cant) {
-                            agregarAlCarrito(p, cant, tempPrep[p.id]);
+                            const textoFinal = isNaN(Number(cant)) ? cant : `${cant} ${p.unidad_medida || 'kg'}`;
+                            agregarAlCarrito(p, cant, tempPrep[p.id], textoFinal);
                             setTempPrep({...tempPrep, [p.id]: ''});
                           }
                         }}

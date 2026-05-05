@@ -43,6 +43,7 @@ export default function AdminPage() {
   const [seccionSeleccionada, setSeccionSeleccionada] = useState('Por kilos');
   const [otraSeccion, setOtraSeccion] = useState('');
   const [permitePreparacion, setPermitePreparacion] = useState(true);
+  const [unidadMedida, setUnidadMedida] = useState<'kg' | 'ud'>('kg');
 
   const SECCIONES_FIJAS = [
     'Por kilos', 
@@ -75,7 +76,8 @@ export default function AdminPage() {
         nombre: nuevoNombre, 
         precio_kilo: parseFloat(nuevoPrecio),
         seccion: seccionFinal,
-        permite_preparacion: permitePreparacion
+        permite_preparacion: permitePreparacion,
+        unidad_medida: unidadMedida
       }])
       .select();
     
@@ -100,8 +102,36 @@ export default function AdminPage() {
       setNuevoPrecio('');
       setOtraSeccion('');
       setPermitePreparacion(true);
+      setUnidadMedida('kg');
     } else if (error) {
-      alert('Error al añadir producto: ' + error.message);
+      // Fallback por si falta la columna permite_preparacion o unidad_medida
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('productos')
+        .insert([{ 
+          nombre: nuevoNombre, 
+          precio_kilo: parseFloat(nuevoPrecio),
+          seccion: seccionFinal
+        }])
+        .select();
+      
+      if (fallbackData) {
+        setProductos([...productos, fallbackData[0]]);
+        setNuevoNombre('');
+        setNuevoPrecio('');
+        setOtraSeccion('');
+      }
+    }
+  };
+
+  const toggleUnidad = async (id: string, currentUnidad: string) => {
+    const nextUnidad = currentUnidad === 'kg' ? 'ud' : 'kg';
+    const { error } = await supabase
+      .from('productos')
+      .update({ unidad_medida: nextUnidad })
+      .eq('id', id);
+    
+    if (!error) {
+      setProductos(productos.map(p => p.id === id ? { ...p, unidad_medida: nextUnidad } : p));
     }
   };
 
@@ -233,6 +263,20 @@ export default function AdminPage() {
               />
               <label htmlFor="prep" className="text-sm font-medium text-slate-600">Permitir preparación personalizada</label>
             </div>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setUnidadMedida('kg')}
+                className={`flex-1 p-3 rounded-xl font-bold border-2 transition-all ${unidadMedida === 'kg' ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-100 text-slate-400'}`}
+              >
+                Venta por Kilos
+              </button>
+              <button 
+                onClick={() => setUnidadMedida('ud')}
+                className={`flex-1 p-3 rounded-xl font-bold border-2 transition-all ${unidadMedida === 'ud' ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-100 text-slate-400'}`}
+              >
+                Venta por Unidad
+              </button>
+            </div>
             <button 
               onClick={addProducto}
               className="bg-indigo-600 text-white p-3 rounded-xl font-bold hover:bg-indigo-700 h-fit self-start"
@@ -276,7 +320,7 @@ export default function AdminPage() {
                               }}
                               className="w-16 p-1 text-indigo-600 font-mono text-sm bg-transparent focus:outline-none"
                             />
-                            <span className="text-indigo-400 font-mono text-xs mr-2">€/kg</span>
+                            <span className="text-indigo-400 font-mono text-xs mr-2">{p.unidad_medida === 'ud' ? '€/ud' : '€/kg'}</span>
                             <button 
                               onClick={(e) => {
                                 const input = e.currentTarget.parentElement?.querySelector('input');
@@ -290,9 +334,19 @@ export default function AdminPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex gap-2 items-center">
-                        <button 
-                          onClick={() => togglePreparacion(p.id, p.permite_preparacion)}
+                        <div className="flex gap-2 items-center">
+                          <button 
+                            onClick={() => toggleUnidad(p.id, p.unidad_medida || 'kg')}
+                            className={`px-3 py-2 rounded-xl text-[10px] font-black transition-all border-2 ${
+                              p.unidad_medida === 'ud' 
+                              ? 'bg-purple-50 border-purple-200 text-purple-600' 
+                              : 'bg-indigo-50 border-indigo-200 text-indigo-600'
+                            }`}
+                          >
+                            {p.unidad_medida === 'ud' ? 'UNIDAD' : 'KILOS'}
+                          </button>
+                          <button 
+                            onClick={() => togglePreparacion(p.id, p.permite_preparacion)}
                           className={`px-3 py-2 rounded-xl text-[10px] font-black transition-all border-2 ${
                             p.permite_preparacion 
                             ? 'bg-amber-50 border-amber-200 text-amber-600' 
