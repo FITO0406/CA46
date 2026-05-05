@@ -196,7 +196,7 @@ export default function PedirPage() {
                       </button>
                     </div>
 
-                    {p.permite_preparacion && (
+                    {p.permite_preparacion !== false && (
                       <div className="pt-3 animate-in fade-in slide-in-from-top-1 duration-300">
                         <div className="flex items-center gap-2 mb-2 ml-1">
                           <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md uppercase tracking-wider">Modo Preparación</span>
