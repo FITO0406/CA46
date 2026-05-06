@@ -17,6 +17,7 @@ export default function PedirPage() {
   const [carrito, setCarrito] = useState<any[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [tempPrep, setTempPrep] = useState<{[key: string]: string}>({});
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const fetchTienda = async () => {
@@ -148,21 +149,39 @@ export default function PedirPage() {
           )}
         </section>
 
-        {/* PASO 2: VER LISTA */}
-        {tipoEntrega && nombre && step === 'inicio' && (
-          <button 
-            onClick={() => setStep('ver_lista')}
-            className="w-full bg-indigo-600 text-white p-6 rounded-3xl font-black text-xl shadow-xl animate-bounce"
-          >
-            ¿QUIERES LA LISTA DE HOY? 🐟
-          </button>
-        )}
+        {/* CATÁLOGO Y BUSCADOR AUTOMÁTICO */}
+        {nombre && tipoEntrega && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-slate-400 group-focus-within:text-[#075e54] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <input 
+                type="text" 
+                placeholder="Busca tu pescado favorito..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-4 py-4 bg-white rounded-2xl border-none shadow-sm focus:ring-2 focus:ring-[#075e54] transition-all text-slate-700 placeholder:text-slate-400"
+              />
+              {searchTerm && (
+                <button 
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600"
+                >
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
 
-        {/* PASO 3: CATÁLOGO AGRUPADO */}
-        {step === 'ver_lista' && (
-          <div className="space-y-8">
+            <div className="space-y-8">
             {Object.entries(
-              productos.reduce((acc: any, p) => {
+              productos
+                .filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || (p.seccion && p.seccion.toLowerCase().includes(searchTerm.toLowerCase())))
+                .reduce((acc: any, p) => {
                 const sec = p.seccion || 'Por kilos';
                 if (!acc[sec]) acc[sec] = [];
                 acc[sec].push(p);
@@ -239,7 +258,19 @@ export default function PedirPage() {
                   </div>
                 ))}
               </div>
-            ))}
+            )}
+            {productos.length > 0 && productos.filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
+              <div className="text-center py-10 bg-white rounded-3xl shadow-sm">
+                <div className="text-4xl mb-2">🔎</div>
+                <p className="text-slate-500 font-medium">No encontramos "{searchTerm}"</p>
+                <button 
+                  onClick={() => setSearchTerm('')}
+                  className="text-[#075e54] font-bold mt-2"
+                >
+                  Ver todos los productos
+                </button>
+              </div>
+            )}
           </div>
         )}
 
