@@ -21,6 +21,8 @@ const ORDEN_SECCIONES = [
 
 export default function PedirPage() {
   const [nombre, setNombre] = useState('');
+  const [telefono, setTelefono] = useState('');
+  const [aceptaPrivacidad, setAceptaPrivacidad] = useState(false);
   const [tiendaAbierta, setTiendaAbierta] = useState(true);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [tipoEntrega, setTipoEntrega] = useState<TipoEntrega>('recoger');
@@ -75,8 +77,11 @@ export default function PedirPage() {
   const totalCarrito = carrito.reduce((acc, item) => acc + item.precio_kilo * item.cantidad, 0);
   const faltaParaMinimo = tipoEntrega === 'domicilio' ? Math.max(0, 30 - totalCarrito) : 0;
   const puedePedir =
-    tipoEntrega === 'recoger' ||
-    (tipoEntrega === 'domicilio' && totalCarrito >= 30 && direccion.trim().length > 0);
+    nombre.trim().length > 0 &&
+    telefono.trim().length >= 9 &&
+    aceptaPrivacidad &&
+    (tipoEntrega === 'recoger' ||
+      (tipoEntrega === 'domicilio' && totalCarrito >= 30 && direccion.trim().length > 0));
 
   const agregarAlCarrito = (
     producto: Producto,
@@ -127,7 +132,7 @@ export default function PedirPage() {
 
     const { error } = await supabase.from('pedidos').insert([
       {
-        nombre_cliente: nombre.trim(),
+        nombre_cliente: `${nombre.trim()} (Tel: ${telefono.trim()})`,
         contenido: contenidoTexto,
         estado: 'pendiente',
         tipo_entrega: tipoEntrega,
@@ -191,21 +196,32 @@ export default function PedirPage() {
 
       <main className="mx-auto flex max-w-xl flex-1 flex-col space-y-6 p-4">
         <section className="space-y-4 rounded-3xl bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-bold">Que quieres hoy?</h2>
-          <input
-            type="text"
-            placeholder="Escribe tu nombre..."
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            className="w-full rounded-2xl border-none bg-slate-50 p-4 focus:ring-2 focus:ring-[#075e54]"
-          />
+          <h2 className="text-lg font-bold text-[#075e54]">¿Quién eres y cómo te avisamos?</h2>
+          
+          <div className="space-y-3">
+            <input
+              type="text"
+              placeholder="Tu nombre completo..."
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              className="w-full rounded-2xl border-none bg-slate-50 p-4 focus:ring-2 focus:ring-[#075e54]"
+            />
+            
+            <input
+              type="tel"
+              placeholder="Tu número de teléfono (Obligatorio)..."
+              value={telefono}
+              onChange={(e) => setTelefono(e.target.value.replace(/[^0-9]/g, ''))}
+              className="w-full rounded-2xl border-none bg-slate-50 p-4 focus:ring-2 focus:ring-[#075e54]"
+            />
+          </div>
 
           <div className="flex gap-2">
             <button
               onClick={() => setTipoEntrega('recoger')}
               className={`flex-1 rounded-2xl p-4 font-bold transition-all ${
                 tipoEntrega === 'recoger'
-                  ? 'bg-[#075e54] text-white'
+                  ? 'bg-[#075e54] text-white shadow-md'
                   : 'bg-slate-100 text-slate-500'
               }`}
             >
@@ -215,7 +231,7 @@ export default function PedirPage() {
               onClick={() => setTipoEntrega('domicilio')}
               className={`flex-1 rounded-2xl p-4 font-bold transition-all ${
                 tipoEntrega === 'domicilio'
-                  ? 'bg-[#075e54] text-white'
+                  ? 'bg-[#075e54] text-white shadow-md'
                   : 'bg-slate-100 text-slate-500'
               }`}
             >
@@ -226,12 +242,26 @@ export default function PedirPage() {
           {tipoEntrega === 'domicilio' && (
             <input
               type="text"
-              placeholder="Direccion completa..."
+              placeholder="Dirección completa para el envío..."
               value={direccion}
               onChange={(e) => setDireccion(e.target.value)}
               className="w-full rounded-2xl border-none bg-rose-50 p-4 focus:ring-2 focus:ring-rose-500"
             />
           )}
+
+          <div className="flex items-start gap-3 rounded-2xl bg-slate-50 p-4 border border-slate-100">
+            <input
+              type="checkbox"
+              id="privacidad"
+              checked={aceptaPrivacidad}
+              onChange={(e) => setAceptaPrivacidad(e.target.checked)}
+              className="mt-1 h-5 w-5 rounded border-slate-300 text-[#075e54] focus:ring-[#075e54]"
+            />
+            <label htmlFor="privacidad" className="text-xs text-slate-500 leading-snug">
+              Acepto que mis datos (nombre y teléfono) se usen exclusivamente para gestionar este pedido. 
+              <strong> No se guardarán ni usarán para ningún otro fin.</strong>
+            </label>
+          </div>
         </section>
 
         {carrito.length > 0 && (
