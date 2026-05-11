@@ -6,6 +6,13 @@ import { supabase } from '@/lib/supabase';
 export default function PantallaPage() {
   const [listos, setListos] = useState<number[]>([]);
   const [enPreparacion, setEnPreparacion] = useState<number[]>([]);
+  const [sonidoHabilitado, setSonidoHabilitado] = useState(false);
+
+  // Cargamos el sonido (Campana tipo tienda)
+  const reproducirSonido = () => {
+    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1010/1010-preview.mp3');
+    audio.play().catch(err => console.log('Esperando interacción para sonido...', err));
+  };
 
   useEffect(() => {
     const fetchPedidos = async () => {
@@ -33,7 +40,12 @@ export default function PantallaPage() {
 
     const channel = supabase
       .channel('pantalla-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, fetchPedidos)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          reproducirSonido();
+        }
+        fetchPedidos();
+      })
       .subscribe();
 
     return () => {
@@ -51,6 +63,17 @@ export default function PantallaPage() {
           <p className="mt-2 text-2xl font-bold text-indigo-200 opacity-80 md:text-3xl">
             Pescaderia R. Vicente - Frescura diaria
           </p>
+          {!sonidoHabilitado && (
+            <button 
+              onClick={() => {
+                setSonidoHabilitado(true);
+                reproducirSonido();
+              }}
+              className="mt-4 rounded-full bg-white/20 px-4 py-2 text-sm font-bold backdrop-blur-sm hover:bg-white/30"
+            >
+              🔔 Haz clic aquí para activar sonido
+            </button>
+          )}
         </div>
       </header>
 

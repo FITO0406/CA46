@@ -6,6 +6,12 @@ import type { Pedido } from '@/lib/types';
 
 export default function PedidosPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [sonidoHabilitado, setSonidoHabilitado] = useState(false);
+
+  const reproducirSonido = () => {
+    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1010/1010-preview.mp3');
+    audio.play().catch(err => console.log('Sonido bloqueado por el navegador', err));
+  };
 
   useEffect(() => {
     const fetchPedidos = async () => {
@@ -23,7 +29,10 @@ export default function PedidosPage() {
 
     const channel = supabase
       .channel('pedidos-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          reproducirSonido();
+        }
         fetchPedidos();
       })
       .subscribe();
@@ -49,6 +58,17 @@ export default function PedidosPage() {
             Gestion de pedidos
           </h1>
           <p className="font-bold text-slate-500">Pescaderia R. Vicente - Panel realtime</p>
+          {!sonidoHabilitado && (
+            <button 
+              onClick={() => {
+                setSonidoHabilitado(true);
+                reproducirSonido();
+              }}
+              className="mt-2 text-xs font-bold text-indigo-400 underline underline-offset-4 hover:text-indigo-300"
+            >
+              🔔 Activar avisos sonoros
+            </button>
+          )}
         </div>
         <div className="text-right">
           <div className="text-5xl font-black leading-none text-white">
