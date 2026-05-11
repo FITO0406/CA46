@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import type { Pedido } from '@/lib/types';
 
 export default function PedidosPage() {
-  const [pedidos, setPedidos] = useState<any[]>([]);
+  const [pedidos, setPedidos] = useState<Pedido[]>([]);
 
   useEffect(() => {
     const fetchPedidos = async () => {
@@ -12,13 +13,14 @@ export default function PedidosPage() {
         .from('pedidos')
         .select('*')
         .in('estado', ['pendiente', 'preparando'])
-        .order('creado_en', { ascending: true });
+        .order('creado_en', { ascending: true })
+        .returns<Pedido[]>();
+
       if (data) setPedidos(data);
     };
 
     fetchPedidos();
 
-    // Suscripción a nuevos pedidos o cambios de estado
     const channel = supabase
       .channel('pedidos-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
@@ -26,70 +28,77 @@ export default function PedidosPage() {
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const actualizarEstado = async (id: number, nuevoEstado: string) => {
-    const { error } = await supabase
-      .from('pedidos')
-      .update({ estado: nuevoEstado })
-      .eq('id', id);
-    
-    if (error) alert('Error: ' + error.message);
+    const { error } = await supabase.from('pedidos').update({ estado: nuevoEstado }).eq('id', id);
+    if (error) alert(`Error: ${error.message}`);
   };
 
+  const pedidosDomicilio = pedidos.filter((pedido) => pedido.tipo_entrega === 'domicilio');
+  const pedidosRecogida = pedidos.filter((pedido) => pedido.tipo_entrega !== 'domicilio');
+
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
-      <header className="bg-slate-900 p-6 flex justify-between items-center border-b border-slate-800 shadow-xl">
+    <div className="min-h-screen bg-slate-950 text-white">
+      <header className="flex items-center justify-between border-b border-slate-800 bg-slate-900 p-6 shadow-xl">
         <div>
-          <h1 className="text-4xl font-black tracking-tighter text-indigo-400 uppercase italic">Gestión de Pedidos</h1>
-          <p className="text-slate-500 font-bold">Pescadería R. Vicente - Panel Realtime</p>
+          <h1 className="text-4xl font-black uppercase italic tracking-tighter text-indigo-400">
+            Gestion de pedidos
+          </h1>
+          <p className="font-bold text-slate-500">Pescaderia R. Vicente - Panel realtime</p>
         </div>
         <div className="text-right">
-          <div className="text-5xl font-mono font-black text-white leading-none">
+          <div className="text-5xl font-black leading-none text-white">
             {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </div>
         </div>
       </header>
 
-      <main className="flex-1 flex overflow-hidden">
-        {/* COLUMNA DOMICILIO (PRIORIDAD) */}
-        <section className="flex-1 border-r border-slate-800 flex flex-col bg-slate-900/30">
-          <div className="p-6 bg-rose-600/10 border-b border-rose-500/30 flex justify-between items-center">
-            <h2 className="text-2xl font-black text-rose-500 uppercase tracking-widest flex items-center gap-3">
-              <span className="w-4 h-4 bg-rose-500 rounded-full animate-ping"></span>
-              A Domicilio (Prioridad)
+      <main className="flex min-h-[calc(100vh-113px)] overflow-hidden">
+        <section className="flex flex-1 flex-col border-r border-slate-800 bg-slate-900/30">
+          <div className="flex items-center justify-between border-b border-rose-500/30 bg-rose-600/10 p-6">
+            <h2 className="flex items-center gap-3 text-2xl font-black uppercase tracking-widest text-rose-500">
+              <span className="h-4 w-4 rounded-full bg-rose-500 animate-ping" />
+              A domicilio (prioridad)
             </h2>
-            <span className="bg-rose-500 text-white px-4 py-1 rounded-full font-black text-xl">
-              {pedidos.filter(p => p.tipo_entrega === 'domicilio').length}
+            <span className="rounded-full bg-rose-500 px-4 py-1 text-xl font-black text-white">
+              {pedidosDomicilio.length}
             </span>
           </div>
-          
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {pedidos.filter(p => p.tipo_entrega === 'domicilio').map((p) => (
-              <OrderCard key={p.id} pedido={p} onUpdate={actualizarEstado} />
+
+          <div className="flex-1 space-y-4 overflow-y-auto p-4">
+            {pedidosDomicilio.map((pedido) => (
+              <OrderCard key={pedido.id} pedido={pedido} onUpdate={actualizarEstado} />
             ))}
-            {pedidos.filter(p => p.tipo_entrega === 'domicilio').length === 0 && (
-              <p className="text-center py-20 text-slate-700 italic text-xl">Sin repartos pendientes</p>
+            {pedidosDomicilio.length === 0 && (
+              <p className="py-20 text-center text-xl italic text-slate-700">
+                Sin repartos pendientes
+              </p>
             )}
           </div>
         </section>
 
-        {/* COLUMNA RECOGIDA */}
-        <section className="flex-1 flex flex-col">
-          <div className="p-6 bg-indigo-600/10 border-b border-indigo-500/30 flex justify-between items-center">
-            <h2 className="text-2xl font-black text-indigo-400 uppercase tracking-widest">Recoger en Tienda</h2>
-            <span className="bg-indigo-500 text-white px-4 py-1 rounded-full font-black text-xl">
-              {pedidos.filter(p => p.tipo_entrega !== 'domicilio').length}
+        <section className="flex flex-1 flex-col">
+          <div className="flex items-center justify-between border-b border-indigo-500/30 bg-indigo-600/10 p-6">
+            <h2 className="text-2xl font-black uppercase tracking-widest text-indigo-400">
+              Recoger en tienda
+            </h2>
+            <span className="rounded-full bg-indigo-500 px-4 py-1 text-xl font-black text-white">
+              {pedidosRecogida.length}
             </span>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {pedidos.filter(p => p.tipo_entrega !== 'domicilio').map((p) => (
-              <OrderCard key={p.id} pedido={p} onUpdate={actualizarEstado} />
+          <div className="flex-1 space-y-4 overflow-y-auto p-4">
+            {pedidosRecogida.map((pedido) => (
+              <OrderCard key={pedido.id} pedido={pedido} onUpdate={actualizarEstado} />
             ))}
-            {pedidos.filter(p => p.tipo_entrega !== 'domicilio').length === 0 && (
-              <p className="text-center py-20 text-slate-700 italic text-xl">Sin recogidas pendientes</p>
+            {pedidosRecogida.length === 0 && (
+              <p className="py-20 text-center text-xl italic text-slate-700">
+                Sin recogidas pendientes
+              </p>
             )}
           </div>
         </section>
@@ -98,58 +107,83 @@ export default function PedidosPage() {
   );
 }
 
-function OrderCard({ pedido, onUpdate }: { pedido: any, onUpdate: any }) {
-  const [itemsListo, setItemsListo] = useState<Record<number, boolean>>({});
+function OrderCard({
+  pedido,
+  onUpdate,
+}: {
+  pedido: Pedido;
+  onUpdate: (id: number, nuevoEstado: string) => void;
+}) {
+  const [itemsListos, setItemsListos] = useState<Record<number, boolean>>({});
 
-  const toggleItem = (idx: number) => {
-    setItemsListo(prev => ({ ...prev, [idx]: !prev[idx] }));
+  const toggleItem = (index: number) => {
+    setItemsListos((current) => ({ ...current, [index]: !current[index] }));
   };
 
   return (
-    <div className={`rounded-3xl p-6 flex flex-col gap-4 border shadow-2xl transition-all ${
-      pedido.estado === 'preparando' 
-      ? 'bg-amber-500/10 border-amber-500/50' 
-      : 'bg-slate-800/50 border-slate-700'
-    }`}>
-      <div className="flex justify-between items-start">
+    <div
+      className={`flex flex-col gap-4 rounded-3xl border p-6 shadow-2xl transition-all ${
+        pedido.estado === 'preparando'
+          ? 'border-amber-500/50 bg-amber-500/10'
+          : 'border-slate-700 bg-slate-800/50'
+      }`}
+    >
+      <div className="flex items-start justify-between">
         <div className="flex-1">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-3xl font-black text-white leading-tight uppercase">{pedido.nombre_cliente}</h3>
-            <div className="text-2xl font-black text-slate-500 font-mono">#{pedido.id}</div>
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-3xl font-black uppercase leading-tight text-white">
+              {pedido.nombre_cliente}
+            </h3>
+            <div className="text-2xl font-black text-slate-500">#{pedido.id}</div>
           </div>
-          
+
           <div className="space-y-3">
-            {pedido.contenido.split(', ').map((item: string, idx: number) => {
+            {pedido.contenido.split(', ').map((item, index) => {
               const hasPrep = item.includes('[PREP:');
               const namePart = hasPrep ? item.split(' [PREP: ')[0] : item;
               const prepPart = hasPrep ? item.split(' [PREP: ')[1].replace(']', '') : null;
-              const isChecked = itemsListo[idx];
+              const isChecked = itemsListos[index];
 
               return (
-                <div 
-                  key={idx} 
-                  onClick={() => toggleItem(idx)}
-                  className={`p-4 rounded-2xl border-2 transition-all cursor-pointer select-none active:scale-95 ${
-                    isChecked 
-                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-inner' 
-                    : 'bg-slate-900/50 border-slate-700 text-slate-300'
+                <div
+                  key={`${pedido.id}-${index}`}
+                  onClick={() => toggleItem(index)}
+                  className={`cursor-pointer select-none rounded-2xl border-2 p-4 transition-all ${
+                    isChecked
+                      ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400 shadow-inner'
+                      : 'border-slate-700 bg-slate-900/50 text-slate-300'
                   }`}
                 >
-                  <div className="flex justify-between items-center">
+                  <div className="flex items-center justify-between">
                     <span className={`text-xl font-bold ${isChecked ? 'line-through opacity-50' : ''}`}>
                       {namePart}
                     </span>
                     {isChecked && (
-                      <span className="bg-emerald-500 text-white p-1 rounded-full animate-in zoom-in">
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      <span className="rounded-full bg-emerald-500 p-1 text-white">
+                        <svg
+                          viewBox="0 0 24 24"
+                          width="20"
+                          height="20"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
                       </span>
                     )}
                   </div>
                   {prepPart && (
-                    <div className={`mt-2 p-2 rounded-xl text-sm font-black uppercase italic ${
-                      isChecked ? 'bg-slate-800/50 text-slate-500' : 'bg-amber-500/20 border border-amber-500/40 text-amber-400'
-                    }`}>
-                      ⚠️ {prepPart}
+                    <div
+                      className={`mt-2 rounded-xl p-2 text-sm font-black uppercase ${
+                        isChecked
+                          ? 'bg-slate-800/50 text-slate-500'
+                          : 'border border-amber-500/40 bg-amber-500/20 text-amber-400'
+                      }`}
+                    >
+                      {prepPart}
                     </div>
                   )}
                 </div>
@@ -159,27 +193,29 @@ function OrderCard({ pedido, onUpdate }: { pedido: any, onUpdate: any }) {
         </div>
       </div>
 
-      {pedido.tipo_entrega === 'domicilio' && (
-        <div className="bg-rose-500 p-4 rounded-2xl border-2 border-rose-400 shadow-lg">
-          <p className="text-xs font-black text-rose-100 uppercase tracking-widest mb-1">Dirección de Entrega:</p>
-          <p className="text-xl font-bold text-white leading-tight">{pedido.direccion}</p>
+      {pedido.tipo_entrega === 'domicilio' && pedido.direccion && (
+        <div className="rounded-2xl border-2 border-rose-400 bg-rose-500 p-4 shadow-lg">
+          <p className="mb-1 text-xs font-black uppercase tracking-widest text-rose-100">
+            Direccion de entrega:
+          </p>
+          <p className="text-xl font-bold text-white">{pedido.direccion}</p>
         </div>
       )}
 
       <div className="flex gap-2 pt-2">
         {pedido.estado === 'pendiente' ? (
-          <button 
+          <button
             onClick={() => onUpdate(pedido.id, 'preparando')}
-            className="flex-1 py-5 bg-amber-500 text-black font-black text-2xl rounded-2xl hover:bg-amber-400 uppercase tracking-tighter shadow-lg shadow-amber-900/20"
+            className="flex-1 rounded-2xl bg-amber-500 py-5 text-2xl font-black uppercase tracking-tighter text-black shadow-lg shadow-amber-900/20 hover:bg-amber-400"
           >
             Empezar
           </button>
         ) : (
-          <button 
+          <button
             onClick={() => onUpdate(pedido.id, 'listo')}
-            className="flex-1 py-5 bg-emerald-500 text-white font-black text-2xl rounded-2xl animate-pulse uppercase tracking-tighter shadow-lg shadow-emerald-900/20"
+            className="flex-1 rounded-2xl bg-emerald-500 py-5 text-2xl font-black uppercase tracking-tighter text-white shadow-lg shadow-emerald-900/20"
           >
-            ¿Listo?
+            Listo?
           </button>
         )}
       </div>
