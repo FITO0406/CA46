@@ -14,6 +14,9 @@ const SECCIONES_FIJAS = [
 ] as const;
 
 export default function AdminPage() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -23,6 +26,29 @@ export default function AdminPage() {
   const [otraSeccion, setOtraSeccion] = useState('');
   const [permitePreparacion, setPermitePreparacion] = useState(true);
   const [unidadMedida, setUnidadMedida] = useState<UnidadMedida>('kg');
+
+  useEffect(() => {
+    const auth = localStorage.getItem('ca46_admin_auth');
+    if (auth === 'true') {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password === '1958') {
+      setIsAuthenticated(true);
+      localStorage.setItem('ca46_admin_auth', 'true');
+      setLoginError(false);
+    } else {
+      setLoginError(true);
+    }
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('ca46_admin_auth');
+  };
 
   useEffect(() => {
     async function fetchStatus() {
@@ -242,11 +268,62 @@ export default function AdminPage() {
     return indexA - indexB;
   });
 
+  if (!isAuthenticated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 p-6">
+        <form
+          onSubmit={handleLogin}
+          className="w-full max-w-md space-y-8 rounded-[3rem] border border-slate-800 bg-slate-900/50 p-12 text-center shadow-2xl backdrop-blur-xl"
+        >
+          <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-400">
+            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-4xl font-black uppercase italic tracking-tighter text-white">Panel Control</h1>
+            <p className="mt-2 font-bold text-slate-500">Introduce la contraseña de acceso</p>
+          </div>
+          <div className="space-y-4">
+            <input
+              type="password"
+              placeholder="Contraseña..."
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={`w-full rounded-2xl border-2 bg-slate-800 p-5 text-center text-2xl font-black tracking-[0.5em] text-white transition-all focus:outline-none ${
+                loginError ? 'border-rose-500 bg-rose-500/10' : 'border-transparent focus:border-indigo-500'
+              }`}
+              autoFocus
+            />
+            {loginError && (
+              <p className="text-sm font-bold text-rose-500 animate-pulse">Contraseña incorrecta</p>
+            )}
+          </div>
+          <button
+            type="submit"
+            className="w-full rounded-2xl bg-indigo-600 p-5 text-xl font-black uppercase tracking-widest text-white shadow-xl shadow-indigo-500/20 transition-all hover:bg-indigo-500 active:scale-95"
+          >
+            Entrar
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-900 md:p-12">
-      <header className="mx-auto mb-10 max-w-4xl">
-        <h1 className="mb-2 text-4xl font-bold text-slate-900">Control Fito</h1>
-        <p className="text-lg text-slate-500">Gestion centralizada de Pescaderia R. Vicente</p>
+      <header className="mx-auto mb-10 max-w-4xl flex items-center justify-between">
+        <div>
+          <h1 className="mb-2 text-4xl font-bold text-slate-900">Control Fito</h1>
+          <p className="text-lg text-slate-500">Gestion centralizada de Pescaderia R. Vicente</p>
+        </div>
+        <button 
+          onClick={logout}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-400 hover:bg-slate-50 hover:text-rose-500 transition-all"
+        >
+          Cerrar sesión
+        </button>
       </header>
 
       <main className="mx-auto grid max-w-4xl gap-8">
