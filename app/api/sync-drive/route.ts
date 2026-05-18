@@ -57,6 +57,7 @@ export async function GET() {
           const inserts: any[] = [];
 
       for (const f of files) {
+          if (!f.id || !f.name) continue;
               const { data: existing, error: errCheck } = await supabase
                 .from('digital_tags')
                 .select('id')
