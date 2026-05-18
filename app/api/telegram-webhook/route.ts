@@ -90,11 +90,11 @@ export async function POST(req: Request) {
           // Procesamiento en segundo plano asincrono
           after(async () => {
                   try {
-                            await sendTelegramMessage(chatId, "Procesando factura con Antigravity 2026 (Gemini Flash)...");
+                            await sendTelegramMessage(chatId, "Procesando factura con Antigravity 2026 (Gemini 2.5 Flash)...");
 
                             const imageBytes = await getTelegramFile(fileId);
 
-                            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
                             const prompt = `Eres un asistente experto en lectura de facturas del Mercado Mayorista de Pescados de Mercasevilla.
                             Extrae los datos en formato JSON EXACTAMENTE con esta estructura (nada de markdown, solo JSON puro):
                             {
