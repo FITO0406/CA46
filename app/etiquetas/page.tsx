@@ -21,6 +21,9 @@ export default function EtiquetasPage() {
   useEffect(() => {
     fetchTags();
 
+    // Sincronizar desde Google Drive de forma silenciosa en segundo plano
+    fetch('/api/sync-drive').catch((err) => console.error('Error al sincronizar Google Drive:', err));
+
     // Suscripción a cambios en tiempo real
     const channel = supabase
       .channel('digital_tags_changes')
@@ -38,7 +41,6 @@ export default function EtiquetasPage() {
       supabase.removeChannel(channel);
     };
   }, []);
-
   async function fetchTags() {
     setLoading(true);
     // Filtrar etiquetas activas y no expiradas

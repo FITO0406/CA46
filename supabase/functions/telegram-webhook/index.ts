@@ -7,9 +7,6 @@ const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') || ''
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') || ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-
-// El JSON de la cuenta de servicio de Google debe estar guardado como string en base64 o como string literal en las variables de entorno.
-// Usaremos GOOGLE_SERVICE_ACCOUNT_JSON
 const GOOGLE_SA_JSON = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_JSON') || ''
 const DRIVE_ROOT_FOLDER_ID = '1g186tAcQ10eqkUKvT9s_eDdB2S-zCeOO' // Carpeta ETIQUETAS
 
@@ -33,7 +30,12 @@ async function sendTelegramMessage(chatId: string, text: string) {
 }
 
 async function getDriveAuth() {
-  const credentials = JSON.parse(GOOGLE_SA_JSON)
+  let jsonString = GOOGLE_SA_JSON.trim();
+  if ((jsonString.startsWith("'") && jsonString.endsWith("'")) || 
+      (jsonString.startsWith('"') && jsonString.endsWith('"'))) {
+    jsonString = jsonString.slice(1, -1);
+  }
+  const credentials = JSON.parse(jsonString)
   const auth = new google.auth.GoogleAuth({
     credentials,
     scopes: ['https://www.googleapis.com/auth/drive'],
@@ -85,17 +87,17 @@ serve(async (req) => {
 
     const chatId = update.message.chat.id
     const photos = update.message.photo
-    // Telegram envía varios tamaños, agarramos el más grande
     const fileId = photos[photos.length - 1].file_id
     
-    await sendTelegramMessage(chatId, "Procesando etiqueta con Antigravity 2026 (Gemini Vision)...")
+    // Ejecución diferida/en segundo plano para Deno
+    (async () => {
+      try {
+        await sendTelegramMessage(chatId, "Procesando factura con Antigravity 2026 (Gemini Flash)...")
 
-    // 1. Descargar imagen
-    const imageBytes = await getTelegramFile(fileId)
+        const imageBytes = await getTelegramFile(fileId)
 
-    // 2. Extraer datos con Gemini
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" }) // gemini-1.5-pro es excelente para facturas
-    const prompt = `Eres un asistente experto en lectura de facturas del Mercado Mayorista de Pescados de Mercasevilla.
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
+        const prompt = `Eres un asistente experto en lectura de facturas del Mercado Mayorista de Pescados de Mercasevilla.
 Extrae los datos en formato JSON EXACTAMENTE con esta estructura (nada de markdown, solo JSON puro):
 {
   "expedicion": { "codigo_ce": null },
@@ -120,49 +122,47 @@ Sigue estas reglas estrictas:
 2) NO inventes. Si no está, usa null.
 3) NO incluyas precios, importes, IVA ni totales.`
 
-    const imageParts = [
-      {
-        inlineData: {
-          data: btoa(String.fromCharCode.apply(null, Array.from(imageBytes))),
-          mimeType: "image/jpeg"
+        // En Deno, convertir ArrayBuffer a Base64:
+        const base64Image = btoa(String.fromCharCode(...imageBytes))
+        const imageParts = [
+          {
+            inlineData: {
+              data: base64Image,
+              mimeType: "image/jpeg"
+            }
+          }
+        ]
+
+        const result = await model.generateContent([prompt, ...imageParts])
+        let responseText = result.response.text()
+        if (responseText.startsWith('```json')) {
+          responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim()
         }
-      }
-    ]
+        
+        const extractedData = JSON.parse(responseText)
+        
+        const now = new Date()
+        const expDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) // +7 días
+        
+        const dbInserts = []
+        let txtFileContent = ''
 
-    const result = await model.generateContent([prompt, ...imageParts])
-    let responseText = result.response.text()
-    // Limpiar markdown si Gemini lo añade a pesar de la orden
-    if (responseText.startsWith('```json')) {
-      responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim()
-    }
-    
-    const extractedData = JSON.parse(responseText)
-    
-    // 3. Procesar e insertar en Base de Datos (digital_tags)
-    const now = new Date()
-    const expDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) // +7 días
-    
-    const dbInserts = []
-    let txtFileContent = ''
+        for (const producto of extractedData.productos) {
+          dbInserts.push({
+            drive_file_id: `telegram_${fileId}_${Math.random().toString(36).substring(7)}`,
+            product_name: producto.descripcion || 'Producto Desconocido',
+            price: 0,
+            unit: 'kg',
+            origin: producto.procedencia || null,
+            category: 'General',
+            is_active: true,
+            created_at: now.toISOString(),
+            expires_at: expDate.toISOString()
+          })
 
-    for (const producto of extractedData.productos) {
-      // Normalizar para DB
-      dbInserts.push({
-        drive_file_id: `telegram_${fileId}_${Math.random().toString(36).substring(7)}`, // ID único temporal
-        product_name: producto.descripcion || 'Producto Desconocido',
-        price: 0, // El modelo no extrae precio, poner 0 por defecto o ajustar DB si es opcional
-        unit: 'kg', // Asumido por defecto
-        origin: producto.procedencia || null,
-        category: 'General',
-        is_active: true,
-        created_at: now.toISOString(),
-        expires_at: expDate.toISOString()
-      })
-
-      // Formato para el archivo .txt de histórico
-      txtFileContent += `--------------------------------
+          txtFileContent += `--------------------------------
  MERCASEVILLA - PABELLON PESCADOS
---------------------------------
+ --------------------------------
 Descripcion: ${producto.descripcion}
 Lote: ${producto.lote}
 Marca: ${producto.marca}
@@ -178,38 +178,47 @@ CE: ${extractedData.expedicion?.codigo_ce}
 Comprador: ${extractedData.comprador?.nombre}
 N: ${extractedData.comprador?.codigo}
 --------------------------------\n\n`
-    }
+        }
 
-    if (dbInserts.length > 0) {
-      const { error } = await supabase.from('digital_tags').insert(dbInserts)
-      if (error) throw new Error("Error guardando en base de datos: " + error.message)
-    }
+        if (dbInserts.length > 0) {
+          const { error } = await supabase.from('digital_tags').insert(dbInserts)
+          if (error) throw new Error("Error guardando en base de datos: " + error.message)
+        }
 
-    // 4. Subir a Google Drive creando carpetas Año/Mes
-    if (txtFileContent && GOOGLE_SA_JSON) {
-      const auth = await getDriveAuth()
-      const drive = google.drive({ version: 'v3', auth })
-      
-      const year = String(now.getFullYear())
-      const month = String(now.getMonth() + 1).padStart(2, '0') // 01, 02...
-      
-      const yearFolderId = await getOrCreateFolder(drive, DRIVE_ROOT_FOLDER_ID, year)
-      const monthFolderId = await getOrCreateFolder(drive, yearFolderId, month)
-      
-      const firstProduct = extractedData.productos[0]?.descripcion || 'Varios'
-      const timestamp = now.toISOString().replace(/[:.]/g, '').replace('T', '_').slice(0, 15)
-      const fileName = `etiqueta_${timestamp}_${firstProduct}.txt`
-      
-      await uploadTextToDrive(drive, monthFolderId, fileName, txtFileContent)
-    }
+        if (txtFileContent && GOOGLE_SA_JSON) {
+          const auth = await getDriveAuth()
+          const drive = google.drive({ version: 'v3', auth })
+          
+          const year = String(now.getFullYear())
+          const month = String(now.getMonth() + 1).padStart(2, '0')
+          
+          const yearFolderId = await getOrCreateFolder(drive, DRIVE_ROOT_FOLDER_ID, year)
+          const monthFolderId = await getOrCreateFolder(drive, yearFolderId, month)
+          
+          const firstProduct = extractedData.productos[0]?.descripcion || 'Varios'
+          const timestamp = now.toISOString().replace(/[:.]/g, '').replace('T', '_').slice(0, 15)
+          const fileName = `etiqueta_${timestamp}_${firstProduct}.txt`
+          
+          await uploadTextToDrive(drive, monthFolderId, fileName, txtFileContent)
+        }
 
-    // 5. Responder a Telegram
-    await sendTelegramMessage(chatId, `✅ Etiqueta procesada y archivada con éxito.\nProductos: ${extractedData.productos.length}\nCarpeta: /${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`)
+        await sendTelegramMessage(chatId, `✅ Etiqueta procesada y archivada con éxito.\nProductos: ${extractedData.productos.length}\nCarpeta: /${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`)
 
+      } catch (innerError: any) {
+        console.error("❌ Error en el procesamiento diferido del webhook (Deno):", innerError)
+        try {
+          await sendTelegramMessage(chatId, `❌ Ocurrió un error al procesar tu factura:\n${innerError.message || 'Error desconocido'}`)
+        } catch (tgError) {
+          console.error("Error al enviar mensaje de error a Telegram:", tgError)
+        }
+      }
+    })()
+
+    // Retornamos 200 OK inmediatamente a Telegram
     return new Response("OK", { status: 200 })
 
-  } catch (error) {
-    console.error(error)
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 })
+  } catch (error: any) {
+    console.error("❌ Error al recibir webhook (Deno):", error)
+    return new Response(JSON.stringify({ success: false, error: error.message }), { status: 200 })
   }
 })
