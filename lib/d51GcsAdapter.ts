@@ -23,11 +23,20 @@ function getStorageClient(): Storage {
 
   const clientEmail = credentials.client_email;
   let privateKey = credentials.private_key || '';
+
   if (typeof privateKey === 'string') {
     privateKey = privateKey
+      .replace(/^["']|["']$/g, '')
       .replace(/\\n/g, '\n')
       .replace(/\r\n/g, '\n')
       .trim();
+
+    if (privateKey.includes('-----BEGIN PRIVATE KEY-----') && !privateKey.includes('-----BEGIN PRIVATE KEY-----\n')) {
+      privateKey = privateKey.replace('-----BEGIN PRIVATE KEY-----', '-----BEGIN PRIVATE KEY-----\n');
+    }
+    if (privateKey.includes('-----END PRIVATE KEY-----') && !privateKey.includes('\n-----END PRIVATE KEY-----')) {
+      privateKey = privateKey.replace('-----END PRIVATE KEY-----', '\n-----END PRIVATE KEY-----');
+    }
   }
 
   return new Storage({
