@@ -93,8 +93,8 @@ export async function writeOutboxToD51Vault(filename: string, content: string | 
   const sha256Hash = crypto.createHash('sha256').update(buffer).digest('hex');
 
   await file.save(buffer, {
+    contentType: 'application/json',
     metadata: {
-      contentType: 'application/json',
       metadata: {
         project: 'CA46',
         environment: 'production',
@@ -103,7 +103,6 @@ export async function writeOutboxToD51Vault(filename: string, content: string | 
         created_at: new Date().toISOString()
       }
     },
-    resumable: false,
     validation: 'crc32c'
   });
 
