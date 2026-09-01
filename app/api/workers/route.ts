@@ -128,9 +128,9 @@ async function executeWorker(workerName: string, payload: any, correlationId: st
         workersExecuted: 4,
         workers: {
           ImportWorker: importResult.status,
-          RetentionD47Worker: d47Result.status,
+          RetentionD47Worker: d47Result.outboxPrepared ? 'SUCCESS' : 'FAILED',
           ContinuityOutboxWorker: outboxResult.status,
-          AuditPiiScrubberWorker: scrubberResult.status
+          AuditPiiScrubberWorker: scrubberResult ? 'SUCCESS' : 'FAILED'
         },
         results: {
           ImportWorker: importResult,
