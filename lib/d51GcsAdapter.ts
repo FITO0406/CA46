@@ -7,10 +7,11 @@ function formatPemPrivateKey(rawKey: string): string {
   if (!rawKey) return '';
   let cleaned = rawKey.replace(/^["']|["']$/g, '').replace(/\\n/g, '\n').replace(/\r\n/g, '\n').trim();
 
-  const headerMatch = cleaned.match(/-----BEGIN PRIVATE KEY-----\s*([\s\S]*?)\s*-----END PRIVATE KEY-----/);
-  if (headerMatch && headerMatch[1]) {
-    const body = headerMatch[1].replace(/\s+/g, '');
-    return `-----BEGIN PRIVATE KEY-----\n${body}\n-----END PRIVATE KEY-----\n`;
+  const match = cleaned.match(/-----BEGIN PRIVATE KEY-----\s*([\s\S]*?)\s*-----END PRIVATE KEY-----/);
+  if (match && match[1]) {
+    const pureBase64 = match[1].replace(/\s+/g, '');
+    const wrapped = pureBase64.match(/.{1,64}/g)?.join('\n');
+    return `-----BEGIN PRIVATE KEY-----\n${wrapped}\n-----END PRIVATE KEY-----\n`;
   }
   return cleaned;
 }
