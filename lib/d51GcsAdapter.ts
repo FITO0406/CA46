@@ -31,13 +31,14 @@ function getStorageClient(): Storage {
       .replace(/\r\n/g, '\n')
       .trim();
 
-    if (privateKey.includes('-----BEGIN PRIVATE KEY-----') && !privateKey.includes('-----BEGIN PRIVATE KEY-----\n')) {
-      privateKey = privateKey.replace('-----BEGIN PRIVATE KEY-----', '-----BEGIN PRIVATE KEY-----\n');
-    }
-    if (privateKey.includes('-----END PRIVATE KEY-----') && !privateKey.includes('\n-----END PRIVATE KEY-----')) {
-      privateKey = privateKey.replace('-----END PRIVATE KEY-----', '\n-----END PRIVATE KEY-----');
+    if (!privateKey.includes('\n')) {
+      privateKey = privateKey
+        .replace('-----BEGIN PRIVATE KEY-----', '-----BEGIN PRIVATE KEY-----\n')
+        .replace('-----END PRIVATE KEY-----', '\n-----END PRIVATE KEY-----');
     }
   }
+
+  console.log(`[D51 GCS Init] ClientEmail=${clientEmail}, KeyLen=${privateKey.length}, HasNL=${privateKey.includes('\n')}`);
 
   return new Storage({
     projectId: credentials.project_id || 'opengravityfito',
