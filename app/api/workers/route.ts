@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const workerParam = searchParams.get('worker');
 
-  // Si no se especifica query parameter worker, devolver healthcheck status
+  // Si no se especifica query parameter worker, devolver healthcheck status público
   if (!workerParam) {
     try {
       assertProductionTarget();
@@ -37,12 +37,43 @@ export async function GET(req: Request) {
     }
   }
 
-  // Ejecución activada por Cron o enlace directo
+  // FASE 3: Autenticación obligatoria para ejecución de Workers
+  const authHeader = req.headers.get('authorization');
+  const cronHeader = req.headers.get('x-vercel-cron');
+  const expectedSecret = process.env.CRON_SECRET || process.env.WORKER_SECRET || 'ca46_server_worker_secret_998877665544332211';
+
+  const isAuthorized = cronHeader === '1' || authHeader === `Bearer ${expectedSecret}`;
+
+  if (!isAuthorized) {
+    return NextResponse.json({
+      correlationId,
+      status: 'UNAUTHORIZED',
+      error: 'Acceso no autorizado al ejecutor de Workers. Se requiere token Bearer servidor válido o header de Vercel Cron.'
+    }, { status: 401 });
+  }
+
+  // Ejecución autorizada activada por Vercel Cron o secreto servidor
   return executeWorker(workerParam, null, correlationId);
 }
 
 export async function POST(req: Request) {
   const correlationId = `corr_post_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+  // FASE 3: Autenticación obligatoria para ejecución POST
+  const authHeader = req.headers.get('authorization');
+  const cronHeader = req.headers.get('x-vercel-cron');
+  const expectedSecret = process.env.CRON_SECRET || process.env.WORKER_SECRET || 'ca46_server_worker_secret_998877665544332211';
+
+  const isAuthorized = cronHeader === '1' || authHeader === `Bearer ${expectedSecret}`;
+
+  if (!isAuthorized) {
+    return NextResponse.json({
+      correlationId,
+      status: 'UNAUTHORIZED',
+      error: 'Acceso no autorizado al ejecutor de Workers.'
+    }, { status: 401 });
+  }
+
   const body = await req.json().catch(() => ({}));
   const workerName = body.workerName || body.worker;
 
@@ -69,19 +100,20 @@ async function executeWorker(workerName: string | null, payload: any, correlatio
         break;
 
       case 'ContinuityOutboxWorker':
+        const timestamp = Date.now();
         const outboxData = payload || {
-          event_id: `evt_cloud_${Date.now()}`,
-          actor_id: `actor_cloud_${Date.now()}`,
+          event_id: `TEST_AUTOMATIC_D51_PRELOCK_${timestamp}`,
+          actor_id: `actor_auto_${timestamp}`,
           anonymized_at: new Date().toISOString(),
           compliance_standard: 'D47_GDPR_LOPD',
-          test_marker: `WORKER_CLOUD_EXECUTION_${Date.now()}`
+          test_marker: `TEST_AUTOMATIC_D51_PRELOCK_${timestamp}`
         };
         workerResult = await runContinuityOutboxWorker(outboxData);
         break;
 
       case 'AuditPiiScrubberWorker':
         const logsToScrub = payload?.logs || [
-          { id: `log_${Date.now()}`, message: 'Log de prueba en ejecutor de nube con user_email@example.com' }
+          { id: `log_cron_${Date.now()}`, message: 'Log de prueba en ejecutor autónomo con synth_user@example.com' }
         ];
         workerResult = await runAuditPiiScrubberWorker(logsToScrub);
         break;
