@@ -17,18 +17,25 @@ function formatPemPrivateKey(rawKey: string): string {
 }
 
 function getStorageClient(): Storage {
-  const saJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
+  let saJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
   if (!saJson) {
     throw new Error('[D51 GCS Error] GOOGLE_SERVICE_ACCOUNT_JSON no está presente en el entorno.');
   }
 
-  let credentials;
+  let jsonString = saJson.trim();
+  if ((jsonString.startsWith("'") && jsonString.endsWith("'")) ||
+      (jsonString.startsWith('"') && jsonString.endsWith('"')) ) {
+    jsonString = jsonString.slice(1, -1);
+  }
+
+  if (!jsonString.startsWith('{')) {
+    try {
+      jsonString = Buffer.from(jsonString, 'base64').toString('utf-8').trim();
+    } catch (e) {}
+  }
+
+  let credentials: any;
   try {
-    let jsonString = saJson.trim();
-    if ((jsonString.startsWith("'") && jsonString.endsWith("'")) ||
-        (jsonString.startsWith('"') && jsonString.endsWith('"')) ) {
-      jsonString = jsonString.slice(1, -1);
-    }
     credentials = JSON.parse(jsonString);
   } catch (err: any) {
     throw new Error(`[D51 GCS Error] Error al decodificar GOOGLE_SERVICE_ACCOUNT_JSON: ${err.message}`);
