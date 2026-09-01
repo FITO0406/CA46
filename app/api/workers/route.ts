@@ -9,12 +9,19 @@ import { assertGoogleTarget, ALLOWED_GCS_BUCKET_NAME, ALLOWED_GCS_REGION } from 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
-  const correlationId = `corr_get_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  const correlationId = `corr_cron_${Date.now()}_${Math.random().toString(36).substring(7)}`;
   const { searchParams } = new URL(req.url);
-  const workerParam = searchParams.get('worker');
+  const workerParam = searchParams.get('worker') || 'all';
 
-  // Si no se especifica query parameter worker, devolver healthcheck status público
-  if (!workerParam) {
+  // Autenticación obligatoria para invocación de Workers (Vercel Cron o token servidor)
+  const authHeader = req.headers.get('authorization');
+  const cronHeader = req.headers.get('x-vercel-cron');
+  const expectedSecret = process.env.CRON_SECRET || process.env.WORKER_SECRET || 'ca46_server_worker_secret_998877665544332211';
+
+  const isAuthorized = cronHeader === '1' || authHeader === `Bearer ${expectedSecret}`;
+
+  // Si no viene autorizado ni hay workerParam específico, responder healthcheck público básico
+  if (!searchParams.get('worker') && !isAuthorized) {
     try {
       assertProductionTarget();
       assertGoogleTarget(ALLOWED_GCS_BUCKET_NAME, ALLOWED_GCS_REGION);
@@ -37,13 +44,6 @@ export async function GET(req: Request) {
     }
   }
 
-  // FASE 3: Autenticación obligatoria para ejecución de Workers
-  const authHeader = req.headers.get('authorization');
-  const cronHeader = req.headers.get('x-vercel-cron');
-  const expectedSecret = process.env.CRON_SECRET || process.env.WORKER_SECRET || 'ca46_server_worker_secret_998877665544332211';
-
-  const isAuthorized = cronHeader === '1' || authHeader === `Bearer ${expectedSecret}`;
-
   if (!isAuthorized) {
     return NextResponse.json({
       correlationId,
@@ -52,14 +52,12 @@ export async function GET(req: Request) {
     }, { status: 401 });
   }
 
-  // Ejecución autorizada activada por Vercel Cron o secreto servidor
-  return executeWorker(workerParam, null, correlationId);
+  return executeWorker(workerParam, null, correlationId, 'VERCEL_CRON');
 }
 
 export async function POST(req: Request) {
   const correlationId = `corr_post_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-  // FASE 3: Autenticación obligatoria para ejecución POST
   const authHeader = req.headers.get('authorization');
   const cronHeader = req.headers.get('x-vercel-cron');
   const expectedSecret = process.env.CRON_SECRET || process.env.WORKER_SECRET || 'ca46_server_worker_secret_998877665544332211';
@@ -75,47 +73,86 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const workerName = body.workerName || body.worker;
+  const workerName = body.workerName || body.worker || 'all';
 
-  return executeWorker(workerName, body.payload, correlationId);
+  return executeWorker(workerName, body.payload, correlationId, 'SERVER_API');
 }
 
-async function executeWorker(workerName: string | null, payload: any, correlationId: string) {
+async function executeWorker(workerName: string, payload: any, correlationId: string, triggerSource: string) {
   const startTime = Date.now();
 
   try {
     assertProductionTarget();
     assertGoogleTarget(ALLOWED_GCS_BUCKET_NAME, ALLOWED_GCS_REGION);
 
-    let workerResult: any = null;
+    const timestamp = Date.now();
+
+    if (workerName === 'all') {
+      console.log(`[Vercel Cron Trigger] Ejecutando secuencia completa de los 4 Workers (${triggerSource})...`);
+
+      const importResult = await runImportWorker(`job_cron_${timestamp}`);
+      const d47Result = await runRetentionD47Worker(`actor_cron_${timestamp}`, { nombre: 'Sintético Cron', email: 'synth_cron@example.com' });
+
+      const outboxPayload = {
+        event_id: `TEST_AUTOMATIC_D51_CRON_${timestamp}`,
+        actor_id: d47Result.actorId,
+        pseudonym: d47Result.pseudonym,
+        anonymized_at: new Date().toISOString(),
+        compliance_standard: 'D47_GDPR_LOPD',
+        test_marker: `TEST_AUTOMATIC_D51_CRON_${timestamp}`
+      };
+
+      const outboxResult = await runContinuityOutboxWorker(outboxPayload);
+      const scrubberResult = await runAuditPiiScrubberWorker([
+        { id: `log_cron_${timestamp}`, message: 'Log de ejecución autónoma Vercel Cron con email user_cron@example.com' }
+      ]);
+
+      const durationMs = Date.now() - startTime;
+
+      return NextResponse.json({
+        correlationId,
+        trigger: triggerSource,
+        status: 'SUCCESS',
+        durationMs,
+        timestampUTC: new Date().toISOString(),
+        workersExecuted: 4,
+        results: {
+          ImportWorker: importResult,
+          RetentionD47Worker: d47Result,
+          ContinuityOutboxWorker: outboxResult,
+          AuditPiiScrubberWorker: scrubberResult
+        }
+      }, { status: 200 });
+    }
+
+    let singleResult: any = null;
 
     switch (workerName) {
       case 'ImportWorker':
-        workerResult = await runImportWorker(payload?.jobId);
+        singleResult = await runImportWorker(payload?.jobId);
         break;
 
       case 'RetentionD47Worker':
-        const actorId = payload?.actorId || `actor_cron_${Date.now()}`;
-        workerResult = await runRetentionD47Worker(actorId, payload?.piiData || { nombre: 'Sintético Cron', email: 'synth_cron@example.com' });
+        const actorId = payload?.actorId || `actor_cron_${timestamp}`;
+        singleResult = await runRetentionD47Worker(actorId, payload?.piiData || { nombre: 'Sintético Cron', email: 'synth_cron@example.com' });
         break;
 
       case 'ContinuityOutboxWorker':
-        const timestamp = Date.now();
         const outboxData = payload || {
-          event_id: `TEST_AUTOMATIC_D51_PRELOCK_${timestamp}`,
+          event_id: `TEST_AUTOMATIC_D51_CRON_${timestamp}`,
           actor_id: `actor_auto_${timestamp}`,
           anonymized_at: new Date().toISOString(),
           compliance_standard: 'D47_GDPR_LOPD',
-          test_marker: `TEST_AUTOMATIC_D51_PRELOCK_${timestamp}`
+          test_marker: `TEST_AUTOMATIC_D51_CRON_${timestamp}`
         };
-        workerResult = await runContinuityOutboxWorker(outboxData);
+        singleResult = await runContinuityOutboxWorker(outboxData);
         break;
 
       case 'AuditPiiScrubberWorker':
         const logsToScrub = payload?.logs || [
-          { id: `log_cron_${Date.now()}`, message: 'Log de prueba en ejecutor autónomo con synth_user@example.com' }
+          { id: `log_cron_${timestamp}`, message: 'Log de prueba en ejecutor autónomo con synth_user@example.com' }
         ];
-        workerResult = await runAuditPiiScrubberWorker(logsToScrub);
+        singleResult = await runAuditPiiScrubberWorker(logsToScrub);
         break;
 
       default:
@@ -129,11 +166,12 @@ async function executeWorker(workerName: string | null, payload: any, correlatio
 
     return NextResponse.json({
       correlationId,
+      trigger: triggerSource,
       workerName,
       status: 'SUCCESS',
       durationMs,
-      timestamp: new Date().toISOString(),
-      result: workerResult
+      timestampUTC: new Date().toISOString(),
+      result: singleResult
     }, { status: 200 });
 
   } catch (err: any) {
@@ -142,9 +180,10 @@ async function executeWorker(workerName: string | null, payload: any, correlatio
 
     return NextResponse.json({
       correlationId,
+      trigger: triggerSource,
       status: 'FAILED',
       durationMs,
-      timestamp: new Date().toISOString(),
+      timestampUTC: new Date().toISOString(),
       errorCode: 'WORKER_EXECUTION_ERROR',
       message: err.message
     }, { status: 500 });
