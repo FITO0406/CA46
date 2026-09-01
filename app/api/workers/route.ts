@@ -13,14 +13,18 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const workerParam = searchParams.get('worker') || 'all';
 
-  // Autenticación obligatoria para invocación de Workers (Vercel Cron o token servidor)
+  // FASE 0 & FASE 3: Autenticación obligatoria con variable server-side o Vercel Cron header
   const authHeader = req.headers.get('authorization');
   const cronHeader = req.headers.get('x-vercel-cron');
-  const expectedSecret = process.env.CRON_SECRET || process.env.WORKER_SECRET || 'ca46_server_worker_secret_998877665544332211';
+  const expectedSecret = process.env.WORKER_SECRET || process.env.CRON_SECRET;
 
-  const isAuthorized = cronHeader === '1' || authHeader === `Bearer ${expectedSecret}`;
+  const isVercelCron = cronHeader === '1';
+  const isServerAuth = expectedSecret && authHeader === `Bearer ${expectedSecret}`;
+  const isAuthorized = isVercelCron || isServerAuth;
 
-  // Si no viene autorizado ni hay workerParam específico, responder healthcheck público básico
+  const triggerSource = isVercelCron ? 'VERCEL_CRON' : (isServerAuth ? 'SERVER_AUTH' : 'UNAUTHORIZED');
+
+  // Responder healthcheck público únicamente cuando no se especifica query parameter worker y no viene autorizado
   if (!searchParams.get('worker') && !isAuthorized) {
     try {
       assertProductionTarget();
@@ -47,12 +51,13 @@ export async function GET(req: Request) {
   if (!isAuthorized) {
     return NextResponse.json({
       correlationId,
+      triggerSource: 'UNAUTHORIZED',
       status: 'UNAUTHORIZED',
-      error: 'Acceso no autorizado al ejecutor de Workers. Se requiere token Bearer servidor válido o header de Vercel Cron.'
+      error: 'Acceso no autorizado al ejecutor de Workers. Se requiere token Bearer servidor válido o firma de Vercel Cron.'
     }, { status: 401 });
   }
 
-  return executeWorker(workerParam, null, correlationId, 'VERCEL_CRON');
+  return executeWorker(workerParam, null, correlationId, triggerSource);
 }
 
 export async function POST(req: Request) {
@@ -60,13 +65,18 @@ export async function POST(req: Request) {
 
   const authHeader = req.headers.get('authorization');
   const cronHeader = req.headers.get('x-vercel-cron');
-  const expectedSecret = process.env.CRON_SECRET || process.env.WORKER_SECRET || 'ca46_server_worker_secret_998877665544332211';
+  const expectedSecret = process.env.WORKER_SECRET || process.env.CRON_SECRET;
 
-  const isAuthorized = cronHeader === '1' || authHeader === `Bearer ${expectedSecret}`;
+  const isVercelCron = cronHeader === '1';
+  const isServerAuth = expectedSecret && authHeader === `Bearer ${expectedSecret}`;
+  const isAuthorized = isVercelCron || isServerAuth;
+
+  const triggerSource = isVercelCron ? 'VERCEL_CRON' : (isServerAuth ? 'SERVER_AUTH' : 'UNAUTHORIZED');
 
   if (!isAuthorized) {
     return NextResponse.json({
       correlationId,
+      triggerSource: 'UNAUTHORIZED',
       status: 'UNAUTHORIZED',
       error: 'Acceso no autorizado al ejecutor de Workers.'
     }, { status: 401 });
@@ -75,7 +85,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const workerName = body.workerName || body.worker || 'all';
 
-  return executeWorker(workerName, body.payload, correlationId, 'SERVER_API');
+  return executeWorker(workerName, body.payload, correlationId, triggerSource);
 }
 
 async function executeWorker(workerName: string, payload: any, correlationId: string, triggerSource: string) {
@@ -88,7 +98,7 @@ async function executeWorker(workerName: string, payload: any, correlationId: st
     const timestamp = Date.now();
 
     if (workerName === 'all') {
-      console.log(`[Vercel Cron Trigger] Ejecutando secuencia completa de los 4 Workers (${triggerSource})...`);
+      console.log(`[Worker Execution] Ejecutando secuencia completa de los 4 Workers. TriggerSource=${triggerSource}...`);
 
       const importResult = await runImportWorker(`job_cron_${timestamp}`);
       const d47Result = await runRetentionD47Worker(`actor_cron_${timestamp}`, { nombre: 'Sintético Cron', email: 'synth_cron@example.com' });
@@ -111,11 +121,17 @@ async function executeWorker(workerName: string, payload: any, correlationId: st
 
       return NextResponse.json({
         correlationId,
-        trigger: triggerSource,
+        triggerSource,
         status: 'SUCCESS',
         durationMs,
         timestampUTC: new Date().toISOString(),
         workersExecuted: 4,
+        workers: {
+          ImportWorker: importResult.status,
+          RetentionD47Worker: d47Result.status,
+          ContinuityOutboxWorker: outboxResult.status,
+          AuditPiiScrubberWorker: scrubberResult.status
+        },
         results: {
           ImportWorker: importResult,
           RetentionD47Worker: d47Result,
@@ -158,6 +174,7 @@ async function executeWorker(workerName: string, payload: any, correlationId: st
       default:
         return NextResponse.json({
           correlationId,
+          triggerSource,
           error: `Worker '${workerName}' no reconocido.`
         }, { status: 400 });
     }
@@ -166,7 +183,7 @@ async function executeWorker(workerName: string, payload: any, correlationId: st
 
     return NextResponse.json({
       correlationId,
-      trigger: triggerSource,
+      triggerSource,
       workerName,
       status: 'SUCCESS',
       durationMs,
@@ -180,7 +197,7 @@ async function executeWorker(workerName: string, payload: any, correlationId: st
 
     return NextResponse.json({
       correlationId,
-      trigger: triggerSource,
+      triggerSource,
       status: 'FAILED',
       durationMs,
       timestampUTC: new Date().toISOString(),
