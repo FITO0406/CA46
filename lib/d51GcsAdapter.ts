@@ -3,6 +3,18 @@ import crypto from 'crypto';
 import { assertProductionTarget } from './targetGuard';
 import { assertGoogleTarget, ALLOWED_GCS_BUCKET_NAME, ALLOWED_GCS_REGION } from './googleTargetGuard';
 
+function formatPemPrivateKey(rawKey: string): string {
+  if (!rawKey) return '';
+  let cleaned = rawKey.replace(/^["']|["']$/g, '').replace(/\\n/g, '\n').replace(/\r\n/g, '\n').trim();
+
+  const headerMatch = cleaned.match(/-----BEGIN PRIVATE KEY-----\s*([\s\S]*?)\s*-----END PRIVATE KEY-----/);
+  if (headerMatch && headerMatch[1]) {
+    const body = headerMatch[1].replace(/\s+/g, '');
+    return `-----BEGIN PRIVATE KEY-----\n${body}\n-----END PRIVATE KEY-----\n`;
+  }
+  return cleaned;
+}
+
 function getStorageClient(): Storage {
   const saJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
   if (!saJson) {
@@ -22,23 +34,7 @@ function getStorageClient(): Storage {
   }
 
   const clientEmail = credentials.client_email;
-  let privateKey = credentials.private_key || '';
-
-  if (typeof privateKey === 'string') {
-    privateKey = privateKey
-      .replace(/^["']|["']$/g, '')
-      .replace(/\\n/g, '\n')
-      .replace(/\r\n/g, '\n')
-      .trim();
-
-    if (!privateKey.includes('\n')) {
-      privateKey = privateKey
-        .replace('-----BEGIN PRIVATE KEY-----', '-----BEGIN PRIVATE KEY-----\n')
-        .replace('-----END PRIVATE KEY-----', '\n-----END PRIVATE KEY-----');
-    }
-  }
-
-  console.log(`[D51 GCS Init] ClientEmail=${clientEmail}, KeyLen=${privateKey.length}, HasNL=${privateKey.includes('\n')}`);
+  const privateKey = formatPemPrivateKey(credentials.private_key);
 
   return new Storage({
     projectId: credentials.project_id || 'opengravityfito',
