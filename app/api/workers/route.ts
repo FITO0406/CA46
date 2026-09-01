@@ -6,6 +6,8 @@ import { runAuditPiiScrubberWorker } from '@/lib/workers/auditPiiScrubberWorker'
 import { assertProductionTarget } from '@/lib/targetGuard';
 import { assertGoogleTarget, ALLOWED_GCS_BUCKET_NAME, ALLOWED_GCS_REGION } from '@/lib/googleTargetGuard';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: Request) {
   const correlationId = `corr_get_${Date.now()}_${Math.random().toString(36).substring(7)}`;
   const { searchParams } = new URL(req.url);
