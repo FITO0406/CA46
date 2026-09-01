@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/workers?worker=ImportWorker",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/workers?worker=ContinuityOutboxWorker",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/workers?worker=AuditPiiScrubberWorker",
+      "schedule": "0 4 * * *"
+    }
+  ]
+}

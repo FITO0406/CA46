@@ -43,16 +43,15 @@ export default function EtiquetasPage() {
     try {
       const res = await fetch('/api/sync-drive');
       const data = await res.json();
-      alert(`Sincronizacion completada. Nuevas etiquetas: ${data.inserted || 0}`);
+      alert(`Sincronización completada. Nuevas etiquetas: ${data.inserted || 0}`);
       fetchTags();
     } catch (err) {
       console.error(err);
-      alert('Error en la sincronizacion');
+      alert('Error en la sincronización');
     } finally {
       setSyncing(false);
     }
   }
-
 
   if (loading) {
     return (
@@ -68,7 +67,7 @@ export default function EtiquetasPage() {
         <div className="mb-8 flex flex-col items-center justify-between gap-4 md:flex-row">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Etiquetas Digitales</h1>
-            <p className="text-gray-600">Gestione los precios and productos de las etiquetas electronicas</p>
+            <p className="text-gray-600">Gestione los precios y productos de las etiquetas electrónicas</p>
           </div>
           <button
             onClick={handleSync}

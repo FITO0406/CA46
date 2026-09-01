@@ -1,16 +1,13 @@
 import { NextResponse, after } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { google } from 'googleapis';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const GOOGLE_SA_JSON = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
 const DRIVE_ROOT_FOLDER_ID = '1g186tAcQ10eqkUKvT9s_eDdB2S-zCeOO'; // Carpeta ETIQUETAS
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 async function getTelegramFile(fileId: string): Promise<Uint8Array> {
