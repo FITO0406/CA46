@@ -17,16 +17,19 @@ function getStorageClient(): Storage {
       jsonString = jsonString.slice(1, -1);
     }
     credentials = JSON.parse(jsonString);
-    if (credentials.private_key) {
-      credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
-    }
   } catch (err: any) {
     throw new Error(`[D51 GCS Error] Error al decodificar GOOGLE_SERVICE_ACCOUNT_JSON: ${err.message}`);
   }
 
+  const clientEmail = credentials.client_email;
+  const privateKey = credentials.private_key ? credentials.private_key.replace(/\\n/g, '\n') : '';
+
   return new Storage({
     projectId: credentials.project_id || 'opengravityfito',
-    credentials
+    credentials: {
+      client_email: clientEmail,
+      private_key: privateKey
+    }
   });
 }
 
