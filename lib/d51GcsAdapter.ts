@@ -17,6 +17,9 @@ function getStorageClient(): Storage {
       jsonString = jsonString.slice(1, -1);
     }
     credentials = JSON.parse(jsonString);
+    if (credentials.private_key) {
+      credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+    }
   } catch (err: any) {
     throw new Error(`[D51 GCS Error] Error al decodificar GOOGLE_SERVICE_ACCOUNT_JSON: ${err.message}`);
   }
@@ -102,8 +105,7 @@ export async function writeOutboxToD51Vault(filename: string, content: string | 
         sha256: sha256Hash,
         created_at: new Date().toISOString()
       }
-    },
-    validation: 'crc32c'
+    }
   });
 
   const [fileMetadata] = await file.getMetadata();
