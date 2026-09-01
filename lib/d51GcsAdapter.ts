@@ -22,7 +22,10 @@ function getStorageClient(): Storage {
   }
 
   const clientEmail = credentials.client_email;
-  const privateKey = credentials.private_key ? credentials.private_key.replace(/\\n/g, '\n') : '';
+  let privateKey = credentials.private_key || '';
+  if (typeof privateKey === 'string') {
+    privateKey = privateKey.replace(/^["']|["']$/g, '').replace(/\\n/g, '\n');
+  }
 
   return new Storage({
     projectId: credentials.project_id || 'opengravityfito',
