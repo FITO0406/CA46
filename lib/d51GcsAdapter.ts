@@ -24,7 +24,10 @@ function getStorageClient(): Storage {
   const clientEmail = credentials.client_email;
   let privateKey = credentials.private_key || '';
   if (typeof privateKey === 'string') {
-    privateKey = privateKey.replace(/^["']|["']$/g, '').replace(/\\n/g, '\n');
+    privateKey = privateKey.trim();
+    if (privateKey.includes('\\n')) {
+      privateKey = privateKey.replace(/\\n/g, '\n');
+    }
   }
 
   return new Storage({
