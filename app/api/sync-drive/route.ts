@@ -74,11 +74,13 @@ export async function GET() {
     });
     const files = listRes.data.files || [];
     if (files.length === 0) {
-      return NextResponse.json({ message: 'No new files found.' }, { status: 200 });
+      return NextResponse.json({ message: 'No files found in Drive folder.', folderId: DRIVE_ROOT_FOLDER_ID }, { status: 200 });
     }
 
     const now = new Date().toISOString();
     const inserts: any[] = [];
+    let skipped = 0;
+    const fileNames: string[] = files.map((f: any) => f.name || 'unknown');
 
     for (const f of files) {
       if (!f.id) continue;
@@ -96,6 +98,7 @@ export async function GET() {
       }
       if (existing && existing.length > 0) {
         // Already synced – skip
+        skipped++;
         continue;
       }
 
@@ -136,15 +139,14 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ inserted: inserts.length, message: 'Sync completed.' }, { status: 200 });
+    return NextResponse.json({ inserted: inserts.length, skipped, totalFound: files.length, fileNames, message: 'Sync completed.' }, { status: 200 });
   } catch (e: any) {
     console.error('Sync-drive error:', e);
-    let debugKey = 'not found';
+    let debugEmail = 'not found';
     try {
       const creds = getCredentials();
-      debugKey = creds.private_key || 'no private key';
-      debugKey = debugKey.replace(/\n/g, '\\n'); // escape newlines for visibility
+      debugEmail = creds.client_email || 'no email';
     } catch(err) {}
-    return NextResponse.json({ error: e.message || 'Unexpected error', debug: debugKey }, { status: 500 });
+    return NextResponse.json({ error: e.message || 'Unexpected error', debug: debugEmail }, { status: 500 });
   }
 }
