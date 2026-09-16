@@ -19,7 +19,11 @@ function getCredentials() {
   }
   const creds = JSON.parse(jsonString);
   if (creds.private_key) {
-    creds.private_key = creds.private_key.replace(/\\n/g, '\n');
+    let key = creds.private_key.replace(/\\n/g, '\n');
+    // If newlines were completely stripped, we need to reconstruct the PEM format
+    key = key.replace('-----BEGIN PRIVATE KEY-----', '').replace('-----END PRIVATE KEY-----', '').replace(/\s+/g, '');
+    const chunks = key.match(/.{1,64}/g) || [];
+    creds.private_key = '-----BEGIN PRIVATE KEY-----\n' + chunks.join('\n') + '\n-----END PRIVATE KEY-----\n';
   }
   return creds;
 }
