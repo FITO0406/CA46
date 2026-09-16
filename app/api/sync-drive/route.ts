@@ -81,6 +81,7 @@ export async function GET() {
     const inserts: any[] = [];
     let skipped = 0;
     const fileNames: string[] = files.map((f: any) => f.name || 'unknown');
+    const errors: string[] = [];
 
     for (const f of files) {
       if (!f.id) continue;
@@ -106,9 +107,12 @@ export async function GET() {
       let txtContent = '';
       try {
         txtContent = await downloadFile(drive, f.id, f.mimeType || '');
-      } catch (e) {
-        console.error('Failed to download file', f.id, e);
-        continue;
+      } catch (e: any) {
+        const msg = `Download failed for ${fileName}: ${e?.message || e}`;
+        console.error(msg);
+        errors.push(msg);
+        // Use filename as product name even if download fails
+        txtContent = '';
       }
 
       // Very light parsing – try to extract a line that starts with "Descripcion:" (Spanish)
@@ -135,11 +139,11 @@ export async function GET() {
       const { error: insertErr } = await supabase.from('digital_tags').insert(inserts);
       if (insertErr) {
         console.error('Insert error:', insertErr);
-        return NextResponse.json({ error: insertErr.message }, { status: 500 });
+        return NextResponse.json({ error: insertErr.message, errors, inserts }, { status: 500 });
       }
     }
 
-    return NextResponse.json({ inserted: inserts.length, skipped, totalFound: files.length, fileNames, message: 'Sync completed.' }, { status: 200 });
+    return NextResponse.json({ inserted: inserts.length, skipped, totalFound: files.length, fileNames, errors, message: 'Sync completed.' }, { status: 200 });
   } catch (e: any) {
     console.error('Sync-drive error:', e);
     let debugEmail = 'not found';
