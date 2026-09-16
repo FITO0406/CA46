@@ -97,7 +97,7 @@ export async function GET() {
       // Download the file to obtain at least a product name (fallback to file name)
       let txtContent = '';
       try {
-        txtContent = await downloadFile(drive, f.id, f.mimeType);
+        txtContent = await downloadFile(drive, f.id, f.mimeType || '');
       } catch (e) {
         console.error('Failed to download file', f.id, e);
         continue;
