@@ -113,13 +113,13 @@ export async function GET() {
       inserts.push({
         drive_file_id: f.id,
         product_name: productName,
-        price: null,
-        unit: null,
-        origin: null,
+        price: 0,
+        unit: 'kg',
+        origin: 'Desconocido',
         category: 'General',
         is_active: true,
         created_at: now,
-        expires_at: now, // optional – you can adjust lifetime logic later
+        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       });
     }
 
