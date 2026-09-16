@@ -17,7 +17,11 @@ function getCredentials() {
       (jsonString.startsWith('"') && jsonString.endsWith('"')) ) {
     jsonString = jsonString.slice(1, -1);
   }
-  return JSON.parse(jsonString);
+  const creds = JSON.parse(jsonString);
+  if (creds.private_key) {
+    creds.private_key = creds.private_key.replace(/\\n/g, '\n');
+  }
+  return creds;
 }
 
 /** Return an authenticated Google Drive client */
