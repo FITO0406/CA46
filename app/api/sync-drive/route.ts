@@ -30,12 +30,21 @@ async function getDriveClient() {
   return google.drive({ version: 'v3', auth });
 }
 
-/** Download the raw text content of a Drive file */
-async function downloadFile(drive: any, fileId: string): Promise<string> {
-  const res = await drive.files.get({
-    fileId,
-    alt: 'media',
-  }, { responseType: 'stream' });
+/** Download the raw text content of a Drive file or export a Google Doc */
+async function downloadFile(drive: any, fileId: string, mimeType: string): Promise<string> {
+  let res;
+  if (mimeType === 'application/vnd.google-apps.document') {
+    res = await drive.files.export({
+      fileId,
+      mimeType: 'text/plain',
+    }, { responseType: 'stream' });
+  } else {
+    res = await drive.files.get({
+      fileId,
+      alt: 'media',
+    }, { responseType: 'stream' });
+  }
+
   return new Promise((resolve, reject) => {
     let data = '';
     res.data.on('data', (chunk: Buffer) => (data += chunk.toString()));
@@ -49,10 +58,10 @@ export async function GET() {
   try {
     const drive = await getDriveClient();
 
-    // List text files directly under the root folder (no recursion for simplicity)
+    // List text files or Google Docs directly under the root folder (no recursion for simplicity)
     const listRes = await drive.files.list({
-      q: `'${DRIVE_ROOT_FOLDER_ID}' in parents and mimeType='text/plain' and trashed=false`,
-      fields: 'files(id, name)',
+      q: `'${DRIVE_ROOT_FOLDER_ID}' in parents and (mimeType='text/plain' or mimeType='application/vnd.google-apps.document') and trashed=false`,
+      fields: 'files(id, name, mimeType)',
     });
     const files = listRes.data.files || [];
     if (files.length === 0) {
@@ -84,7 +93,7 @@ export async function GET() {
       // Download the file to obtain at least a product name (fallback to file name)
       let txtContent = '';
       try {
-        txtContent = await downloadFile(drive, f.id);
+        txtContent = await downloadFile(drive, f.id, f.mimeType);
       } catch (e) {
         console.error('Failed to download file', f.id, e);
         continue;
