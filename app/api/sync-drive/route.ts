@@ -134,6 +134,12 @@ export async function GET() {
     return NextResponse.json({ inserted: inserts.length, message: 'Sync completed.' }, { status: 200 });
   } catch (e: any) {
     console.error('Sync-drive error:', e);
-    return NextResponse.json({ error: e.message || 'Unexpected error' }, { status: 500 });
+    let debugKey = 'not found';
+    try {
+      const creds = getCredentials();
+      debugKey = creds.private_key ? creds.private_key.substring(0, 50) + '...' + creds.private_key.substring(creds.private_key.length - 30) : 'no private key';
+      debugKey = debugKey.replace(/\n/g, '\\n'); // escape newlines for visibility
+    } catch(err) {}
+    return NextResponse.json({ error: e.message || 'Unexpected error', debug: debugKey }, { status: 500 });
   }
 }
