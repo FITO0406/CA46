@@ -1,13 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 import { assertProductionTarget, ALLOWED_PRODUCTION_SUPABASE_URL } from './targetGuard';
 
-// Published anon key for xcjhqyjqakknnfbjxlui
-const DEFAULT_PRODUCTION_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjamhxeWpxYWtubmZianhsdWkiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTc3OTA1MzUyMiwiZXhwIjoyMDk0NjI5NTIyfQ.dGq_Hq_oT552-k4r54G4';
-
-const supabaseUrl = ALLOWED_PRODUCTION_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_PRODUCTION_ANON_KEY;
+const SUPABASE_URL = ALLOWED_PRODUCTION_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_7qFeNP7a1ZNZ_NbhYdrwmw_DxzHJrJv';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 // Fail-Closed assertion
-assertProductionTarget(supabaseUrl);
+assertProductionTarget(SUPABASE_URL);
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Public client (anon key) – for browser/frontend use
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Server-side admin client (service_role key) – bypasses RLS, use only in API routes
+export const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY);

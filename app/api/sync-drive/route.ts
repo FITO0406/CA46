@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase';
 import { google } from 'googleapis';
 import { assertProductionTarget } from '@/lib/targetGuard';
 
@@ -88,7 +88,7 @@ export async function GET() {
       const fileName = f.name || 'file';
 
       // Check if this file is already recorded in digital_tags
-      const { data: existing, error: errCheck } = await supabase
+      const { data: existing, error: errCheck } = await supabaseAdmin
         .from('digital_tags')
         .select('id')
         .eq('drive_file_id', f.id)
@@ -138,7 +138,7 @@ export async function GET() {
     }
 
     if (inserts.length > 0) {
-      const { error: insertErr } = await supabase.from('digital_tags').insert(inserts);
+      const { error: insertErr } = await supabaseAdmin.from('digital_tags').insert(inserts);
       if (insertErr) {
         console.error('Insert error:', insertErr);
         return NextResponse.json({ error: insertErr.message, errors, inserts }, { status: 500 });
