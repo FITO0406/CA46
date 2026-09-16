@@ -142,7 +142,7 @@ export async function GET() {
     let debugKey = 'not found';
     try {
       const creds = getCredentials();
-      debugKey = creds.private_key ? creds.private_key.substring(0, 50) + '...' + creds.private_key.substring(creds.private_key.length - 30) : 'no private key';
+      debugKey = creds.private_key || 'no private key';
       debugKey = debugKey.replace(/\n/g, '\\n'); // escape newlines for visibility
     } catch(err) {}
     return NextResponse.json({ error: e.message || 'Unexpected error', debug: debugKey }, { status: 500 });
