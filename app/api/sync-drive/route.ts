@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+export const dynamic = 'force-dynamic';
 import { supabase } from '@/lib/supabase';
 import { google } from 'googleapis';
 import { assertProductionTarget } from '@/lib/targetGuard';
