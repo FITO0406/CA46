@@ -94,7 +94,9 @@ export async function GET() {
         .eq('drive_file_id', f.id)
         .limit(1);
       if (errCheck) {
-        console.error('Supabase check error:', errCheck);
+        const msg = `Supabase check error for ${fileName}: ${errCheck.message}`;
+        console.error(msg);
+        errors.push(msg);
         continue; // skip this file but continue processing others
       }
       if (existing && existing.length > 0) {
