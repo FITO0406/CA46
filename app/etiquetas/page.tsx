@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import TagCard from '@/components/TagCard';
 
 interface Tag {
@@ -13,399 +14,147 @@ interface Tag {
   drive_file_id?: string;
 }
 
+const normalize = (value: string) => value
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLocaleLowerCase('es')
+  .trim();
+
 export default function EtiquetasPage() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query);
 
   async function fetchTags() {
     try {
-      const res = await fetch('/api/digital-tags');
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setTags(data);
-      }
-    } catch (err) {
-      console.error(err);
+      const response = await fetch('/api/digital-tags');
+      if (!response.ok) throw new Error('No se pudieron cargar las etiquetas');
+      const data: unknown = await response.json();
+      if (Array.isArray(data)) setTags(data as Tag[]);
+    } catch (error) {
+      console.error(error);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    fetchTags();
+    let cancelled = false;
+    fetch('/api/digital-tags')
+      .then((response) => {
+        if (!response.ok) throw new Error('No se pudieron cargar las etiquetas');
+        return response.json();
+      })
+      .then((data: unknown) => {
+        if (!cancelled && Array.isArray(data)) setTags(data as Tag[]);
+      })
+      .catch((error: unknown) => console.error(error))
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
   }, []);
+
+  const filteredTags = useMemo(() => {
+    const term = normalize(deferredQuery);
+    if (!term) return tags;
+    return tags.filter((tag) => normalize(tag.product_name).includes(term));
+  }, [deferredQuery, tags]);
+
+  const suggestions = useMemo(() => {
+    const term = normalize(query);
+    if (!term) return [];
+    return tags
+      .map((tag) => tag.product_name)
+      .filter((name, index, names) => names.indexOf(name) === index && normalize(name).includes(term))
+      .slice(0, 5);
+  }, [query, tags]);
 
   async function handleSync() {
     setSyncing(true);
     setSyncMsg('');
     try {
-      const res = await fetch('/api/sync-drive');
-      const data = await res.json();
-      if (data.error) {
-        setSyncMsg(`❌ Error: ${data.error}`);
-      } else {
-        setSyncMsg(`✅ Sincronización completada · ${data.synchronized || 0} etiquetas actualizadas`);
-        fetchTags();
-      }
-    } catch (err) {
-      console.error(err);
-      setSyncMsg('❌ Error en la sincronización');
+      const response = await fetch('/api/sync-drive');
+      const data = await response.json();
+      if (!response.ok || data.error) throw new Error(data.error || 'Error de sincronización');
+      setSyncMsg(`${data.synchronized || 0} etiquetas actualizadas`);
+      await fetchTags();
+    } catch (error) {
+      setSyncMsg(error instanceof Error ? error.message : 'Error de sincronización');
     } finally {
       setSyncing(false);
     }
   }
 
-  if (loading) {
-    return (
-      <div style={styles.loadingScreen}>
-        <div style={styles.spinner} />
-        <p style={styles.loadingText}>Cargando etiquetas...</p>
-      </div>
-    );
-  }
-
   return (
-    <div style={styles.page}>
-      {/* Header */}
-      <header style={styles.header}>
-        <div style={styles.headerInner}>
-          {/* Logo */}
-          <div style={styles.logoArea}>
-            <div style={styles.logoIcon}>
-              <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-                <circle cx="18" cy="18" r="17" stroke="#FF7A00" strokeWidth="2"/>
-                <path d="M8 18 Q18 8 28 18 Q18 28 8 18Z" fill="#FF7A00" opacity="0.15"/>
-                <ellipse cx="22" cy="14" rx="6" ry="4" fill="#C0C0C0"/>
-                <circle cx="25" cy="13" r="1" fill="#1a1a1a"/>
-                <text x="10" y="26" fontFamily="Arial Black" fontWeight="900" fontSize="10" fill="#C0C0C0">CA</text>
-                <text x="20" y="26" fontFamily="Arial Black" fontWeight="900" fontSize="10" fill="#FF7A00">46</text>
-              </svg>
+    <div className="min-h-screen overflow-hidden bg-[#0a0d0f] text-white selection:bg-orange-500/30">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(249,115,22,.16),transparent_28%),radial-gradient(circle_at_85%_30%,rgba(14,165,233,.10),transparent_25%)]" />
+
+      <header className="relative border-b border-white/10 bg-[#0d1114]/85 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
+          <div className="flex items-center gap-3">
+            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-black shadow-lg shadow-orange-950/40 sm:h-16 sm:w-16">
+              <Image src="/ca46-logo.svg" alt="Logotipo CA46" fill priority sizes="64px" className="object-cover" />
             </div>
             <div>
-              <h1 style={styles.logoTitle}>CA<span style={styles.logoTitleOrange}>46</span></h1>
-              <p style={styles.logoSubtitle}>Etiquetas Digitales</p>
+              <p className="text-lg font-black tracking-tight sm:text-xl">Trazabilidad del mar</p>
+              <p className="text-xs font-medium text-slate-400">Información clara, origen verdadero</p>
             </div>
           </div>
-
-          {/* Sync button */}
-          <div style={styles.syncArea}>
-            {syncMsg && (
-              <span style={{
-                ...styles.syncMsg,
-                color: syncMsg.startsWith('✅') ? '#4ade80' : '#f87171'
-              }}>
-                {syncMsg}
-              </span>
-            )}
-            <button
-              id="btn-sincronizar"
-              onClick={handleSync}
-              disabled={syncing}
-              style={syncing ? styles.btnSyncDisabled : styles.btnSync}
-            >
-              {syncing ? (
-                <>
-                  <span style={styles.btnSpinner} />
-                  Sincronizando...
-                </>
-              ) : (
-                <>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M23 4v6h-6M1 20v-6h6"/>
-                    <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-                  </svg>
-                  Sincronizar Drive
-                </>
-              )}
-            </button>
-          </div>
+          <button onClick={handleSync} disabled={syncing} className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-slate-200 transition hover:border-orange-400/50 hover:bg-orange-500/10 disabled:opacity-50 sm:flex">
+            <span className={syncing ? 'animate-spin' : ''}>↻</span>{syncing ? 'Actualizando' : 'Actualizar'}
+          </button>
         </div>
-
-        {/* Decorative line */}
-        <div style={styles.headerLine} />
       </header>
 
-      {/* Stats bar */}
-      <div style={styles.statsBar}>
-        <div style={styles.statItem}>
-          <span style={styles.statNumber}>{tags.length}</span>
-          <span style={styles.statLabel}>Etiquetas activas</span>
-        </div>
-        <div style={styles.statDivider} />
-        <div style={styles.statItem}>
-          <span style={styles.statNumber}>{new Set(tags.map(t => t.drive_file_id ? 'Drive' : 'Manual')).size}</span>
-          <span style={styles.statLabel}>Fuentes documentales</span>
-        </div>
-        <div style={styles.statDivider} />
-        <div style={styles.statItem}>
-          <span style={styles.statDot} />
-          <span style={styles.statLabel}>Sistema activo</span>
-        </div>
-      </div>
+      <main className="relative mx-auto max-w-7xl px-5 pb-16 pt-10 sm:px-8 sm:pt-14">
+        <section className="mx-auto mb-12 max-w-3xl text-center">
+          <div className="relative mx-auto mb-6 h-24 w-24 overflow-hidden rounded-[1.8rem] border border-white/10 bg-black shadow-2xl shadow-orange-950/40 sm:h-28 sm:w-28">
+            <Image src="/ca46-logo.svg" alt="CA46" fill priority sizes="112px" className="object-cover" />
+          </div>
+          <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-xs font-bold uppercase tracking-[.18em] text-emerald-300">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" /> Sistema activo
+          </span>
+          <h1 className="text-balance text-4xl font-black tracking-[-.04em] sm:text-6xl">
+            Conoce lo que llega<br /><span className="bg-gradient-to-r from-orange-400 via-amber-300 to-orange-500 bg-clip-text text-transparent">a tu mesa</span>
+          </h1>
+          <p className="mx-auto mt-5 max-w-xl text-base leading-7 text-slate-400 sm:text-lg">
+            Busca tu producto y consulta su procedencia, lote y método de producción de forma sencilla.
+          </p>
 
-      {/* Main content */}
-      <main style={styles.main}>
-        {tags.length === 0 ? (
-          <div style={styles.emptyState}>
-            <div style={styles.emptyIcon}>
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#FF7A00" strokeWidth="1.5">
-                <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
-                <line x1="7" y1="7" x2="7.01" y2="7"/>
-              </svg>
+          <div className="relative mx-auto mt-8 max-w-2xl text-left">
+            <div className="group flex items-center gap-3 rounded-[1.4rem] border border-white/10 bg-white/[.07] p-2 pl-5 shadow-2xl shadow-black/30 backdrop-blur-xl transition focus-within:border-orange-400/60 focus-within:bg-white/[.09] focus-within:shadow-orange-950/30">
+              <svg aria-hidden="true" className="h-6 w-6 shrink-0 text-orange-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+              <input value={query} onChange={(event) => setQuery(event.target.value)} autoComplete="off" inputMode="search" aria-label="Buscar producto" placeholder="Busca merluza, pescada, atún…" className="min-w-0 flex-1 bg-transparent py-3 text-base font-semibold text-white outline-none placeholder:text-slate-500 sm:text-lg" />
+              {query ? <button onClick={() => setQuery('')} aria-label="Borrar búsqueda" className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-slate-300 transition hover:bg-white/20">×</button> : null}
             </div>
-            <h2 style={styles.emptyTitle}>No hay etiquetas disponibles</h2>
-            <p style={styles.emptyText}>
-              Pulsa <strong style={{color:'#FF7A00'}}>Sincronizar Drive</strong> para importar las etiquetas desde Google Drive.
-            </p>
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              style={syncing ? styles.btnSyncDisabled : { ...styles.btnSync, marginTop: '1.5rem' }}
-            >
-              {syncing ? 'Sincronizando...' : '⟳ Sincronizar ahora'}
-            </button>
+            {suggestions.length > 0 && query ? (
+              <div className="absolute inset-x-0 top-[calc(100%+.6rem)] z-20 overflow-hidden rounded-2xl border border-white/10 bg-[#171c20]/95 p-2 shadow-2xl backdrop-blur-xl">
+                {suggestions.map((name) => <button key={name} onClick={() => setQuery(name)} className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left font-semibold text-slate-200 transition hover:bg-orange-500/15 hover:text-orange-300"><span className="text-orange-400">↗</span>{name}</button>)}
+              </div>
+            ) : null}
           </div>
+          {syncMsg ? <p className="mt-4 text-sm font-semibold text-slate-400">{syncMsg}</p> : null}
+        </section>
+
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-white/10 pb-5">
+          <div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Productos trazados</p><h2 className="mt-1 text-2xl font-black">{query ? `Resultados para “${query}”` : 'Últimas etiquetas'}</h2></div>
+          <p aria-live="polite" className="rounded-full bg-white/5 px-4 py-2 text-sm font-bold text-slate-400">{filteredTags.length} {filteredTags.length === 1 ? 'resultado' : 'resultados'}</p>
+        </div>
+
+        {loading ? (
+          <div className="grid gap-6 md:grid-cols-2"><div className="h-96 animate-pulse rounded-[2rem] bg-white/5"/><div className="h-96 animate-pulse rounded-[2rem] bg-white/5"/></div>
+        ) : filteredTags.length > 0 ? (
+          <div className="grid gap-6 md:grid-cols-2">{filteredTags.map((tag, index) => <TagCard key={tag.id} tag={tag} accentIndex={index} />)}</div>
         ) : (
-          <div style={styles.grid}>
-            {tags.map((tag) => (
-              <TagCard key={tag.id} tag={tag} />
-            ))}
-          </div>
+          <div className="rounded-[2rem] border border-dashed border-white/15 bg-white/[.03] px-6 py-16 text-center"><div className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-2xl bg-orange-500/10 text-3xl">🐟</div><h3 className="text-2xl font-black">No encontramos ese producto</h3><p className="mt-2 text-slate-400">Prueba escribiendo menos letras o comprueba el nombre.</p><button onClick={() => setQuery('')} className="mt-6 rounded-full bg-orange-500 px-5 py-2.5 font-black text-[#121416] transition hover:bg-orange-400">Ver todos</button></div>
         )}
       </main>
 
-      {/* Footer */}
-      <footer style={styles.footer}>
-        <span style={styles.footerText}>CA46 · Ecosistema Inteligente de Trazabilidad Alimentaria</span>
-      </footer>
-
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Inter', sans-serif; background: #111318; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
-      `}</style>
+      <footer className="relative border-t border-white/10 bg-black/20 px-5 py-7 text-center text-xs font-semibold tracking-wide text-slate-500">CA46 · Ecosistema Inteligente de Trazabilidad Alimentaria</footer>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: '100vh',
-    background: 'linear-gradient(135deg, #0d0f14 0%, #111318 50%, #161a20 100%)',
-    display: 'flex',
-    flexDirection: 'column',
-    fontFamily: "'Inter', sans-serif",
-    color: '#e2e8f0',
-  },
-  loadingScreen: {
-    minHeight: '100vh',
-    background: '#0d0f14',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '1rem',
-  },
-  spinner: {
-    width: '48px',
-    height: '48px',
-    border: '3px solid #2d3748',
-    borderTop: '3px solid #FF7A00',
-    borderRadius: '50%',
-    animation: 'spin 0.8s linear infinite',
-  },
-  loadingText: {
-    color: '#94a3b8',
-    fontSize: '1rem',
-    fontWeight: 500,
-  },
-  header: {
-    background: 'rgba(255,255,255,0.03)',
-    backdropFilter: 'blur(20px)',
-    borderBottom: '1px solid rgba(255,122,0,0.15)',
-    padding: '0 1.5rem',
-  },
-  headerInner: {
-    maxWidth: '1400px',
-    margin: '0 auto',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '1.25rem 0',
-    gap: '1rem',
-    flexWrap: 'wrap' as const,
-  },
-  logoArea: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.875rem',
-  },
-  logoIcon: {
-    filter: 'drop-shadow(0 0 8px rgba(255,122,0,0.4))',
-  },
-  logoTitle: {
-    fontSize: '1.75rem',
-    fontWeight: 900,
-    color: '#C0C0C0',
-    letterSpacing: '-0.02em',
-    lineHeight: 1,
-  },
-  logoTitleOrange: {
-    color: '#FF7A00',
-  },
-  logoSubtitle: {
-    fontSize: '0.7rem',
-    color: '#64748b',
-    fontWeight: 500,
-    letterSpacing: '0.1em',
-    textTransform: 'uppercase' as const,
-    marginTop: '2px',
-  },
-  syncArea: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '1rem',
-    flexWrap: 'wrap' as const,
-    justifyContent: 'flex-end',
-  },
-  syncMsg: {
-    fontSize: '0.85rem',
-    fontWeight: 500,
-  },
-  btnSync: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    background: 'linear-gradient(135deg, #FF7A00, #e06500)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '10px',
-    padding: '0.65rem 1.4rem',
-    fontSize: '0.9rem',
-    fontWeight: 700,
-    cursor: 'pointer',
-    boxShadow: '0 4px 20px rgba(255,122,0,0.35)',
-    transition: 'all 0.2s',
-    letterSpacing: '0.01em',
-  },
-  btnSyncDisabled: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    background: 'rgba(255,122,0,0.3)',
-    color: 'rgba(255,255,255,0.6)',
-    border: 'none',
-    borderRadius: '10px',
-    padding: '0.65rem 1.4rem',
-    fontSize: '0.9rem',
-    fontWeight: 700,
-    cursor: 'not-allowed',
-    boxShadow: 'none',
-  },
-  btnSpinner: {
-    display: 'inline-block',
-    width: '14px',
-    height: '14px',
-    border: '2px solid rgba(255,255,255,0.3)',
-    borderTop: '2px solid #fff',
-    borderRadius: '50%',
-    animation: 'spin 0.7s linear infinite',
-  },
-  headerLine: {
-    height: '2px',
-    background: 'linear-gradient(90deg, transparent, #FF7A00 30%, #C0C0C0 60%, transparent)',
-    opacity: 0.3,
-  },
-  statsBar: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '2rem',
-    maxWidth: '1400px',
-    margin: '0 auto',
-    padding: '1rem 1.5rem',
-    width: '100%',
-  },
-  statItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-  },
-  statNumber: {
-    fontSize: '1.5rem',
-    fontWeight: 900,
-    color: '#FF7A00',
-    lineHeight: 1,
-  },
-  statLabel: {
-    fontSize: '0.78rem',
-    color: '#64748b',
-    fontWeight: 500,
-  },
-  statDivider: {
-    width: '1px',
-    height: '24px',
-    background: 'rgba(255,255,255,0.08)',
-  },
-  statDot: {
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
-    background: '#4ade80',
-    boxShadow: '0 0 8px #4ade80',
-    animation: 'pulse 2s infinite',
-  },
-  main: {
-    flex: 1,
-    maxWidth: '1400px',
-    margin: '0 auto',
-    width: '100%',
-    padding: '1rem 1.5rem 3rem',
-  },
-  emptyState: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '5rem 2rem',
-    background: 'rgba(255,255,255,0.02)',
-    border: '1px solid rgba(255,122,0,0.1)',
-    borderRadius: '20px',
-    textAlign: 'center' as const,
-    marginTop: '2rem',
-  },
-  emptyIcon: {
-    marginBottom: '1.5rem',
-    opacity: 0.7,
-  },
-  emptyTitle: {
-    fontSize: '1.5rem',
-    fontWeight: 700,
-    color: '#e2e8f0',
-    marginBottom: '0.75rem',
-  },
-  emptyText: {
-    fontSize: '0.95rem',
-    color: '#64748b',
-    maxWidth: '380px',
-    lineHeight: 1.6,
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-    gap: '1.25rem',
-  },
-  footer: {
-    textAlign: 'center' as const,
-    padding: '1.5rem',
-    borderTop: '1px solid rgba(255,255,255,0.05)',
-  },
-  footerText: {
-    fontSize: '0.75rem',
-    color: '#475569',
-    letterSpacing: '0.05em',
-  },
-};
