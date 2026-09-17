@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 import { supabaseAdmin } from '@/lib/supabase';
 import { google } from 'googleapis';
-import { assertProductionTarget } from '@/lib/targetGuard';
+import { encodeTraceability, parseTraceabilityText } from '@/lib/traceability';
 
 // Environment variables
 const GOOGLE_SA_JSON = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
@@ -78,8 +78,7 @@ export async function GET() {
     }
 
     const now = new Date().toISOString();
-    const inserts: any[] = [];
-    let skipped = 0;
+    const records: any[] = [];
     const fileNames: string[] = files.map((f: any) => f.name || 'unknown');
     const errors: string[] = [];
 
@@ -87,25 +86,6 @@ export async function GET() {
       if (!f.id) continue;
       const fileName = f.name || 'file';
 
-      // Check if this file is already recorded in digital_tags
-      const { data: existing, error: errCheck } = await supabaseAdmin
-        .from('digital_tags')
-        .select('id')
-        .eq('drive_file_id', f.id)
-        .limit(1);
-      if (errCheck) {
-        const msg = `Supabase check error for ${fileName}: ${errCheck.message}`;
-        console.error(msg);
-        errors.push(msg);
-        continue; // skip this file but continue processing others
-      }
-      if (existing && existing.length > 0) {
-        // Already synced – skip
-        skipped++;
-        continue;
-      }
-
-      // Download the file to obtain at least a product name (fallback to file name)
       let txtContent = '';
       try {
         txtContent = await downloadFile(drive, f.id, f.mimeType || '');
@@ -113,39 +93,33 @@ export async function GET() {
         const msg = `Download failed for ${fileName}: ${e?.message || e}`;
         console.error(msg);
         errors.push(msg);
-        // Use filename as product name even if download fails
-        txtContent = '';
+        continue;
       }
 
-      // Very light parsing – try to extract a line that starts with "Descripcion:" (Spanish)
-      let productName = fileName.replace(/\.txt$/i, '');
-      const match = txtContent.match(/Descripcion:\s*(.*)/i);
-      if (match && match[1]) {
-        productName = match[1].trim();
-      }
+      const traceability = parseTraceabilityText(txtContent, fileName);
 
-      inserts.push({
+      records.push({
         drive_file_id: f.id,
-        product_name: productName,
+        product_name: traceability.description,
         price: 0,
         unit: 'kg',
-        origin: 'Desconocido',
-        category: 'General',
+        origin: traceability.origin || null,
+        category: encodeTraceability(traceability),
         is_active: true,
         created_at: now,
         expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       });
     }
 
-    if (inserts.length > 0) {
-      const { error: insertErr } = await supabaseAdmin.from('digital_tags').insert(inserts);
+    if (records.length > 0) {
+      const { error: insertErr } = await supabaseAdmin.from('digital_tags').upsert(records, { onConflict: 'drive_file_id' });
       if (insertErr) {
         console.error('Insert error:', insertErr);
-        return NextResponse.json({ error: insertErr.message, errors, inserts }, { status: 500 });
+        return NextResponse.json({ error: insertErr.message, errors }, { status: 500 });
       }
     }
 
-    return NextResponse.json({ inserted: inserts.length, skipped, totalFound: files.length, fileNames, errors, message: 'Sync completed.' }, { status: 200 });
+    return NextResponse.json({ synchronized: records.length, totalFound: files.length, fileNames, errors, message: 'Sync completed.' }, { status: 200 });
   } catch (e: any) {
     console.error('Sync-drive error:', e);
     let debugEmail = 'not found';
