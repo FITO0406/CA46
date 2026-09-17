@@ -32,17 +32,23 @@ export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentInde
   const accent = accentStyles[accentIndex % accentStyles.length];
   const productName = trace?.description || tag.product_name;
   const secondary = [trace?.freshness, trace?.presentation].filter(Boolean).join(' · ');
+  const weight = trace?.netWeight
+    ? /\bkg\b/i.test(trace.netWeight) ? trace.netWeight : `${trace.netWeight} kg`
+    : '';
 
   const primaryDetails = [
     { label: 'Lote', value: trace?.lot, icon: 'lot' as const },
     { label: 'Procedencia', value: trace?.origin || tag.origin, icon: 'origin' as const },
     { label: 'Método', value: trace?.productionMethod, icon: 'method' as const },
-    { label: 'Peso neto', value: trace?.netWeight ? `${trace.netWeight} kg` : '', icon: 'weight' as const },
+    { label: 'Peso neto', value: weight, icon: 'weight' as const },
   ];
 
   const extraDetails = [
     ['Zona FAO', trace?.fao], ['Arte de pesca', trace?.fishingGear],
     ['Marca', trace?.brand], ['Registro CE', trace?.ceCode],
+    ['Comprador', trace?.buyer], ['N.º comprador', trace?.buyerNumber],
+    ['Centro', trace?.establishment],
+    ...(trace?.extraFields || []).map(({ label, value }) => [label, value]),
   ].filter(([, value]) => value);
 
   return (
