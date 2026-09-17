@@ -1,163 +1,53 @@
 'use client';
 
-import { useState } from 'react';
+import { decodeTraceability } from '@/lib/traceability';
 
 interface Tag {
   id: string;
   product_name: string;
-  price: number | null;
-  unit: string;
   origin: string | null;
   category: string;
   is_active: boolean;
-  expires_at: string;
   drive_file_id?: string;
 }
 
-interface TagCardProps {
-  tag: Tag;
-  onUpdate: () => void;
-}
+const fields = [
+  ['Lote', 'lot'], ['Marca', 'brand'], ['Peso neto', 'netWeight'],
+  ['Método de producción', 'productionMethod'], ['Presentación', 'presentation'],
+  ['Procedencia', 'origin'], ['Zona FAO', 'fao'], ['Frescura', 'freshness'],
+  ['Arte de pesca', 'fishingGear'], ['Registro sanitario (CE)', 'ceCode'],
+] as const;
 
-export default function TagCard({ tag, onUpdate }: TagCardProps) {
-  const [editing, setEditing] = useState(false);
-  const [price, setPrice] = useState<string>(tag.price !== null ? tag.price.toString() : '');
-  const [origin, setOrigin] = useState<string>(tag.origin || '');
-  const [saving, setSaving] = useState(false);
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      const parsedPrice = price === '' ? null : parseFloat(price);
-      const res = await fetch('/api/digital-tags', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: tag.id,
-          price: parsedPrice,
-          origin: origin === '' ? null : origin,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error('Error al actualizar la etiqueta');
-      }
-
-      setEditing(false);
-      onUpdate();
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message || 'Error al guardar los cambios');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const daysLeft = Math.ceil(
-    (new Date(tag.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  );
-
+export default function TagCard({ tag }: { tag: Tag }) {
+  const trace = decodeTraceability(tag.category);
   return (
-    <div className="flex flex-col justify-between rounded-xl bg-white p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-600">
-            {tag.category}
-          </span>
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-semibold ${
-            tag.is_active ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-          }`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${tag.is_active ? 'bg-green-600' : 'bg-red-600'}`} />
-            {tag.is_active ? 'Activo' : 'Inactivo'}
+    <article className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-xl">
+      <div className="border-b border-orange-500/40 bg-gradient-to-r from-orange-500/15 to-transparent p-5">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <span className="rounded-full bg-orange-500 px-3 py-1 text-xs font-black uppercase tracking-wider text-slate-950">Trazabilidad</span>
+          <span className="flex items-center gap-2 text-xs font-semibold text-emerald-400">
+            <span className="h-2 w-2 rounded-full bg-emerald-400" />Información verificada
           </span>
         </div>
-
-        <h3 className="text-lg font-bold text-gray-900 line-clamp-2 min-h-[3.5rem] mb-4">
-          {tag.product_name}
-        </h3>
-
-        {editing ? (
-          <div className="space-y-4 mb-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-400 uppercase mb-1">Precio</label>
-              <div className="relative rounded-md shadow-sm">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  className="block w-full rounded-md border-gray-300 pr-12 focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-                  placeholder="0.00"
-                />
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                  <span className="text-gray-500 sm:text-sm">EUR/{tag.unit}</span>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-400 uppercase mb-1">Origen</label>
-              <input
-                type="text"
-                value={origin}
-                onChange={(e) => setOrigin(e.target.value)}
-                className="block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
-                placeholder="Ej. España"
-              />
-            </div>
+        <h2 className="text-2xl font-black uppercase leading-tight text-white">{trace?.description || tag.product_name}</h2>
+      </div>
+      <dl className="grid grid-cols-1 gap-px bg-slate-700 sm:grid-cols-2">
+        {trace ? fields.map(([label, key]) => (
+          <div key={key} className="min-h-20 bg-slate-900 p-4">
+            <dt className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">{label}</dt>
+            <dd className="text-sm font-semibold text-slate-100">{trace[key] || 'No indicado'}</dd>
           </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="rounded-lg bg-gray-50 p-3">
-              <span className="block text-xs font-medium text-gray-400 uppercase mb-1">Precio</span>
-              <span className="text-xl font-bold text-blue-600">
-                {tag.price !== null ? `${tag.price.toFixed(2)} EUR` : 'N/A'}
-              </span>
-              <span className="text-xs text-gray-500">/{tag.unit}</span>
-            </div>
-            <div className="rounded-lg bg-gray-50 p-3">
-              <span className="block text-xs font-medium text-gray-400 uppercase mb-1">Origen</span>
-              <span className="text-sm font-semibold text-gray-800 truncate block">
-                {tag.origin || 'No especificado'}
-              </span>
-            </div>
+        )) : (
+          <div className="bg-slate-900 p-4 sm:col-span-2">
+            <dt className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">Procedencia</dt>
+            <dd className="font-semibold text-slate-100">{tag.origin || 'No indicada'}</dd>
           </div>
         )}
-      </div>
-
-      <div>
-        <div className="border-t border-gray-100 pt-4 mb-4 flex justify-between text-xs text-gray-400">
-          <span>ID: {tag.drive_file_id ? 'Drive' : 'Manual'}</span>
-          <span className={daysLeft < 2 ? 'text-red-500 font-semibold' : ''}>
-            {daysLeft > 0 ? `Expira en ${daysLeft} d` : 'Expirado'}
-          </span>
-        </div>
-
-        {editing ? (
-          <div className="flex gap-2">
-            <button
-              onClick={() => setEditing(false)}
-              className="flex-1 rounded-lg border border-gray-300 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors disabled:bg-blue-400"
-            >
-              {saving ? 'Guardando...' : 'Guardar'}
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setEditing(true)}
-            className="w-full rounded-lg border border-blue-600 py-2.5 text-sm font-semibold text-blue-600 hover:bg-blue-50 transition-all active:scale-98"
-          >
-            Editar Detalles
-          </button>
-        )}
-      </div>
-    </div>
+      </dl>
+      <footer className="flex items-center justify-between gap-4 bg-slate-950 px-5 py-3 text-[11px] font-medium text-slate-500">
+        <span>CA46 · Trazabilidad alimentaria</span>
+        <span>{tag.drive_file_id ? 'Origen documental: Drive' : 'Registro manual'}</span>
+      </footer>
+    </article>
   );
 }
