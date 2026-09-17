@@ -6,8 +6,6 @@ import TagCard from '@/components/TagCard';
 interface Tag {
   id: string;
   product_name: string;
-  price: number | null;
-  unit: string;
   origin: string | null;
   category: string;
   is_active: boolean;
@@ -48,7 +46,7 @@ export default function EtiquetasPage() {
       if (data.error) {
         setSyncMsg(`❌ Error: ${data.error}`);
       } else {
-        setSyncMsg(`✅ Sincronización completada · ${data.inserted || 0} nuevas etiquetas`);
+        setSyncMsg(`✅ Sincronización completada · ${data.synchronized || 0} etiquetas actualizadas`);
         fetchTags();
       }
     } catch (err) {
@@ -137,8 +135,8 @@ export default function EtiquetasPage() {
         </div>
         <div style={styles.statDivider} />
         <div style={styles.statItem}>
-          <span style={styles.statNumber}>{new Set(tags.map(t => t.category)).size}</span>
-          <span style={styles.statLabel}>Categorías</span>
+          <span style={styles.statNumber}>{new Set(tags.map(t => t.drive_file_id ? 'Drive' : 'Manual')).size}</span>
+          <span style={styles.statLabel}>Fuentes documentales</span>
         </div>
         <div style={styles.statDivider} />
         <div style={styles.statItem}>
@@ -172,7 +170,7 @@ export default function EtiquetasPage() {
         ) : (
           <div style={styles.grid}>
             {tags.map((tag) => (
-              <TagCard key={tag.id} tag={tag} onUpdate={fetchTags} />
+              <TagCard key={tag.id} tag={tag} />
             ))}
           </div>
         )}
