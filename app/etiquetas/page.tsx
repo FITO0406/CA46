@@ -1,6 +1,6 @@
 'use client';
 
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import TagCard from '@/components/TagCard';
 
@@ -20,43 +20,46 @@ const normalize = (value: string) => value
   .toLocaleLowerCase('es')
   .trim();
 
+const AUTO_REFRESH_MS = 15_000;
+
 export default function EtiquetasPage() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
 
-  async function fetchTags() {
+  const fetchTags = useCallback(async (signal?: AbortSignal) => {
     try {
-      const response = await fetch('/api/digital-tags');
+      const response = await fetch('/api/digital-tags', { cache: 'no-store', signal });
       if (!response.ok) throw new Error('No se pudieron cargar las etiquetas');
       const data: unknown = await response.json();
-      if (Array.isArray(data)) setTags(data as Tag[]);
+      if (Array.isArray(data)) {
+        setTags(data as Tag[]);
+        setLastUpdated(new Date());
+      }
     } catch (error) {
-      console.error(error);
+      if (!(error instanceof DOMException && error.name === 'AbortError')) console.error(error);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    fetch('/api/digital-tags')
-      .then((response) => {
-        if (!response.ok) throw new Error('No se pudieron cargar las etiquetas');
-        return response.json();
-      })
-      .then((data: unknown) => {
-        if (!cancelled && Array.isArray(data)) setTags(data as Tag[]);
-      })
-      .catch((error: unknown) => console.error(error))
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, []);
+    const controller = new AbortController();
+    const initialFetchId = window.setTimeout(() => void fetchTags(controller.signal), 0);
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void fetchTags();
+    }, AUTO_REFRESH_MS);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(initialFetchId);
+      window.clearInterval(intervalId);
+    };
+  }, [fetchTags]);
 
   const filteredTags = useMemo(() => {
     const term = normalize(deferredQuery);
@@ -138,6 +141,9 @@ export default function EtiquetasPage() {
             ) : null}
           </div>
           {syncMsg ? <p className="mt-4 text-sm font-semibold text-slate-400">{syncMsg}</p> : null}
+          <p className="mt-3 text-xs font-semibold text-slate-500" aria-live="polite">
+            Actualización automática cada 15 segundos{lastUpdated ? ` · Última comprobación ${lastUpdated.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : ''}
+          </p>
         </section>
 
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-white/10 pb-5">
