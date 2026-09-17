@@ -5,7 +5,7 @@ export async function GET() {
   try {
     const { data, error } = await supabase
       .from('digital_tags')
-      .select('*')
+      .select('id, drive_file_id, product_name, origin, category, is_active, created_at, expires_at')
       .eq('is_active', true)
       .gte('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false });
