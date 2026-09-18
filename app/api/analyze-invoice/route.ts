@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+const FALLBACK_MODELS = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 
 type TraceabilityLabel = {
@@ -33,6 +34,15 @@ type InvoiceAnalysis = {
   buyer_nif: string;
   labels: TraceabilityLabel[];
   warnings: string[];
+};
+
+type ProviderResult = {
+  ok: boolean;
+  status: number;
+  payload: any;
+  text: string;
+  model: string;
+  error: string;
 };
 
 const EMPTY_ANALYSIS: InvoiceAnalysis = {
@@ -116,10 +126,93 @@ function parseModelJson(text: string): any {
   }
 }
 
+function shouldFallback(status: number, message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    status === 429 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
+    normalized.includes('high demand') ||
+    normalized.includes('overloaded') ||
+    normalized.includes('temporarily unavailable') ||
+    normalized.includes('try again later')
+  );
+}
+
+async function callGeminiModel(
+  model: string,
+  imageBase64: string,
+  mimeType: string,
+  prompt: string
+): Promise<ProviderResult> {
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': GEMINI_API_KEY,
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  inlineData: {
+                    mimeType,
+                    data: imageBase64,
+                  },
+                },
+                { text: prompt },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: 'application/json',
+          },
+        }),
+        signal: AbortSignal.timeout(45000),
+      }
+    );
+
+    const payload = await response.json().catch(() => null);
+    const providerMessage = payload?.error?.message || `Error ${response.status}`;
+    const text = payload?.candidates?.[0]?.content?.parts
+      ?.map((part: any) => (typeof part?.text === 'string' ? part.text : ''))
+      .join('')
+      .trim() || '';
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      payload,
+      text,
+      model,
+      error: response.ok ? '' : providerMessage,
+    };
+  } catch (error: any) {
+    return {
+      ok: false,
+      status: 504,
+      payload: null,
+      text: '',
+      model,
+      error: error?.name === 'TimeoutError'
+        ? 'El lector ha tardado demasiado en responder.'
+        : error?.message || 'Error de conexión con el lector.',
+    };
+  }
+}
+
 export async function GET() {
   return NextResponse.json({
     configured: Boolean(GEMINI_API_KEY),
     model: GEMINI_MODEL,
+    fallbacks: FALLBACK_MODELS,
   });
 }
 
@@ -223,59 +316,57 @@ Devuelve EXCLUSIVAMENTE JSON válido con esta forma exacta, sin markdown ni come
 Si no encuentras ninguna partida de trazabilidad, devuelve labels: [] y explica el motivo brevemente en warnings.
 `.trim();
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': GEMINI_API_KEY,
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  inlineData: {
-                    mimeType: file.type || 'image/jpeg',
-                    data: imageBase64,
-                  },
-                },
-                { text: prompt },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.1,
-            responseMimeType: 'application/json',
-          },
-        }),
-      }
+    const models = [GEMINI_MODEL, ...FALLBACK_MODELS].filter(
+      (model, index, all) => all.indexOf(model) === index
     );
 
-    const payload = await response.json().catch(() => null);
+    let providerResult: ProviderResult | null = null;
+    const attempts: Array<{ model: string; status: number; error: string }> = [];
 
-    if (!response.ok) {
-      const providerMessage = payload?.error?.message || `Error ${response.status}`;
-      console.error('Gemini invoice analysis error:', providerMessage);
+    for (const model of models) {
+      const result = await callGeminiModel(
+        model,
+        imageBase64,
+        file.type || 'image/jpeg',
+        prompt
+      );
+
+      if (result.ok && result.text) {
+        providerResult = result;
+        break;
+      }
+
+      attempts.push({ model, status: result.status, error: result.error || 'Respuesta vacía' });
+      console.warn(`CA46 OCR intento fallido con ${model}:`, result.error || result.status);
+
+      if (!shouldFallback(result.status, result.error)) {
+        providerResult = result;
+        break;
+      }
+    }
+
+    if (!providerResult?.ok) {
+      const lastAttempt = attempts[attempts.length - 1];
+      const detail = lastAttempt?.error || providerResult?.error || 'El lector no está disponible.';
+      console.error('Gemini invoice analysis error:', detail, attempts);
       return NextResponse.json(
-        { error: 'No se pudo analizar la factura en este momento.', detail: providerMessage },
-        { status: 502 }
+        {
+          error: 'El lector de CA46 está temporalmente saturado. Vuelve a intentarlo en unos segundos.',
+          code: 'AI_TEMPORARILY_BUSY',
+          detail,
+          attempts: attempts.map(({ model, status }) => ({ model, status })),
+        },
+        { status: 503 }
       );
     }
 
-    const text = payload?.candidates?.[0]?.content?.parts
-      ?.map((part: any) => (typeof part?.text === 'string' ? part.text : ''))
-      .join('')
-      .trim();
-
-    if (!text) {
+    if (!providerResult.text) {
       return NextResponse.json({ error: 'El lector no devolvió información de la factura.' }, { status: 502 });
     }
 
     let analysis = EMPTY_ANALYSIS;
     try {
-      analysis = normalizeAnalysis(parseModelJson(text));
+      analysis = normalizeAnalysis(parseModelJson(providerResult.text));
     } catch (error: any) {
       console.error('Invalid invoice JSON:', error);
       return NextResponse.json({ error: 'No se pudo interpretar la lectura de la factura.' }, { status: 502 });
@@ -283,8 +374,10 @@ Si no encuentras ninguna partida de trazabilidad, devuelve labels: [] y explica 
 
     return NextResponse.json({
       analysis,
-      model: GEMINI_MODEL,
+      model: providerResult.model,
       source: file.name,
+      fallback_used: providerResult.model !== GEMINI_MODEL,
+      attempts: attempts.map(({ model, status }) => ({ model, status })),
     });
   } catch (error: any) {
     console.error('Analyze invoice error:', error);
