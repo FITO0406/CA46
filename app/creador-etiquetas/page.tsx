@@ -82,6 +82,13 @@ const INVOICE_FIELDS: Array<{ key: InvoiceStringKey; label: string; wide?: boole
   { key: 'buyer_nif', label: 'CIF/NIF comprador' },
 ];
 
+const CRITICAL_REVIEW_FIELDS = new Set(['description', 'lote', 'procedencia']);
+
+function labelReadyToPublish(label: LabelDraft) {
+  const criticalReviewPending = (label.review_fields || []).some((field) => CRITICAL_REVIEW_FIELDS.has(field));
+  return Boolean(label.description?.trim()) && Boolean(label.lote?.trim()) && Boolean(label.procedencia?.trim()) && !criticalReviewPending;
+}
+
 function CameraIcon() {
   return <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 7h3l1.5-2h7L17 7h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"/><circle cx="12" cy="13" r="4"/></svg>;
 }
@@ -172,13 +179,11 @@ export default function CreadorEtiquetasPage() {
   const totalSize = useMemo(() => photos.reduce((sum, photo) => sum + photo.file.size, 0), [photos]);
   const totalLabels = useMemo(() => results.reduce((sum, invoice) => sum + invoice.labels.length, 0), [results]);
   const completedPhotos = useMemo(() => Object.values(photoStates).filter((item) => item.state === 'done' || item.state === 'error').length, [photoStates]);
+  const blockingLabels = useMemo(() => results.reduce((sum, invoice) => sum + invoice.labels.filter((label) => !labelReadyToPublish(label)).length, 0), [results]);
   const allReviewed = useMemo(() => {
     if (totalLabels === 0 || analyzing) return false;
-    return results.every((invoice) => invoice.labels.every((label) =>
-      Boolean(label.description?.trim()) && Boolean(label.lote?.trim()) && Boolean(label.procedencia?.trim()) &&
-      !label.needs_review && (label.review_fields || []).length === 0
-    ));
-  }, [results, totalLabels, analyzing]);
+    return blockingLabels === 0;
+  }, [totalLabels, analyzing, blockingLabels]);
 
   function resetAnalysis() {
     setResults([]);
@@ -245,8 +250,6 @@ export default function CreadorEtiquetasPage() {
         const invoice = normalizeInvoice(photo, payload?.analysis || {});
         nextResults.push(invoice);
 
-        // Importante para lotes: cada factura aparece en pantalla en cuanto termina,
-        // sin esperar a que se analicen todas las fotos seleccionadas.
         setResults([...nextResults]);
         setPhotoStates((current) => ({
           ...current,
@@ -391,7 +394,7 @@ export default function CreadorEtiquetasPage() {
         </section>
 
         {results.length > 0 ? <section className="mx-auto mt-8 max-w-6xl">
-          <div className="rounded-[2rem] border border-orange-400/20 bg-orange-500/[.06] p-6 sm:p-8"><p className="text-xs font-black uppercase tracking-[.22em] text-orange-400">Paso 2 · Etiquetas generadas</p><h2 className="mt-2 text-3xl font-black sm:text-4xl">{totalLabels} {totalLabels === 1 ? 'etiqueta disponible' : 'etiquetas disponibles'} para revisar</h2><p className="mt-3 text-slate-400">Si has subido varias fotos, cada factura aparece aquí en cuanto termina su lectura. No hace falta esperar a todo el lote.</p></div>
+          <div className="rounded-[2rem] border border-orange-400/20 bg-orange-500/[.06] p-6 sm:p-8"><p className="text-xs font-black uppercase tracking-[.22em] text-orange-400">Paso 2 · Etiquetas generadas</p><h2 className="mt-2 text-3xl font-black sm:text-4xl">{totalLabels} {totalLabels === 1 ? 'etiqueta disponible' : 'etiquetas disponibles'} para revisar</h2><p className="mt-3 text-slate-400">Los avisos de campos opcionales no bloquean la publicación. Solo deben estar correctos especie, lote y procedencia.</p></div>
 
           <div className="mt-6 space-y-7">{results.map((invoice, invoiceIndex) => <article key={invoice.photoId} className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[.035]">
             <header className="border-b border-white/10 bg-black/20 p-5 sm:p-6"><p className="text-xs font-black uppercase tracking-[.2em] text-orange-400">{invoice.fileName}</p><h3 className="mt-2 text-2xl font-black">Datos generales de la factura</h3><div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{INVOICE_FIELDS.map((field) => <label key={field.key} className={field.wide ? 'sm:col-span-2' : ''}><span className="mb-2 block text-[11px] font-black uppercase tracking-[.16em] text-slate-500">{field.label}</span><input value={invoice[field.key]} onChange={(event) => updateInvoiceField(invoiceIndex, field.key, event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-bold text-white outline-none focus:border-orange-400" placeholder="No figura" /></label>)}</div>{invoice.invoice_extra_fields.length > 0 ? <div className="mt-4 flex flex-wrap gap-2">{invoice.invoice_extra_fields.map((field) => <span key={`${field.label}-${field.value}`} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300"><strong>{field.label}:</strong> {field.value}</span>)}</div> : null}{invoice.warnings.length > 0 ? <div className="mt-4 rounded-xl border border-amber-400/15 bg-amber-400/[.06] p-3 text-sm text-amber-100/70">{invoice.warnings.join(' · ')}</div> : null}</header>
@@ -409,7 +412,7 @@ export default function CreadorEtiquetasPage() {
             </div>)}</div>
           </article>)}</div>
 
-          <div className="mt-7 rounded-[2rem] border border-white/10 bg-white/[.035] p-6 sm:flex sm:items-center sm:justify-between sm:gap-6"><div><p className="text-xs font-black uppercase tracking-[.2em] text-orange-400">Paso 3</p><h3 className="mt-2 text-2xl font-black">Publicar durante 72 horas</h3><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Las etiquetas generadas correctamente se conservan aunque otra foto del lote dé error.</p>{analyzing ? <p className="mt-3 text-sm font-bold text-orange-300">Espera a que termine el lote antes de publicar.</p> : !allReviewed ? <p className="mt-3 text-sm font-bold text-amber-300">Revisa y confirma todas las etiquetas antes de publicar.</p> : null}{publishError ? <p className="mt-3 text-sm font-bold text-rose-300">{publishError}</p> : null}</div><button type="button" onClick={publishLabels} disabled={!allReviewed || publishing || analyzing} className="mt-5 w-full rounded-2xl bg-orange-500 px-6 py-4 font-black text-[#111416] disabled:bg-slate-800 disabled:text-slate-600 sm:mt-0 sm:w-auto">{publishing ? 'Publicando…' : `Publicar ${totalLabels} ${totalLabels === 1 ? 'etiqueta' : 'etiquetas'}`}</button></div>
+          <div className="mt-7 rounded-[2rem] border border-white/10 bg-white/[.035] p-6 sm:flex sm:items-center sm:justify-between sm:gap-6"><div><p className="text-xs font-black uppercase tracking-[.2em] text-orange-400">Paso 3</p><h3 className="mt-2 text-2xl font-black">Publicar durante 72 horas</h3><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Cuando el lote termina, el botón se activa automáticamente si todas las etiquetas tienen especie, lote y procedencia.</p>{analyzing ? <p className="mt-3 text-sm font-bold text-orange-300">Espera a que termine el lote antes de publicar.</p> : !allReviewed ? <p className="mt-3 text-sm font-bold text-amber-300">{blockingLabels} {blockingLabels === 1 ? 'etiqueta necesita' : 'etiquetas necesitan'} revisar especie, lote o procedencia.</p> : <p className="mt-3 text-sm font-bold text-emerald-300">✓ Listo para publicar en el apartado Etiquetas.</p>}{publishError ? <p className="mt-3 text-sm font-bold text-rose-300">{publishError}</p> : null}</div><button type="button" onClick={publishLabels} disabled={!allReviewed || publishing || analyzing} className="mt-5 w-full rounded-2xl bg-orange-500 px-6 py-4 font-black text-[#111416] disabled:bg-slate-800 disabled:text-slate-600 sm:mt-0 sm:w-auto">{publishing ? 'Publicando…' : `Publicar ${totalLabels} ${totalLabels === 1 ? 'etiqueta' : 'etiquetas'}`}</button></div>
         </section> : null}
       </main>
     </div>
