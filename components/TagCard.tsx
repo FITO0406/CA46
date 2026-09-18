@@ -31,7 +31,7 @@ export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentInde
   const trace = decodeTraceability(tag.category);
   const accent = accentStyles[accentIndex % accentStyles.length];
   const productName = trace?.description || tag.product_name;
-  const secondary = [trace?.freshness, trace?.presentation].filter(Boolean).join(' · ');
+  const secondary = [trace?.scientificName, trace?.freshness, trace?.presentation].filter(Boolean).join(' · ');
   const weight = trace?.netWeight
     ? /\bkg\b/i.test(trace.netWeight) ? trace.netWeight : `${trace.netWeight} kg`
     : '';
@@ -44,12 +44,27 @@ export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentInde
   ];
 
   const extraDetails = [
-    ['Zona FAO', trace?.fao], ['Arte de pesca', trace?.fishingGear],
-    ['Marca', trace?.brand], ['Registro CE', trace?.ceCode],
-    ['Comprador', trace?.buyer], ['N.º comprador', trace?.buyerNumber],
+    ['Nombre científico', trace?.scientificName],
+    ['Zona FAO', trace?.fao],
+    ['Subzona', trace?.subzone],
+    ['Arte de pesca', trace?.fishingGear],
+    ['Primer expedidor', trace?.firstShipper],
+    ['Población', trace?.population],
+    ['Fecha de captura', trace?.captureDate],
+    ['Marca', trace?.brand],
+    ['Registro CE', trace?.ceCode],
+    ['N.º factura', trace?.invoiceNumber],
+    ['Fecha factura', trace?.invoiceDate],
+    ['Expedidor', trace?.shipper],
+    ['CIF expedidor', trace?.shipperTaxId],
+    ['Registro sanitario expedidor', trace?.shipperHealthRegistration],
+    ['Comprador', trace?.buyer],
+    ['N.º comprador', trace?.buyerNumber],
     ['Centro', trace?.establishment],
     ...(trace?.extraFields || []).map(({ label, value }) => [label, value]),
   ].filter(([, value]) => value);
+
+  const consumerNotice = trace?.consumerNotice || (/descongelad/i.test(trace?.freshness || '') ? 'Consumir preferentemente en 3 días' : '');
 
   return (
     <article className="group relative isolate overflow-hidden rounded-[2rem] border border-white/10 bg-[#12171a] shadow-2xl shadow-black/20 transition duration-300 hover:-translate-y-1 hover:border-white/20 hover:shadow-black/40">
@@ -66,6 +81,12 @@ export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentInde
           <div className={`grid h-14 w-14 shrink-0 place-items-center rounded-[1.2rem] border border-white/10 bg-black/20 text-3xl ${accent.icon}`}>◇</div>
         </div>
 
+        {consumerNotice ? (
+          <div className="mb-5 rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm font-black uppercase tracking-wide text-amber-200">
+            ⚠ {consumerNotice}
+          </div>
+        ) : null}
+
         <dl className="grid gap-3 sm:grid-cols-2">
           {primaryDetails.map((detail) => (
             <div key={detail.label} className="rounded-2xl border border-white/[.07] bg-white/[.045] p-4 transition group-hover:bg-white/[.06]">
@@ -76,8 +97,13 @@ export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentInde
         </dl>
 
         {extraDetails.length > 0 ? (
-          <div className="mt-5 flex flex-wrap gap-2 border-t border-white/[.08] pt-5">
-            {extraDetails.map(([label, value]) => <span key={label} className="rounded-full border border-white/[.08] bg-black/20 px-3 py-1.5 text-xs text-slate-400"><strong className="text-slate-300">{label}:</strong> {value}</span>)}
+          <div className="mt-5 grid gap-2 border-t border-white/[.08] pt-5 sm:grid-cols-2">
+            {extraDetails.map(([label, value]) => (
+              <div key={`${label}-${value}`} className="rounded-xl border border-white/[.08] bg-black/20 px-3 py-2.5 text-xs leading-5 text-slate-400">
+                <strong className="block text-[10px] uppercase tracking-[.14em] text-slate-500">{label}</strong>
+                <span className="font-bold text-slate-200">{value}</span>
+              </div>
+            ))}
           </div>
         ) : null}
       </div>
