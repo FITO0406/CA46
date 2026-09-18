@@ -13,6 +13,17 @@ export interface TraceabilityData {
   ceCode: string;
   buyer: string;
   buyerNumber: string;
+  scientificName?: string;
+  subzone?: string;
+  firstShipper?: string;
+  population?: string;
+  captureDate?: string;
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  shipper?: string;
+  shipperTaxId?: string;
+  shipperHealthRegistration?: string;
+  consumerNotice?: string;
   extraFields: Array<{ label: string; value: string }>;
 }
 
@@ -20,11 +31,11 @@ const TRACE_PREFIX = 'TRACE_V1:';
 
 const FIELD_ALIASES: Record<keyof TraceabilityData, string[]> = {
   establishment: ['establecimiento', 'mercado', 'centro'],
-  description: ['descripcion', 'descripción', 'producto'],
+  description: ['descripcion', 'descripción', 'producto', 'especie'],
   lot: ['lote'],
   brand: ['marca'],
-  netWeight: ['kg neto', 'peso neto', 'kg'],
-  productionMethod: ['metodo', 'método', 'metodo de produccion', 'método de producción'],
+  netWeight: ['kg neto', 'peso neto', 'peso.neto(kg)', 'peso neto(kg)', 'kg'],
+  productionMethod: ['metodo', 'método', 'metodo de produccion', 'método de producción', 'metodo produccion'],
   presentation: ['presentacion', 'presentación'],
   origin: ['procedencia', 'origen'],
   fao: ['fao', 'zona fao', 'zona de captura'],
@@ -32,7 +43,18 @@ const FIELD_ALIASES: Record<keyof TraceabilityData, string[]> = {
   fishingGear: ['arte', 'arte de pesca'],
   ceCode: ['ce', 'codigo ce', 'código ce'],
   buyer: ['comprador', 'cliente'],
-  buyerNumber: ['n', 'nº', 'n°', 'numero de comprador', 'número de comprador', 'numero comprador'],
+  buyerNumber: ['n', 'nº', 'n°', 'numero de comprador', 'número de comprador', 'numero comprador', 'cif/nif comprador'],
+  scientificName: ['nombre cientifico', 'nombre científico', 'nom.cientif', 'nom cientif'],
+  subzone: ['subzona'],
+  firstShipper: ['primer expedidor', 'prim.exped', 'prim exped', 'primero expedidor'],
+  population: ['poblacion', 'población', 'poblac'],
+  captureDate: ['fecha captura', 'fecha de captura', 'fec.captura', 'fec captura'],
+  invoiceNumber: ['factura', 'n factura', 'nº factura', 'numero factura', 'número factura'],
+  invoiceDate: ['fecha factura'],
+  shipper: ['expedidor'],
+  shipperTaxId: ['cif expedidor', 'nif expedidor', 'cif/nif expedidor'],
+  shipperHealthRegistration: ['r.g.s.', 'rgs', 'registro sanitario', 'registro sanitario expedidor'],
+  consumerNotice: ['consumir preferentemente'],
   extraFields: [],
 };
 
@@ -68,21 +90,40 @@ export function parseTraceabilityText(text: string, fallbackName: string): Trace
     }
     return '';
   };
-  const knownAliases = new Set(
-    Object.values(FIELD_ALIASES).flat().map(normalizeKey),
-  );
+  const knownAliases = new Set(Object.values(FIELD_ALIASES).flat().map(normalizeKey));
   const extraFields = Array.from(values.entries())
     .filter(([key]) => !knownAliases.has(key) && !PRIVATE_PRICE_FIELD.test(key))
     .map(([key, value]) => ({ label: labels.get(key) || key, value }));
 
+  const freshness = read('freshness');
+
   return {
     establishment: read('establishment') || standaloneLines[0] || '',
     description: read('description') || fallbackName.replace(/\.txt$/i, ''),
-    lot: read('lot'), brand: read('brand'), netWeight: read('netWeight'),
-    productionMethod: read('productionMethod'), presentation: read('presentation'),
-    origin: read('origin'), fao: read('fao'), freshness: read('freshness'),
-    fishingGear: read('fishingGear'), ceCode: read('ceCode'),
-    buyer: read('buyer'), buyerNumber: read('buyerNumber'), extraFields,
+    lot: read('lot'),
+    brand: read('brand'),
+    netWeight: read('netWeight'),
+    productionMethod: read('productionMethod'),
+    presentation: read('presentation'),
+    origin: read('origin'),
+    fao: read('fao'),
+    freshness,
+    fishingGear: read('fishingGear'),
+    ceCode: read('ceCode'),
+    buyer: read('buyer'),
+    buyerNumber: read('buyerNumber'),
+    scientificName: read('scientificName'),
+    subzone: read('subzone'),
+    firstShipper: read('firstShipper'),
+    population: read('population'),
+    captureDate: read('captureDate'),
+    invoiceNumber: read('invoiceNumber'),
+    invoiceDate: read('invoiceDate'),
+    shipper: read('shipper'),
+    shipperTaxId: read('shipperTaxId'),
+    shipperHealthRegistration: read('shipperHealthRegistration'),
+    consumerNotice: /descongelad/i.test(freshness) ? 'Consumir preferentemente en 3 días' : '',
+    extraFields,
   };
 }
 
