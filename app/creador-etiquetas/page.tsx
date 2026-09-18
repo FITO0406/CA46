@@ -10,6 +10,52 @@ type SelectedPhoto = {
   url: string;
 };
 
+type LabelDraft = {
+  description: string;
+  lote: string;
+  marca: string;
+  kg_neto: string;
+  metodo: string;
+  presentacion: string;
+  procedencia: string;
+  fao: string;
+  frescura: string;
+  arte: string;
+  ce: string;
+  comprador: string;
+  nif: string;
+  confidence: number;
+  needs_review: boolean;
+  review_fields: string[];
+};
+
+type InvoiceResult = {
+  photoId: string;
+  fileName: string;
+  invoice_number: string;
+  invoice_date: string;
+  buyer: string;
+  buyer_nif: string;
+  warnings: string[];
+  labels: LabelDraft[];
+};
+
+const EDITABLE_FIELDS: Array<{ key: keyof LabelDraft; label: string; wide?: boolean }> = [
+  { key: 'description', label: 'Descripción', wide: true },
+  { key: 'lote', label: 'Lote', wide: true },
+  { key: 'kg_neto', label: 'Kg neto' },
+  { key: 'marca', label: 'Marca' },
+  { key: 'metodo', label: 'Método' },
+  { key: 'presentacion', label: 'Presentación' },
+  { key: 'procedencia', label: 'Procedencia', wide: true },
+  { key: 'fao', label: 'FAO' },
+  { key: 'frescura', label: 'Frescura' },
+  { key: 'arte', label: 'Arte de pesca', wide: true },
+  { key: 'ce', label: 'CE' },
+  { key: 'comprador', label: 'Comprador', wide: true },
+  { key: 'nif', label: 'NIF' },
+];
+
 function CameraIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -29,15 +75,59 @@ function GalleryIcon() {
   );
 }
 
+async function compressForUpload(file: File): Promise<File> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const maxSide = 2200;
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) return file;
+    context.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, 'image/jpeg', 0.82)
+    );
+    if (!blob) return file;
+
+    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', {
+      type: 'image/jpeg',
+      lastModified: Date.now(),
+    });
+  } catch {
+    return file;
+  }
+}
+
 export default function CreadorEtiquetasPage() {
   const cameraInput = useRef<HTMLInputElement>(null);
   const galleryInput = useRef<HTMLInputElement>(null);
   const [photos, setPhotos] = useState<SelectedPhoto[]>([]);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [results, setResults] = useState<InvoiceResult[]>([]);
+  const [analysisErrors, setAnalysisErrors] = useState<string[]>([]);
 
   const totalSize = useMemo(
     () => photos.reduce((sum, photo) => sum + photo.file.size, 0),
     [photos]
   );
+
+  const totalLabels = useMemo(
+    () => results.reduce((sum, invoice) => sum + invoice.labels.length, 0),
+    [results]
+  );
+
+  function resetAnalysis() {
+    setResults([]);
+    setAnalysisErrors([]);
+    setProgress({ current: 0, total: 0 });
+  }
 
   function addFiles(fileList: FileList | null) {
     if (!fileList) return;
@@ -50,10 +140,12 @@ export default function CreadorEtiquetasPage() {
         url: URL.createObjectURL(file),
       }));
 
+    resetAnalysis();
     setPhotos((current) => [...current, ...incoming]);
   }
 
   function removePhoto(id: string) {
+    resetAnalysis();
     setPhotos((current) => {
       const photo = current.find((item) => item.id === id);
       if (photo) URL.revokeObjectURL(photo.url);
@@ -64,6 +156,87 @@ export default function CreadorEtiquetasPage() {
   function clearAll() {
     photos.forEach((photo) => URL.revokeObjectURL(photo.url));
     setPhotos([]);
+    resetAnalysis();
+  }
+
+  async function analyzePhotos() {
+    if (photos.length === 0 || analyzing) return;
+
+    setAnalyzing(true);
+    setResults([]);
+    setAnalysisErrors([]);
+    setProgress({ current: 0, total: photos.length });
+
+    const nextResults: InvoiceResult[] = [];
+    const nextErrors: string[] = [];
+
+    for (let index = 0; index < photos.length; index += 1) {
+      const photo = photos[index];
+      setProgress({ current: index + 1, total: photos.length });
+
+      try {
+        const optimized = await compressForUpload(photo.file);
+        const formData = new FormData();
+        formData.append('image', optimized);
+
+        const response = await fetch('/api/analyze-invoice', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const detail = payload?.code === 'AI_NOT_CONFIGURED'
+            ? 'Falta configurar el lector inteligente de CA46 en Vercel.'
+            : payload?.error || 'No se pudo leer la factura.';
+          throw new Error(detail);
+        }
+
+        const analysis = payload?.analysis;
+        nextResults.push({
+          photoId: photo.id,
+          fileName: photo.file.name,
+          invoice_number: analysis?.invoice_number || '',
+          invoice_date: analysis?.invoice_date || '',
+          buyer: analysis?.buyer || '',
+          buyer_nif: analysis?.buyer_nif || '',
+          warnings: Array.isArray(analysis?.warnings) ? analysis.warnings : [],
+          labels: Array.isArray(analysis?.labels) ? analysis.labels : [],
+        });
+      } catch (error: any) {
+        nextErrors.push(`Factura ${index + 1}: ${error?.message || 'error de lectura'}`);
+      }
+    }
+
+    setResults(nextResults);
+    setAnalysisErrors(nextErrors);
+    setAnalyzing(false);
+  }
+
+  function updateLabelField(
+    invoiceIndex: number,
+    labelIndex: number,
+    field: keyof LabelDraft,
+    value: string
+  ) {
+    setResults((current) =>
+      current.map((invoice, currentInvoiceIndex) => {
+        if (currentInvoiceIndex !== invoiceIndex) return invoice;
+        return {
+          ...invoice,
+          labels: invoice.labels.map((label, currentLabelIndex) => {
+            if (currentLabelIndex !== labelIndex) return label;
+            const nextReviewFields = label.review_fields.filter((reviewField) => reviewField !== field);
+            return {
+              ...label,
+              [field]: value,
+              review_fields: nextReviewFields,
+              needs_review: nextReviewFields.length > 0,
+            };
+          }),
+        };
+      })
+    );
   }
 
   return (
@@ -94,14 +267,14 @@ export default function CreadorEtiquetasPage() {
       <main className="relative mx-auto max-w-7xl px-5 pb-16 pt-10 sm:px-8 sm:pt-14">
         <section className="mx-auto max-w-3xl text-center">
           <span className="inline-flex rounded-full border border-orange-400/20 bg-orange-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[.22em] text-orange-300">
-            Paso 1 · Captura de factura
+            Captura · lectura · revisión
           </span>
           <h1 className="mt-5 text-balance text-4xl font-black tracking-[-.045em] sm:text-6xl">
-            Convierte tus facturas en
+            De una factura a todas sus
             <span className="block bg-gradient-to-r from-orange-400 via-amber-300 to-slate-200 bg-clip-text text-transparent">etiquetas de trazabilidad</span>
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg">
-            Haz una foto directamente o selecciona varias imágenes de la galería. CA46 procesará cada factura y separará cada partida en su propia etiqueta.
+            CA46 lee cada fotografía, detecta todas las partidas por separado y te obliga a revisar el resultado antes de publicar.
           </p>
         </section>
 
@@ -109,20 +282,22 @@ export default function CreadorEtiquetasPage() {
           <button
             type="button"
             onClick={() => cameraInput.current?.click()}
-            className="group rounded-[2rem] border border-orange-400/25 bg-gradient-to-br from-orange-500/[.16] via-white/[.055] to-white/[.025] p-7 text-left shadow-2xl shadow-orange-950/20 transition hover:border-orange-300/60 hover:bg-orange-500/[.12] sm:p-8"
+            disabled={analyzing}
+            className="group rounded-[2rem] border border-orange-400/25 bg-gradient-to-br from-orange-500/[.16] via-white/[.055] to-white/[.025] p-7 text-left shadow-2xl shadow-orange-950/20 transition hover:border-orange-300/60 hover:bg-orange-500/[.12] disabled:opacity-50 sm:p-8"
           >
             <div className="grid h-16 w-16 place-items-center rounded-2xl border border-orange-400/25 bg-orange-500/10 text-orange-300">
               <CameraIcon />
             </div>
             <p className="mt-7 text-xs font-black uppercase tracking-[.22em] text-orange-400">Desde el móvil</p>
             <h2 className="mt-2 text-3xl font-black">Hacer foto</h2>
-            <p className="mt-3 max-w-md leading-7 text-slate-400">Abre la cámara y fotografía la factura completa con buena luz y el papel lo más recto posible.</p>
+            <p className="mt-3 max-w-md leading-7 text-slate-400">Fotografía la factura completa con buena luz y el papel lo más recto posible.</p>
           </button>
 
           <button
             type="button"
             onClick={() => galleryInput.current?.click()}
-            className="group rounded-[2rem] border border-white/10 bg-white/[.045] p-7 text-left shadow-2xl shadow-black/20 transition hover:border-orange-400/35 hover:bg-white/[.065] sm:p-8"
+            disabled={analyzing}
+            className="group rounded-[2rem] border border-white/10 bg-white/[.045] p-7 text-left shadow-2xl shadow-black/20 transition hover:border-orange-400/35 hover:bg-white/[.065] disabled:opacity-50 sm:p-8"
           >
             <div className="grid h-16 w-16 place-items-center rounded-2xl border border-white/10 bg-white/5 text-slate-200">
               <GalleryIcon />
@@ -159,15 +334,15 @@ export default function CreadorEtiquetasPage() {
         <section className="mx-auto mt-8 max-w-5xl rounded-[2rem] border border-white/10 bg-white/[.035] p-5 sm:p-7">
           <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-5">
             <div>
-              <p className="text-xs font-black uppercase tracking-[.22em] text-orange-400">Fotos preparadas</p>
+              <p className="text-xs font-black uppercase tracking-[.22em] text-orange-400">Paso 1 · Fotografías</p>
               <h2 className="mt-2 text-2xl font-black sm:text-3xl">
                 {photos.length === 0 ? 'Aún no has añadido ninguna factura' : `${photos.length} ${photos.length === 1 ? 'fotografía' : 'fotografías'} seleccionadas`}
               </h2>
               {photos.length > 0 ? (
-                <p className="mt-2 text-sm font-semibold text-slate-500">{(totalSize / 1024 / 1024).toFixed(1)} MB en total</p>
+                <p className="mt-2 text-sm font-semibold text-slate-500">{(totalSize / 1024 / 1024).toFixed(1)} MB originales · CA46 las optimiza antes de leerlas</p>
               ) : null}
             </div>
-            {photos.length > 0 ? (
+            {photos.length > 0 && !analyzing ? (
               <button type="button" onClick={clearAll} className="rounded-full border border-white/10 px-4 py-2 text-sm font-black text-slate-400 transition hover:border-rose-400/30 hover:text-rose-300">
                 Quitar todas
               </button>
@@ -185,9 +360,11 @@ export default function CreadorEtiquetasPage() {
                   </div>
                   <div className="flex items-center justify-between gap-3 p-4">
                     <p className="min-w-0 truncate text-sm font-bold text-slate-300">{photo.file.name}</p>
-                    <button type="button" onClick={() => removePhoto(photo.id)} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/10 text-slate-500 transition hover:border-rose-400/30 hover:bg-rose-500/10 hover:text-rose-300" aria-label="Eliminar foto">
-                      ×
-                    </button>
+                    {!analyzing ? (
+                      <button type="button" onClick={() => removePhoto(photo.id)} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/10 text-slate-500 transition hover:border-rose-400/30 hover:bg-rose-500/10 hover:text-rose-300" aria-label="Eliminar foto">
+                        ×
+                      </button>
+                    ) : null}
                   </div>
                 </article>
               ))}
@@ -199,18 +376,131 @@ export default function CreadorEtiquetasPage() {
             </div>
           )}
 
-          <div className="mt-6 rounded-2xl border border-amber-400/15 bg-amber-400/[.06] p-4 text-sm leading-6 text-amber-100/80">
-            <strong className="text-amber-200">Siguiente fase:</strong> lectura OCR propia de CA46, detección de todas las partidas, revisión de campos y publicación de todas las etiquetas. Esta pantalla de captura ya queda preparada para ese flujo.
-          </div>
-
           <button
             type="button"
-            disabled={photos.length === 0}
-            className="mt-5 w-full rounded-2xl bg-orange-500 px-6 py-4 text-lg font-black text-[#111416] shadow-lg shadow-orange-950/30 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none"
+            onClick={analyzePhotos}
+            disabled={photos.length === 0 || analyzing}
+            className="mt-6 w-full rounded-2xl bg-orange-500 px-6 py-4 text-lg font-black text-[#111416] shadow-lg shadow-orange-950/30 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none"
           >
-            Continuar al análisis ({photos.length})
+            {analyzing
+              ? `Analizando factura ${progress.current} de ${progress.total}…`
+              : `Analizar y separar etiquetas (${photos.length})`}
           </button>
+
+          {analyzing ? (
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/5">
+              <div
+                className="h-full rounded-full bg-orange-500 transition-all"
+                style={{ width: `${progress.total ? (progress.current / progress.total) * 100 : 0}%` }}
+              />
+            </div>
+          ) : null}
+
+          {analysisErrors.length > 0 ? (
+            <div className="mt-5 rounded-2xl border border-rose-400/20 bg-rose-500/[.07] p-4">
+              <p className="font-black text-rose-200">Hay fotografías que necesitan atención</p>
+              {analysisErrors.map((error) => (
+                <p key={error} className="mt-2 text-sm leading-6 text-rose-100/70">• {error}</p>
+              ))}
+            </div>
+          ) : null}
         </section>
+
+        {results.length > 0 ? (
+          <section className="mx-auto mt-8 max-w-6xl">
+            <div className="rounded-[2rem] border border-orange-400/20 bg-orange-500/[.06] p-6 sm:p-8">
+              <p className="text-xs font-black uppercase tracking-[.22em] text-orange-400">Paso 2 · Revisión obligatoria</p>
+              <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <h2 className="text-3xl font-black sm:text-4xl">CA46 ha separado {totalLabels} {totalLabels === 1 ? 'etiqueta' : 'etiquetas'}</h2>
+                  <p className="mt-3 max-w-3xl leading-7 text-slate-400">Revisa los campos. Los avisos en ámbar son datos que el lector considera dudosos o incompletos. Nada se publica todavía.</p>
+                </div>
+                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/[.08] px-4 py-2 text-sm font-black text-emerald-300">Lectura terminada</span>
+              </div>
+            </div>
+
+            <div className="mt-6 space-y-7">
+              {results.map((invoice, invoiceIndex) => (
+                <article key={invoice.photoId} className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[.035]">
+                  <header className="border-b border-white/10 bg-black/20 p-5 sm:p-6">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[.2em] text-orange-400">{invoice.fileName}</p>
+                        <h3 className="mt-2 text-2xl font-black">{invoice.labels.length} {invoice.labels.length === 1 ? 'partida detectada' : 'partidas detectadas'}</h3>
+                      </div>
+                      <div className="text-right text-sm leading-6 text-slate-500">
+                        {invoice.invoice_number ? <p>Factura: <span className="font-bold text-slate-300">{invoice.invoice_number}</span></p> : null}
+                        {invoice.invoice_date ? <p>Fecha: <span className="font-bold text-slate-300">{invoice.invoice_date}</span></p> : null}
+                      </div>
+                    </div>
+                    {invoice.warnings.length > 0 ? (
+                      <div className="mt-4 rounded-xl border border-amber-400/15 bg-amber-400/[.06] p-3 text-sm text-amber-100/70">
+                        {invoice.warnings.join(' · ')}
+                      </div>
+                    ) : null}
+                  </header>
+
+                  <div className="space-y-5 p-5 sm:p-6">
+                    {invoice.labels.length === 0 ? (
+                      <div className="rounded-2xl border border-amber-400/20 bg-amber-400/[.06] p-5 text-amber-100/80">
+                        No se ha podido separar ninguna partida de esta fotografía. Revisa que la factura se vea completa y vuelve a fotografiarla.
+                      </div>
+                    ) : invoice.labels.map((label, labelIndex) => (
+                      <div key={`${invoice.photoId}-${labelIndex}`} className={`rounded-2xl border p-5 ${label.needs_review ? 'border-amber-400/25 bg-amber-400/[.035]' : 'border-white/10 bg-black/20'}`}>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-[.2em] text-slate-500">Etiqueta {labelIndex + 1}</p>
+                            <h4 className="mt-1 text-2xl font-black text-white">{label.description || 'Producto por revisar'}</h4>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-slate-400">Confianza {Math.round((label.confidence || 0) * 100)}%</span>
+                            {label.needs_review ? (
+                              <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-black text-amber-300">⚠ Revisar</span>
+                            ) : (
+                              <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-300">✓ Lectura clara</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                          {EDITABLE_FIELDS.map((field) => {
+                            const flagged = label.review_fields.includes(field.key as string);
+                            const rawValue = label[field.key];
+                            const value = typeof rawValue === 'string' ? rawValue : '';
+                            return (
+                              <label key={field.key as string} className={field.wide ? 'sm:col-span-2' : ''}>
+                                <span className={`mb-2 block text-[11px] font-black uppercase tracking-[.16em] ${flagged ? 'text-amber-300' : 'text-slate-500'}`}>
+                                  {field.label}{flagged ? ' · revisar' : ''}
+                                </span>
+                                <input
+                                  value={value}
+                                  onChange={(event) => updateLabelField(invoiceIndex, labelIndex, field.key, event.target.value)}
+                                  className={`w-full rounded-xl border bg-black/30 px-4 py-3 text-sm font-bold text-white outline-none transition focus:border-orange-400 ${flagged ? 'border-amber-400/35' : 'border-white/10'}`}
+                                  placeholder="Sin dato"
+                                />
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <div className="mt-7 rounded-[2rem] border border-white/10 bg-white/[.035] p-6 sm:flex sm:items-center sm:justify-between sm:gap-6">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[.2em] text-orange-400">Siguiente paso</p>
+                <h3 className="mt-2 text-2xl font-black">Publicación y vigencia de 72 horas</h3>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">En el siguiente avance conectaremos estas etiquetas revisadas con Supabase y la pantalla táctil de clientes.</p>
+              </div>
+              <button type="button" disabled className="mt-5 w-full rounded-2xl bg-slate-800 px-6 py-4 font-black text-slate-500 sm:mt-0 sm:w-auto">
+                Publicar etiquetas
+              </button>
+            </div>
+          </section>
+        ) : null}
       </main>
     </div>
   );
