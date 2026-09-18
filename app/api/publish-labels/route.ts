@@ -44,6 +44,8 @@ type InvoiceDraft = {
   labels?: LabelDraft[];
 };
 
+const CRITICAL_REVIEW_FIELDS = new Set(['description', 'lote', 'procedencia']);
+
 function clean(value: unknown) {
   return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
 }
@@ -85,19 +87,24 @@ export async function POST(request: Request) {
     }
 
     const invalid = flattened.find(({ label }) => {
-      const reviewFields = Array.isArray(label.review_fields) ? label.review_fields.filter(Boolean) : [];
+      const criticalReviewPending = Array.isArray(label.review_fields)
+        ? label.review_fields.some((field) => CRITICAL_REVIEW_FIELDS.has(String(field)))
+        : false;
+
       return (
         !clean(label.description) ||
         !clean(label.lote) ||
         !clean(label.procedencia) ||
-        Boolean(label.needs_review) ||
-        reviewFields.length > 0
+        criticalReviewPending
       );
     });
 
     if (invalid) {
       return NextResponse.json(
-        { error: 'Hay etiquetas pendientes de revisión. Revisa especie, lote y procedencia antes de publicar.', code: 'REVIEW_REQUIRED' },
+        {
+          error: 'Hay etiquetas con datos esenciales pendientes. Revisa especie, lote y procedencia antes de publicar.',
+          code: 'REVIEW_REQUIRED',
+        },
         { status: 400 }
       );
     }
