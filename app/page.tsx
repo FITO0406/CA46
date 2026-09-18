@@ -249,7 +249,7 @@ export default function Home() {
           </div>
           <div>
             <p className="text-[10px] font-black uppercase tracking-[.22em] text-slate-600">Objetivo</p>
-            <p className="mt-2 font-black text-slate-200">Automatización propia, sin depender de Make</p>
+            <p className="mt-2 font-black text-slate-200">Automatización integrada en CA46</p>
           </div>
         </section>
       </main>
