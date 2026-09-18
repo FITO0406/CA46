@@ -6,8 +6,11 @@ import { encodeTraceability, type TraceabilityData } from '@/lib/traceability';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+type ExtraField = { label?: string; value?: string };
+
 type LabelDraft = {
   description?: string;
+  scientific_name?: string;
   lote?: string;
   marca?: string;
   kg_neto?: string;
@@ -18,8 +21,13 @@ type LabelDraft = {
   frescura?: string;
   arte?: string;
   ce?: string;
+  subzona?: string;
+  primer_expedidor?: string;
+  poblacion?: string;
+  fecha_captura?: string;
   comprador?: string;
   nif?: string;
+  extra_fields?: ExtraField[];
   needs_review?: boolean;
   review_fields?: string[];
 };
@@ -27,13 +35,25 @@ type LabelDraft = {
 type InvoiceDraft = {
   invoice_number?: string;
   invoice_date?: string;
+  expedidor?: string;
+  cif_expedidor?: string;
+  registro_sanitario_expedidor?: string;
   buyer?: string;
   buyer_nif?: string;
+  invoice_extra_fields?: ExtraField[];
   labels?: LabelDraft[];
 };
 
 function clean(value: unknown) {
   return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
+}
+
+function cleanExtras(values: ExtraField[] | undefined) {
+  if (!Array.isArray(values)) return [];
+  return values
+    .map((item) => ({ label: clean(item?.label), value: clean(item?.value) }))
+    .filter((item) => item.label && item.value)
+    .filter((item) => !/(precio|importe|total|iva|coste|€)/i.test(item.label));
 }
 
 function fingerprint(invoice: InvoiceDraft, label: LabelDraft) {
@@ -77,7 +97,7 @@ export async function POST(request: Request) {
 
     if (invalid) {
       return NextResponse.json(
-        { error: 'Hay etiquetas pendientes de revisión. Revisa descripción, lote y procedencia antes de publicar.', code: 'REVIEW_REQUIRED' },
+        { error: 'Hay etiquetas pendientes de revisión. Revisa especie, lote y procedencia antes de publicar.', code: 'REVIEW_REQUIRED' },
         { status: 400 }
       );
     }
@@ -88,6 +108,10 @@ export async function POST(request: Request) {
     const records = flattened.map(({ invoice, label }) => {
       const buyer = clean(label.comprador || invoice.buyer);
       const buyerNumber = clean(label.nif || invoice.buyer_nif);
+      const freshness = clean(label.frescura);
+      const consumerNotice = /descongelad/i.test(freshness)
+        ? 'Consumir preferentemente en 3 días'
+        : '';
 
       const traceability: TraceabilityData = {
         establishment: 'CA46',
@@ -99,14 +123,25 @@ export async function POST(request: Request) {
         presentation: clean(label.presentacion),
         origin: clean(label.procedencia),
         fao: clean(label.fao),
-        freshness: clean(label.frescura),
+        freshness,
         fishingGear: clean(label.arte),
         ceCode: clean(label.ce),
         buyer,
         buyerNumber,
+        scientificName: clean(label.scientific_name),
+        subzone: clean(label.subzona),
+        firstShipper: clean(label.primer_expedidor),
+        population: clean(label.poblacion),
+        captureDate: clean(label.fecha_captura),
+        invoiceNumber: clean(invoice.invoice_number),
+        invoiceDate: clean(invoice.invoice_date),
+        shipper: clean(invoice.expedidor),
+        shipperTaxId: clean(invoice.cif_expedidor),
+        shipperHealthRegistration: clean(invoice.registro_sanitario_expedidor),
+        consumerNotice,
         extraFields: [
-          ...(clean(invoice.invoice_number) ? [{ label: 'Factura', value: clean(invoice.invoice_number) }] : []),
-          ...(clean(invoice.invoice_date) ? [{ label: 'Fecha factura', value: clean(invoice.invoice_date) }] : []),
+          ...cleanExtras(invoice.invoice_extra_fields),
+          ...cleanExtras(label.extra_fields),
         ],
       };
 
