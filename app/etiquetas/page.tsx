@@ -152,9 +152,9 @@ export default function EtiquetasPage() {
         </div>
 
         {loading ? (
-          <div className="grid gap-6 md:grid-cols-2"><div className="h-96 animate-pulse rounded-[2rem] bg-white/5"/><div className="h-96 animate-pulse rounded-[2rem] bg-white/5"/></div>
+          <div className="space-y-6"><div className="h-96 animate-pulse rounded-[2rem] bg-white/5"/><div className="h-96 animate-pulse rounded-[2rem] bg-white/5"/></div>
         ) : filteredTags.length > 0 ? (
-          <div className="grid gap-6 md:grid-cols-2">{filteredTags.map((tag, index) => <TagCard key={tag.id} tag={tag} accentIndex={index} />)}</div>
+          <div className="space-y-6">{filteredTags.map((tag, index) => <TagCard key={tag.id} tag={tag} accentIndex={index} />)}</div>
         ) : (
           <div className="rounded-[2rem] border border-dashed border-white/15 bg-white/[.03] px-6 py-16 text-center"><div className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-2xl bg-orange-500/10 text-3xl">🐟</div><h3 className="text-2xl font-black">No encontramos ese producto</h3><p className="mt-2 text-slate-400">Prueba escribiendo menos letras o comprueba el nombre.</p><button onClick={() => setQuery('')} className="mt-6 rounded-full bg-orange-500 px-5 py-2.5 font-black text-[#121416] transition hover:bg-orange-400">Ver todos</button></div>
         )}
