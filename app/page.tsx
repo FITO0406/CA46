@@ -191,7 +191,7 @@ export default function Home() {
               <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">5 módulos. Un solo ecosistema.</h2>
             </div>
             <p className="max-w-xl text-sm leading-6 text-slate-500">
-              Etiquetas y GESICO ya están disponibles. El resto de módulos los iremos activando sobre esta misma estructura.
+              Etiquetas, Creador de etiquetas y GESICO ya están disponibles. El resto de módulos los iremos activando sobre esta misma estructura.
             </p>
           </div>
 
@@ -210,7 +210,8 @@ export default function Home() {
               title="Creador de etiquetas"
               description="Captura facturas con la cámara o selecciona varias fotos, revisa los datos detectados y publica todas las etiquetas."
               eyebrow="Zona profesional"
-              badge="Siguiente paso"
+              href="/creador-etiquetas"
+              badge="En desarrollo"
               icon={<TagIcon />}
             />
 
