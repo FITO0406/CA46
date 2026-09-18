@@ -191,7 +191,7 @@ export default function Home() {
               <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">5 módulos. Un solo ecosistema.</h2>
             </div>
             <p className="max-w-xl text-sm leading-6 text-slate-500">
-              Etiquetas, Creador de etiquetas y GESICO ya están disponibles. El resto de módulos los iremos activando sobre esta misma estructura.
+              Etiquetas, Creador, GESICO, Bancos y Mi empresa ya tienen acceso desde este panel.
             </p>
           </div>
 
@@ -225,15 +225,18 @@ export default function Home() {
 
             <ModuleCard
               title="Bancos"
-              description="Selecciona tu entidad habitual y accede rápidamente a su banca online sin que CA46 almacene tus credenciales."
+              description="Muestra solo las entidades seleccionadas en Mi empresa y abre su banca online oficial."
               eyebrow="Acceso rápido"
+              href="/bancos"
               icon={<BankIcon />}
             />
 
             <ModuleCard
               title="Mi empresa"
-              description="Datos de empresa, usuarios, conexión de Drive, preferencias y configuración general de tu cuenta CA46."
+              description="Datos de empresa y responsable, bancos, Drive, GESICO y configuración de etiquetas."
               eyebrow="Configuración"
+              href="/mi-empresa"
+              badge="Nuevo"
               icon={<CompanyIcon />}
             />
           </div>
