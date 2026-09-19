@@ -131,7 +131,7 @@ export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentInde
 
       <footer className="flex items-center justify-between gap-4 border-t border-white/[.07] bg-black/20 px-5 py-3 text-[10px] font-bold uppercase tracking-[.14em] text-slate-500 sm:px-7 lg:px-8">
         <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-400" />Ficha activa</span>
-        <span>CA46 · Trazabilidad verificada</span>
+        <span>CA46 · Trazabilidad alimentaria</span>
       </footer>
     </article>
   );
