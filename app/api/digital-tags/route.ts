@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
-import { supabase, supabaseAdmin } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase';
+import { syncCompanyDrive } from '@/lib/company-drive-sync';
 
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 async function publicCompanyFromScreenToken(screenToken: string) {
@@ -29,33 +31,30 @@ export async function GET(request: Request) {
   try {
     const screenToken = new URL(request.url).searchParams.get('screen')?.trim() || '';
 
-    if (screenToken) {
-      const companyId = await publicCompanyFromScreenToken(screenToken);
-      if (!companyId) {
-        return NextResponse.json([], { status: 200, headers: { 'Cache-Control': 'no-store' } });
-      }
-
-      const { data, error } = await supabaseAdmin
-        .from('digital_tags')
-        .select('id, drive_file_id, product_name, origin, category, is_active, created_at, expires_at, source, status')
-        .eq('company_id', companyId)
-        .eq('is_active', true)
-        .gte('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      return NextResponse.json(data || [], {
-        status: 200,
-        headers: { 'Cache-Control': 'no-store' },
-      });
+    // La pantalla pública siempre necesita el token propio de una empresa.
+    // Sin token no se sirven etiquetas antiguas/globales.
+    if (!screenToken) {
+      return NextResponse.json([], { status: 200, headers: { 'Cache-Control': 'no-store' } });
     }
 
-    // Compatibilidad temporal: solo muestra antiguas etiquetas sin empresa.
-    const { data, error } = await supabase
+    const companyId = await publicCompanyFromScreenToken(screenToken);
+    if (!companyId) {
+      return NextResponse.json([], { status: 200, headers: { 'Cache-Control': 'no-store' } });
+    }
+
+    // Encadena Drive -> base de datos -> visor. El helper lleva un pequeño
+    // throttle para que el refresco del escaparate no golpee Drive en exceso.
+    try {
+      await syncCompanyDrive({ companyId, force: false });
+    } catch (syncError) {
+      console.warn('Automatic Drive sync skipped:', syncError);
+      // El visor sigue funcionando con las etiquetas que ya estaban publicadas.
+    }
+
+    const { data, error } = await supabaseAdmin
       .from('digital_tags')
       .select('id, drive_file_id, product_name, origin, category, is_active, created_at, expires_at, source, status')
-      .is('company_id', null)
+      .eq('company_id', companyId)
       .eq('is_active', true)
       .gte('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false });
