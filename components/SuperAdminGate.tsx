@@ -21,7 +21,9 @@ export default function SuperAdminGate({ children }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [signingIn, setSigningIn] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -43,18 +45,29 @@ export default function SuperAdminGate({ children }: Props) {
       }
 
       try {
-        const response = await fetch('/api/superadmin/me', {
-          cache: 'no-store',
-          headers: { Authorization: `Bearer ${nextSession.access_token}` },
-        });
-        const payload = await response.json().catch(() => ({}));
-
-        if (!mounted || currentValidation !== validationId) return;
+        const headers = { Authorization: `Bearer ${nextSession.access_token}` };
+        let response = await fetch('/api/superadmin/me', { cache: 'no-store', headers });
+        let payload = await response.json().catch(() => ({}));
 
         if (response.status === 401) {
           await supabase.auth.signOut();
           return;
         }
+
+        if (response.status === 403) {
+          const bootstrap = await fetch('/api/superadmin/bootstrap', {
+            method: 'POST',
+            cache: 'no-store',
+            headers,
+          });
+          const bootstrapPayload = await bootstrap.json().catch(() => ({}));
+          if (bootstrap.ok) {
+            response = bootstrap;
+            payload = bootstrapPayload;
+          }
+        }
+
+        if (!mounted || currentValidation !== validationId) return;
 
         if (!response.ok) {
           setAllowed(false);
@@ -86,9 +99,10 @@ export default function SuperAdminGate({ children }: Props) {
 
   async function handleLogin(event: FormEvent) {
     event.preventDefault();
-    if (!email.trim() || !password || signingIn) return;
+    if (!email.trim() || !password || signingIn || creating) return;
     setSigningIn(true);
     setError('');
+    setMessage('');
 
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email: email.trim(),
@@ -96,13 +110,45 @@ export default function SuperAdminGate({ children }: Props) {
     });
 
     if (signInError) {
-      setError('No hemos podido iniciar sesión. Revisa email y contraseña.');
+      setError('No hemos podido iniciar sesión. Si es tu primer acceso, pulsa “Crear acceso SuperAdmin”.');
       setSigningIn(false);
       return;
     }
 
     setPassword('');
     setSigningIn(false);
+  }
+
+  async function handleCreateAccess() {
+    if (!email.trim() || !password || signingIn || creating) return;
+    setCreating(true);
+    setError('');
+    setMessage('');
+
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/superadmin`,
+        data: {
+          role: 'superadmin',
+          signup_source: 'ca46_superadmin',
+        },
+      },
+    });
+
+    if (signUpError) {
+      setError(signUpError.message || 'No se pudo crear el acceso SuperAdmin.');
+      setCreating(false);
+      return;
+    }
+
+    if (!data.session) {
+      setMessage('Cuenta creada. Confirma el correo y vuelve a entrar como SuperAdmin.');
+    }
+
+    setPassword('');
+    setCreating(false);
   }
 
   async function logout() {
@@ -128,13 +174,15 @@ export default function SuperAdminGate({ children }: Props) {
           <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl border border-orange-400/20 bg-orange-500/10 text-3xl">🛡️</div>
           <p className="mt-6 text-center text-xs font-black uppercase tracking-[.22em] text-orange-400">CA46 · Administración global</p>
           <h1 className="mt-2 text-center text-3xl font-black">SuperAdmin</h1>
-          <p className="mt-3 text-center text-sm leading-6 text-slate-400">Acceso exclusivo para cuentas autorizadas. No crea empresas ni permisos automáticamente.</p>
+          <p className="mt-3 text-center text-sm leading-6 text-slate-400">Solo los emails autorizados pueden crear o usar un acceso SuperAdmin.</p>
 
           <form onSubmit={handleLogin} className="mt-7 space-y-4">
             <label className="block"><span className="mb-2 block text-[11px] font-black uppercase tracking-[.16em] text-slate-500">Email</span><input type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 font-bold outline-none focus:border-orange-400" /></label>
             <label className="block"><span className="mb-2 block text-[11px] font-black uppercase tracking-[.16em] text-slate-500">Contraseña</span><input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 font-bold outline-none focus:border-orange-400" /></label>
             {error ? <p className="rounded-xl border border-rose-400/20 bg-rose-500/[.07] px-4 py-3 text-sm font-bold text-rose-300">{error}</p> : null}
-            <button type="submit" disabled={signingIn || !email.trim() || !password} className="w-full rounded-xl bg-orange-500 px-5 py-4 font-black text-[#111416] disabled:bg-slate-800 disabled:text-slate-600">{signingIn ? 'Validando…' : 'Entrar como SuperAdmin'}</button>
+            {message ? <p className="rounded-xl border border-emerald-400/20 bg-emerald-500/[.07] px-4 py-3 text-sm font-bold text-emerald-300">{message}</p> : null}
+            <button type="submit" disabled={signingIn || creating || !email.trim() || !password} className="w-full rounded-xl bg-orange-500 px-5 py-4 font-black text-[#111416] disabled:bg-slate-800 disabled:text-slate-600">{signingIn ? 'Validando…' : 'Entrar como SuperAdmin'}</button>
+            <button type="button" onClick={handleCreateAccess} disabled={signingIn || creating || !email.trim() || !password} className="w-full rounded-xl border border-white/10 bg-white/5 px-5 py-4 font-black text-white disabled:text-slate-600">{creating ? 'Creando acceso…' : 'Primer acceso · Crear SuperAdmin'}</button>
           </form>
           <a href="/" className="mt-5 block text-center text-sm font-black text-slate-500">← Volver a CA46</a>
         </section>
@@ -150,10 +198,7 @@ export default function SuperAdminGate({ children }: Props) {
           <p className="mt-6 text-xs font-black uppercase tracking-[.22em] text-rose-300">Acceso denegado</p>
           <h1 className="mt-2 text-3xl font-black">No eres SuperAdmin</h1>
           <p className="mt-4 text-sm leading-6 text-slate-400">{error || 'Esta cuenta no está autorizada para administrar todas las empresas.'}</p>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <a href="/mi-empresa" className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-black">Ir a Mi empresa</a>
-            <button type="button" onClick={logout} className="rounded-xl bg-orange-500 px-5 py-3 font-black text-black">Cerrar sesión</button>
-          </div>
+          <button type="button" onClick={logout} className="mt-6 w-full rounded-xl bg-orange-500 px-5 py-3 font-black text-black">Cerrar sesión y usar otra cuenta</button>
         </section>
       </div>
     );
