@@ -51,7 +51,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const [settingsResult, membersResult, tagsResult] = await Promise.all([
+    const [settingsResult, membersResult, tagsResult, authUsersResult] = await Promise.all([
       supabaseAdmin
         .from('company_settings')
         .select('company_id, business_name, city, province, drive_connected, public_screen_enabled')
@@ -67,6 +67,7 @@ export async function GET(request: Request) {
         .select('company_id, expires_at')
         .in('company_id', companyIds)
         .eq('is_active', true),
+      supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     ]);
 
     if (settingsResult.error) throw settingsResult.error;
@@ -93,16 +94,10 @@ export async function GET(request: Request) {
       }
     }
 
-    const ownerIds = [...new Set((companies || []).map((company) => company.owner_user_id).filter(Boolean))];
     const ownerEmails = new Map<string, string>();
-    if (ownerIds.length > 0) {
-      const { data: authUsers, error: authUsersError } = await supabaseAdmin
-        .schema('auth')
-        .from('users')
-        .select('id, email')
-        .in('id', ownerIds);
-      if (!authUsersError) {
-        for (const user of authUsers || []) ownerEmails.set(user.id, user.email || '');
+    if (!authUsersResult.error) {
+      for (const user of authUsersResult.data.users || []) {
+        ownerEmails.set(user.id, user.email || '');
       }
     }
 
