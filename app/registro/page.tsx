@@ -54,6 +54,7 @@ export default function RegistroPage() {
           company_name: companyName.trim(),
           plan,
           role: 'admin_empresa',
+          signup_source: 'ca46_public',
         },
       },
     });
@@ -79,7 +80,7 @@ export default function RegistroPage() {
       return;
     }
 
-    setSuccess('Cuenta creada. Revisa tu correo y confirma el enlace para activar el acceso a CA46.');
+    setSuccess('Cuenta y empresa creadas. Revisa tu correo y confirma el enlace para activar el acceso a CA46.');
     setLoading(false);
   }
 
