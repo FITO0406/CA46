@@ -36,6 +36,7 @@ export type CompanyConfig = {
   screenName: string;
   labelsHours: number;
   publicScreenEnabled: boolean;
+  publicScreenToken: string;
   driveFolderId: string;
   driveFolderUrl: string;
   driveConnected: boolean;
@@ -61,6 +62,7 @@ export const DEFAULT_COMPANY_CONFIG: CompanyConfig = {
   screenName: '',
   labelsHours: 72,
   publicScreenEnabled: true,
+  publicScreenToken: '',
   driveFolderId: '',
   driveFolderUrl: '',
   driveConnected: false,
