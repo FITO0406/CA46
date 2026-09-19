@@ -18,7 +18,10 @@ export default function SuperAdminRecuperarPage() {
     setError('');
 
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/superadmin-nueva-clave`,
+      // La URL raíz siempre coincide con el Site URL de CA46. El puente global
+      // detecta el enlace de recuperación y conserva los tokens/código al enviar
+      // al usuario a /superadmin-nueva-clave.
+      redirectTo: `${window.location.origin}/`,
     });
 
     if (resetError) {
@@ -27,7 +30,7 @@ export default function SuperAdminRecuperarPage() {
       return;
     }
 
-    setMessage('Te hemos enviado un enlace para crear una nueva contraseña. Revisa también Spam o Promociones.');
+    setMessage('Te hemos enviado un enlace nuevo. Ábrelo y CA46 te llevará directamente a crear la nueva contraseña. Revisa también Spam o Promociones.');
     setSending(false);
   }
 
