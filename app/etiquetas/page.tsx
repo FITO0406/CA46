@@ -55,6 +55,7 @@ export default function EtiquetasPage() {
   const [selectedTagId, setSelectedTagId] = useState('');
   const deferredQuery = useDeferredValue(query);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const ignoreShowcaseTapUntilRef = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -138,9 +139,15 @@ export default function EtiquetasPage() {
   }, [mode, tags.length]);
 
   const returnToShowcase = useCallback(() => {
+    ignoreShowcaseTapUntilRef.current = Date.now() + 700;
     setMode('showcase');
     setQuery('');
     setSelectedTagId('');
+  }, []);
+
+  const openSearch = useCallback(() => {
+    if (Date.now() < ignoreShowcaseTapUntilRef.current) return;
+    setMode('search');
   }, []);
 
   useEffect(() => {
@@ -178,10 +185,12 @@ export default function EtiquetasPage() {
     return (
       <div
         className="relative min-h-screen cursor-pointer overflow-hidden bg-[#080b0d] text-white"
-        onPointerDown={() => setMode('search')}
+        onPointerDown={openSearch}
         role="button"
         tabIndex={0}
-        onKeyDown={() => setMode('search')}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') openSearch();
+        }}
         aria-label="Toca para buscar una etiqueta"
       >
         <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_12%_5%,rgba(249,115,22,.18),transparent_27%),radial-gradient(circle_at_88%_18%,rgba(14,165,233,.08),transparent_25%)]" />
@@ -236,7 +245,14 @@ export default function EtiquetasPage() {
             <p className="text-xs font-black uppercase tracking-[.18em] text-orange-400">Buscar etiqueta</p>
             <h1 className="mt-1 text-2xl font-black">Escribe el producto o lote</h1>
           </div>
-          <button type="button" onClick={returnToShowcase} className="rounded-xl bg-orange-500 px-4 py-3 text-sm font-black text-black">Volver</button>
+          <button
+            type="button"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={returnToShowcase}
+            className="rounded-xl bg-orange-500 px-4 py-3 text-sm font-black text-black"
+          >
+            Volver
+          </button>
         </div>
       </header>
 
