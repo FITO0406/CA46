@@ -3,19 +3,41 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { BANKS, loadCompanyConfig, type CompanyConfig } from '@/lib/company-config';
+import { BANKS, DEFAULT_COMPANY_CONFIG, type CompanyConfig } from '@/lib/company-config';
+import { loadTenantCompanyConfig } from '@/lib/tenant-company-config';
 
 export default function BancosPage() {
   const [config, setConfig] = useState<CompanyConfig | null>(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const refresh = () => setConfig(loadCompanyConfig());
-    refresh();
-    window.addEventListener('storage', refresh);
-    window.addEventListener('ca46-company-config-updated', refresh as EventListener);
+    let active = true;
+
+    const refresh = async () => {
+      try {
+        const settings = await loadTenantCompanyConfig();
+        if (!active) return;
+        setConfig(settings ? { ...DEFAULT_COMPANY_CONFIG, ...settings } : DEFAULT_COMPANY_CONFIG);
+        setError('');
+      } catch (requestError: any) {
+        if (!active) return;
+        setConfig(DEFAULT_COMPANY_CONFIG);
+        setError(requestError?.message || 'No se pudieron cargar los bancos de tu empresa.');
+      }
+    };
+
+    void refresh();
+    const onUpdated = () => void refresh();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+
+    window.addEventListener('ca46-tenant-settings-updated', onUpdated as EventListener);
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
-      window.removeEventListener('storage', refresh);
-      window.removeEventListener('ca46-company-config-updated', refresh as EventListener);
+      active = false;
+      window.removeEventListener('ca46-tenant-settings-updated', onUpdated as EventListener);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
 
@@ -41,8 +63,10 @@ export default function BancosPage() {
         <section className="max-w-3xl">
           <p className="text-xs font-black uppercase tracking-[.22em] text-orange-400">Acceso rápido</p>
           <h1 className="mt-2 text-4xl font-black sm:text-6xl">Mis bancos</h1>
-          <p className="mt-4 text-slate-400">Aquí aparecen únicamente los bancos seleccionados en Mi empresa. CA46 no almacena credenciales: al pulsar se abre la web oficial de la entidad.</p>
+          <p className="mt-4 text-slate-400">Aquí aparecen únicamente los bancos seleccionados en Mi empresa. La selección se carga desde tu empresa en CA46, no desde este dispositivo.</p>
         </section>
+
+        {error ? <p className="mt-6 rounded-2xl border border-rose-400/20 bg-rose-500/[.07] px-5 py-4 text-sm font-bold text-rose-200">{error}</p> : null}
 
         {!config ? (
           <div className="mt-8 h-40 animate-pulse rounded-[2rem] bg-white/5" />
@@ -50,7 +74,7 @@ export default function BancosPage() {
           <section className="mt-8 rounded-[2rem] border border-dashed border-white/15 bg-white/[.03] p-8 text-center sm:p-12">
             <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-orange-500/10 text-3xl">🏦</div>
             <h2 className="mt-5 text-2xl font-black">Todavía no has seleccionado ningún banco</h2>
-            <p className="mx-auto mt-3 max-w-xl text-slate-400">Entra en Mi empresa, marca los bancos que utilizas y aparecerán aquí automáticamente.</p>
+            <p className="mx-auto mt-3 max-w-xl text-slate-400">Entra en Mi empresa, marca los bancos que utilizas y pulsa Guardar. La selección quedará asociada a tu empresa.</p>
             <Link href="/mi-empresa" className="mt-6 inline-flex rounded-xl bg-orange-500 px-5 py-3 font-black text-[#111416]">Seleccionar bancos</Link>
           </section>
         ) : (
