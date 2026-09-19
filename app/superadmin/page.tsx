@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import Link from 'next/link';
 
 export default function SuperAdminPage() {
   return (
@@ -23,12 +24,13 @@ export default function SuperAdminPage() {
         </section>
 
         <section className="mt-10 grid gap-5 md:grid-cols-3">
-          <div className="rounded-[2rem] border border-orange-400/25 bg-orange-500/[.06] p-7">
+          <Link href="/superadmin/empresas" className="rounded-[2rem] border border-orange-400/30 bg-orange-500/[.08] p-7 transition hover:border-orange-300/50 hover:bg-orange-500/[.11] active:scale-[.99]">
             <div className="text-4xl">🏢</div>
-            <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-orange-400">Siguiente paso</p>
+            <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-orange-400">Activo</p>
             <h2 className="mt-2 text-2xl font-black">Empresas</h2>
-            <p className="mt-3 text-sm leading-6 text-slate-400">Listado global, estado, plan, datos básicos y acceso a la ficha de cada empresa.</p>
-          </div>
+            <p className="mt-3 text-sm leading-6 text-slate-400">Listado global, estado, plan, usuarios, Drive y etiquetas activas de cada empresa.</p>
+            <span className="mt-6 inline-flex rounded-xl bg-orange-500 px-4 py-3 text-sm font-black text-black">Abrir Empresas →</span>
+          </Link>
 
           <div className="rounded-[2rem] border border-white/10 bg-white/[.035] p-7 opacity-70">
             <div className="text-4xl">💳</div>
@@ -45,8 +47,8 @@ export default function SuperAdminPage() {
           </div>
         </section>
 
-        <section className="mt-8 rounded-2xl border border-white/10 bg-white/[.035] px-5 py-4 text-sm font-bold text-slate-400">
-          Paso 1 completado: autenticación SuperAdmin independiente y cerrada. El siguiente bloque será el panel de Empresas.
+        <section className="mt-8 rounded-2xl border border-emerald-400/15 bg-emerald-400/[.05] px-5 py-4 text-sm font-bold text-emerald-200">
+          Paso 3 activo: Empresas ya está conectado a la base multiempresa. El siguiente bloque será la ficha individual de cada empresa.
         </section>
       </main>
     </div>
