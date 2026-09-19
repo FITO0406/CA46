@@ -45,9 +45,14 @@ export async function saveTenantCompanyConfig(config: CompanyConfig): Promise<Co
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload?.error || 'No se pudo guardar Mi empresa.');
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('ca46-tenant-settings-updated'));
+  }
+
   return payload.settings as CompanyConfig;
 }
 
 export async function tenantAuthorizationHeader() {
-  return { Authorization: `Bearer ${await accessToken()}` };
+  return authHeaders();
 }
