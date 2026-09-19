@@ -47,13 +47,10 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada' }:
     setSigningIn(true);
     setError('');
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
 
     if (signInError) {
-      setError('Email o contraseña incorrectos.');
+      setError('No hemos podido entrar. Revisa email, contraseña y que hayas confirmado tu correo.');
       setSigningIn(false);
       return;
     }
@@ -69,10 +66,7 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada' }:
   if (loading) {
     return (
       <div className="grid min-h-screen place-items-center bg-[#080b0d] text-white">
-        <div className="text-center">
-          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-white/10 border-t-orange-400" />
-          <p className="mt-4 text-sm font-bold text-slate-500">Comprobando acceso…</p>
-        </div>
+        <div className="text-center"><div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-white/10 border-t-orange-400" /><p className="mt-4 text-sm font-bold text-slate-500">Comprobando acceso…</p></div>
       </div>
     );
   }
@@ -85,23 +79,21 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada' }:
           <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl border border-orange-400/20 bg-orange-500/10 text-3xl">🔒</div>
           <p className="mt-6 text-center text-xs font-black uppercase tracking-[.22em] text-orange-400">CA46 · Acceso privado</p>
           <h1 className="mt-2 text-center text-3xl font-black">{areaName}</h1>
-          <p className="mx-auto mt-3 max-w-sm text-center text-sm leading-6 text-slate-400">Introduce el email y la contraseña de tu usuario CA46 para continuar.</p>
+          <p className="mx-auto mt-3 max-w-sm text-center text-sm leading-6 text-slate-400">Introduce el email y la contraseña de tu cuenta CA46 para continuar.</p>
 
           <form onSubmit={handleLogin} className="mt-7 space-y-4">
-            <label className="block">
-              <span className="mb-2 block text-[11px] font-black uppercase tracking-[.16em] text-slate-500">Email</span>
-              <input type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 font-bold outline-none focus:border-orange-400" placeholder="tu@email.com" />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-[11px] font-black uppercase tracking-[.16em] text-slate-500">Contraseña</span>
-              <input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 font-bold outline-none focus:border-orange-400" placeholder="••••••••" />
-            </label>
+            <label className="block"><span className="mb-2 block text-[11px] font-black uppercase tracking-[.16em] text-slate-500">Email</span><input type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 font-bold outline-none focus:border-orange-400" placeholder="tu@email.com" /></label>
+            <label className="block"><span className="mb-2 block text-[11px] font-black uppercase tracking-[.16em] text-slate-500">Contraseña</span><input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 font-bold outline-none focus:border-orange-400" placeholder="••••••••" /></label>
             {error ? <p className="rounded-xl border border-rose-400/20 bg-rose-500/[.07] px-4 py-3 text-sm font-bold text-rose-300">{error}</p> : null}
             <button type="submit" disabled={signingIn || !email.trim() || !password} className="w-full rounded-xl bg-orange-500 px-5 py-4 font-black text-[#111416] disabled:bg-slate-800 disabled:text-slate-600">{signingIn ? 'Entrando…' : 'Entrar en CA46'}</button>
           </form>
 
-          <p className="mt-5 text-center text-xs leading-5 text-slate-600">No hay registro público desde esta pantalla. Solo pueden entrar usuarios autorizados de CA46.</p>
-          <a href="/" className="mt-5 block text-center text-sm font-black text-slate-400">← Volver al inicio</a>
+          <div className="mt-5 flex flex-col gap-3 text-center text-sm font-black">
+            <a href="/recuperar-clave" className="text-slate-400">¿Has olvidado tu contraseña?</a>
+            <a href="/registro?plan=gratis" className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white">Crear una cuenta gratis</a>
+            <a href="/planes" className="text-orange-300">Ver planes CA46</a>
+            <a href="/" className="text-slate-500">← Volver al inicio</a>
+          </div>
         </section>
       </div>
     );
