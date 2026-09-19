@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import TenantCompanyCard from '@/components/TenantCompanyCard';
 import { BANKS, DEFAULT_COMPANY_CONFIG, loadCompanyConfig, saveCompanyConfig, type CompanyConfig } from '@/lib/company-config';
 
 const inputClass = 'w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-bold text-white outline-none transition focus:border-orange-400';
@@ -86,6 +87,8 @@ export default function MiEmpresaPage() {
           <h1 className="mt-2 text-4xl font-black sm:text-6xl">Mi empresa</h1>
           <p className="mt-4 max-w-2xl text-slate-400">Configura una vez tu negocio. CA46 utilizará estos datos para bancos, Drive y la pantalla de etiquetas.</p>
         </section>
+
+        <TenantCompanyCard companyName={config.businessName} />
 
         <div className="grid gap-6 lg:grid-cols-[1fr_.72fr]">
           <div className="space-y-6">
