@@ -1,11 +1,61 @@
 import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const GOOGLE_SA_JSON = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
 const DRIVE_ROOT_FOLDER_ID = process.env.DRIVE_ROOT_FOLDER_ID || '1g186tAcQ10eqkUKvT9s_eDdB2S-zCeOO';
+
+function bearerToken(request: Request) {
+  const authorization = request.headers.get('authorization') || '';
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || '';
+}
+
+async function tenantForRequest(request: Request) {
+  const token = bearerToken(request);
+  if (!token) return { error: 'No autorizado.', status: 401 as const };
+
+  const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token);
+  if (authError || !authData.user) return { error: 'No autorizado.', status: 401 as const };
+
+  const { data: membership, error: membershipError } = await supabaseAdmin
+    .from('company_members')
+    .select('company_id, role, is_active')
+    .eq('user_id', authData.user.id)
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle();
+
+  if (membershipError) throw membershipError;
+  if (!membership) return { error: 'Primero debes activar tu empresa.', status: 409 as const };
+  if (membership.role !== 'admin_empresa') return { error: 'Solo el administrador puede preparar Drive.', status: 403 as const };
+
+  const { data: company, error: companyError } = await supabaseAdmin
+    .from('companies')
+    .select('id, name, status')
+    .eq('id', membership.company_id)
+    .single();
+
+  if (companyError) throw companyError;
+  if (!['active', 'trial'].includes(company.status)) return { error: 'La empresa no está activa.', status: 403 as const };
+
+  const { data: settings, error: settingsError } = await supabaseAdmin
+    .from('company_settings')
+    .select('business_name')
+    .eq('company_id', company.id)
+    .maybeSingle();
+
+  if (settingsError) throw settingsError;
+
+  return {
+    companyId: company.id,
+    companyName: String(settings?.business_name || company.name || '').trim(),
+    status: 200 as const,
+  };
+}
 
 function getCredentials() {
   let jsonString = GOOGLE_SA_JSON.trim();
@@ -57,14 +107,17 @@ async function findOrCreateFolder(drive: any, name: string, parentId: string) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json().catch(() => ({}));
-    const companyName = String(body?.companyName || '').trim();
-    if (!companyName) {
-      return NextResponse.json({ error: 'Escribe primero el nombre comercial de la empresa.' }, { status: 400 });
+    const tenant = await tenantForRequest(request);
+    if ('error' in tenant) {
+      return NextResponse.json({ error: tenant.error }, { status: tenant.status, headers: { 'Cache-Control': 'no-store' } });
+    }
+
+    if (!tenant.companyName) {
+      return NextResponse.json({ error: 'Configura primero el nombre comercial de la empresa.' }, { status: 400 });
     }
 
     const drive = await getDriveClient();
-    const rootName = `CA46 - ${companyName}`.slice(0, 120);
+    const rootName = `CA46 - ${tenant.companyName}`.slice(0, 120);
     const root = await findOrCreateFolder(drive, rootName, DRIVE_ROOT_FOLDER_ID);
     if (!root?.id) throw new Error('No se pudo crear la carpeta de empresa.');
 
@@ -73,14 +126,35 @@ export async function POST(request: Request) {
     }
 
     const folderUrl = root.webViewLink || `https://drive.google.com/drive/folders/${root.id}`;
-    return NextResponse.json({
-      folderId: root.id,
-      folderUrl,
-      folderName: rootName,
-      subfolders: ['Facturas', 'Etiquetas', 'Histórico'],
-    });
+
+    const { error: saveError } = await supabaseAdmin
+      .from('company_settings')
+      .upsert(
+        {
+          company_id: tenant.companyId,
+          drive_connected: true,
+          drive_folder_id: root.id,
+          drive_folder_url: folderUrl,
+        },
+        { onConflict: 'company_id' },
+      );
+
+    if (saveError) throw saveError;
+
+    return NextResponse.json(
+      {
+        folderId: root.id,
+        folderUrl,
+        folderName: rootName,
+        subfolders: ['Facturas', 'Etiquetas', 'Histórico'],
+      },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
   } catch (error: any) {
     console.error('company-drive error:', error);
-    return NextResponse.json({ error: error?.message || 'No se pudo preparar Google Drive.' }, { status: 500 });
+    return NextResponse.json(
+      { error: error?.message || 'No se pudo preparar Google Drive.' },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } },
+    );
   }
 }
