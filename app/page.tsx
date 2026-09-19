@@ -132,6 +132,13 @@ function ModuleCard({ title, description, eyebrow, href, icon, featured, badge }
   );
 }
 
+const plans = [
+  { name: 'Gratis', price: '0 €', note: 'para empezar' },
+  { name: 'Autónomo', price: '19,99 €', note: '/mes' },
+  { name: 'Empresa', price: '35,99 €', note: '/mes' },
+  { name: 'Personalizado', price: 'A medida', note: 'según necesidad' },
+];
+
 export default function Home() {
   return (
     <div className="min-h-screen overflow-hidden bg-[#080b0d] text-white selection:bg-orange-500/30">
@@ -150,12 +157,14 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="hidden items-center gap-3 sm:flex">
-            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/15 bg-emerald-400/[.07] px-4 py-2 text-xs font-bold text-emerald-300">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" /> Sistema activo
-            </span>
-            <div className="grid h-11 w-11 place-items-center rounded-full border border-white/10 bg-white/5 text-sm font-black text-slate-300">CA</div>
-          </div>
+          <nav className="flex items-center gap-2 sm:gap-3">
+            <Link href="/planes" className="hidden rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-black text-slate-300 transition hover:border-orange-400/30 hover:text-orange-300 sm:inline-flex">
+              Planes
+            </Link>
+            <Link href="/mi-empresa" className="rounded-full bg-orange-500 px-4 py-2 text-sm font-black text-[#111416] transition hover:bg-orange-400 sm:px-5">
+              Entrar
+            </Link>
+          </nav>
         </div>
       </header>
 
@@ -174,6 +183,14 @@ export default function Home() {
             <p className="mt-6 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg">
               Crea, publica y muestra la trazabilidad de tus productos. Accede también a GESICO, tus bancos y la configuración de tu empresa desde un único panel.
             </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link href="/planes" className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-6 py-4 font-black text-[#111416] shadow-lg shadow-orange-950/30 transition hover:bg-orange-400">
+                Probar gratis <span>→</span>
+              </Link>
+              <Link href="/planes" className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-6 py-4 font-black text-slate-200 transition hover:border-orange-400/30 hover:text-orange-300">
+                Ver planes
+              </Link>
+            </div>
           </div>
 
           <div className="relative mx-auto w-full max-w-sm lg:max-w-md">
@@ -184,14 +201,37 @@ export default function Home() {
           </div>
         </section>
 
+        <section className="mt-12 overflow-hidden rounded-[2rem] border border-orange-400/20 bg-gradient-to-r from-orange-500/[.10] via-white/[.035] to-white/[.02] p-5 sm:mt-16 sm:p-6">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[.22em] text-orange-400">Planes CA46</p>
+              <h2 className="mt-2 text-2xl font-black sm:text-3xl">Empieza gratis y crece cuando lo necesites</h2>
+            </div>
+            <Link href="/planes" className="rounded-full border border-orange-400/25 bg-orange-500/10 px-4 py-2 text-sm font-black text-orange-300">
+              Comparar planes →
+            </Link>
+          </div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {plans.map((plan) => (
+              <div key={plan.name} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <p className="text-xs font-black uppercase tracking-[.18em] text-slate-500">{plan.name}</p>
+                <div className="mt-2 flex items-end gap-2">
+                  <span className="text-2xl font-black text-white">{plan.price}</span>
+                  <span className="pb-1 text-xs font-bold text-slate-500">{plan.note}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section className="mt-14 sm:mt-20">
           <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-black uppercase tracking-[.24em] text-orange-400">Panel principal</p>
+              <p className="text-xs font-black uppercase tracking-[.24em] text-orange-400">Producto</p>
               <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">5 módulos. Un solo ecosistema.</h2>
             </div>
             <p className="max-w-xl text-sm leading-6 text-slate-500">
-              Etiquetas, Creador, GESICO, Bancos y Mi empresa ya tienen acceso desde este panel.
+              Conoce las herramientas que forman CA46. El acceso a la zona privada queda separado de esta portada comercial.
             </p>
           </div>
 
@@ -236,7 +276,7 @@ export default function Home() {
               description="Datos de empresa y responsable, bancos, Drive, GESICO y configuración de etiquetas."
               eyebrow="Configuración"
               href="/mi-empresa"
-              badge="Nuevo"
+              badge="Privado"
               icon={<CompanyIcon />}
             />
           </div>
@@ -254,6 +294,18 @@ export default function Home() {
           <div>
             <p className="text-[10px] font-black uppercase tracking-[.22em] text-slate-600">Objetivo</p>
             <p className="mt-2 font-black text-slate-200">Automatización integrada en CA46</p>
+          </div>
+        </section>
+
+        <section className="mt-10 rounded-[2.4rem] border border-orange-400/25 bg-orange-500/[.08] p-7 text-center sm:p-10">
+          <p className="text-xs font-black uppercase tracking-[.22em] text-orange-400">CA46 para tu negocio</p>
+          <h2 className="mx-auto mt-3 max-w-3xl text-3xl font-black tracking-tight sm:text-5xl">Empieza gratis. Configura tu empresa después.</h2>
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">
+            Prueba el ecosistema y elige el plan que mejor encaje con tu actividad.
+          </p>
+          <div className="mt-7 flex flex-wrap justify-center gap-3">
+            <Link href="/planes" className="rounded-2xl bg-orange-500 px-6 py-4 font-black text-[#111416]">Ver planes y empezar</Link>
+            <Link href="/mi-empresa" className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 font-black text-slate-200">Ya soy cliente · Entrar</Link>
           </div>
         </section>
       </main>
