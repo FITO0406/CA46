@@ -66,6 +66,7 @@ type Company = {
 };
 
 type Payload = { ok: boolean; company?: Company; error?: string };
+type UpdatePayload = { ok: boolean; company?: { id: string; plan: Company['plan']; status: Company['status']; updatedAt: string }; error?: string };
 
 const planLabels: Record<Company['plan'], string> = {
   gratis: 'Gratis',
@@ -85,8 +86,12 @@ export default function SuperAdminCompanyDetailPage() {
   const params = useParams<{ companyId: string }>();
   const companyId = params?.companyId;
   const [company, setCompany] = useState<Company | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<Company['plan']>('gratis');
   const [loading, setLoading] = useState(true);
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [changingStatus, setChangingStatus] = useState<Company['status'] | null>(null);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
   async function loadCompany() {
     if (!companyId) return;
@@ -109,10 +114,88 @@ export default function SuperAdminCompanyDetailPage() {
       const payload = (await response.json().catch(() => ({}))) as Payload;
       if (!response.ok || !payload.ok || !payload.company) throw new Error(payload.error || 'No se pudo cargar la empresa.');
       setCompany(payload.company);
+      setSelectedPlan(payload.company.plan);
     } catch (loadError: any) {
       setError(loadError?.message || 'No se pudo cargar la empresa.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function patchCompany(body: Partial<Pick<Company, 'plan' | 'status'>>) {
+    if (!companyId) throw new Error('Empresa no válida.');
+
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) throw new Error('La sesión SuperAdmin no está disponible.');
+
+    const response = await fetch(`/api/superadmin/companies/${encodeURIComponent(companyId)}`, {
+      method: 'PATCH',
+      cache: 'no-store',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    const payload = (await response.json().catch(() => ({}))) as UpdatePayload;
+    if (!response.ok || !payload.ok || !payload.company) {
+      throw new Error(payload.error || 'No se pudo actualizar la empresa.');
+    }
+
+    setCompany((current) => current ? {
+      ...current,
+      plan: payload.company!.plan,
+      status: payload.company!.status,
+      updatedAt: payload.company!.updatedAt,
+    } : current);
+    setSelectedPlan(payload.company.plan);
+    return payload.company;
+  }
+
+  async function savePlan() {
+    if (!company || selectedPlan === company.plan || savingPlan) return;
+    const confirmed = window.confirm(`¿Cambiar el plan de ${planLabels[company.plan]} a ${planLabels[selectedPlan]}?`);
+    if (!confirmed) return;
+
+    setSavingPlan(true);
+    setError('');
+    setMessage('');
+    try {
+      const updated = await patchCompany({ plan: selectedPlan });
+      setMessage(`Plan actualizado a ${planLabels[updated.plan]}.`);
+    } catch (saveError: any) {
+      setError(saveError?.message || 'No se pudo cambiar el plan.');
+    } finally {
+      setSavingPlan(false);
+    }
+  }
+
+  async function changeStatus(nextStatus: Company['status']) {
+    if (!company || nextStatus === company.status || changingStatus) return;
+
+    const warning = nextStatus === 'suspended'
+      ? 'Suspender la empresa bloqueará el uso normal de CA46 para sus usuarios.'
+      : nextStatus === 'cancelled'
+        ? 'Cancelar la empresa bloqueará el uso normal de CA46 para sus usuarios.'
+        : nextStatus === 'trial'
+          ? 'La empresa quedará marcada como periodo de prueba y seguirá teniendo acceso.'
+          : 'La empresa volverá a estar activa y sus usuarios podrán utilizar CA46.';
+
+    const confirmed = window.confirm(`${warning}\n\n¿Confirmas el cambio a “${statusLabels[nextStatus]}”?`);
+    if (!confirmed) return;
+
+    setChangingStatus(nextStatus);
+    setError('');
+    setMessage('');
+    try {
+      const updated = await patchCompany({ status: nextStatus });
+      setMessage(`Estado actualizado a ${statusLabels[updated.status]}.`);
+    } catch (statusError: any) {
+      setError(statusError?.message || 'No se pudo cambiar el estado.');
+    } finally {
+      setChangingStatus(null);
     }
   }
 
@@ -134,7 +217,8 @@ export default function SuperAdminCompanyDetailPage() {
 
       <main className="mx-auto max-w-7xl px-5 py-8 sm:px-8">
         {loading ? <div className="h-64 animate-pulse rounded-[2rem] border border-white/10 bg-white/[.03]" /> : null}
-        {error ? <div className="rounded-2xl border border-rose-400/20 bg-rose-500/[.07] px-5 py-4 font-bold text-rose-300">{error}</div> : null}
+        {error ? <div className="mb-5 rounded-2xl border border-rose-400/20 bg-rose-500/[.07] px-5 py-4 font-bold text-rose-300">{error}</div> : null}
+        {message ? <div className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-500/[.07] px-5 py-4 font-bold text-emerald-300">{message}</div> : null}
 
         {!loading && company ? (
           <div className="space-y-6">
@@ -158,6 +242,46 @@ export default function SuperAdminCompanyDetailPage() {
                 <Stat label="Etiquetas recientes" value={company.summary.totalTags} />
               </div>
             </section>
+
+            <Panel title="Control de la empresa">
+              <div className="grid gap-5 lg:grid-cols-[1fr_1.4fr]">
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <p className="text-xs font-black uppercase tracking-[.14em] text-slate-500">Plan</p>
+                  <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                    <select
+                      value={selectedPlan}
+                      onChange={(event) => setSelectedPlan(event.target.value as Company['plan'])}
+                      className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#11161a] px-4 py-3 font-bold text-white outline-none focus:border-orange-400"
+                    >
+                      <option value="gratis">Gratis</option>
+                      <option value="autonomo">Autónomo</option>
+                      <option value="empresa">Empresa</option>
+                      <option value="personalizado">Personalizado</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => void savePlan()}
+                      disabled={savingPlan || selectedPlan === company.plan}
+                      className="rounded-xl bg-orange-500 px-5 py-3 font-black text-black disabled:bg-slate-800 disabled:text-slate-600"
+                    >
+                      {savingPlan ? 'Guardando…' : 'Guardar plan'}
+                    </button>
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-slate-600">Este cambio es administrativo. Los cobros automáticos llegarán más adelante con Stripe.</p>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <p className="text-xs font-black uppercase tracking-[.14em] text-slate-500">Estado de acceso</p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    <StatusActionButton label="Activar" active={company.status === 'active'} busy={changingStatus === 'active'} onClick={() => void changeStatus('active')} tone="green" />
+                    <StatusActionButton label="Prueba" active={company.status === 'trial'} busy={changingStatus === 'trial'} onClick={() => void changeStatus('trial')} tone="amber" />
+                    <StatusActionButton label="Suspender" active={company.status === 'suspended'} busy={changingStatus === 'suspended'} onClick={() => void changeStatus('suspended')} tone="rose" />
+                    <StatusActionButton label="Cancelar" active={company.status === 'cancelled'} busy={changingStatus === 'cancelled'} onClick={() => void changeStatus('cancelled')} tone="slate" />
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-slate-600">Suspender o cancelar impide el uso normal de CA46. Activar o poner en prueba devuelve el acceso.</p>
+                </div>
+              </div>
+            </Panel>
 
             <section className="grid gap-6 xl:grid-cols-2">
               <Panel title="Datos de la empresa">
@@ -235,7 +359,7 @@ export default function SuperAdminCompanyDetailPage() {
             </Panel>
 
             <section className="rounded-2xl border border-emerald-400/15 bg-emerald-400/[.05] px-5 py-4 text-sm font-bold text-emerald-200">
-              Paso 4 activo: ficha individual completa en modo lectura. El siguiente paso será habilitar acciones controladas desde SuperAdmin: cambiar plan y activar, suspender o cancelar una empresa.
+              Paso 5 activo: SuperAdmin ya puede cambiar el plan y controlar el estado de acceso de cada empresa con confirmación antes de aplicar el cambio.
             </section>
           </div>
         ) : null}
@@ -263,6 +387,27 @@ function Stat({ label, value }: { label: string; value: number }) {
 function StatusBadge({ status }: { status: Company['status'] }) {
   const classes = status === 'active' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : status === 'trial' ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : status === 'suspended' ? 'border-rose-400/20 bg-rose-500/10 text-rose-300' : 'border-white/10 bg-white/5 text-slate-500';
   return <span className={`rounded-full border px-3 py-1 text-xs font-black ${classes}`}>{statusLabels[status]}</span>;
+}
+
+function StatusActionButton({ label, active, busy, onClick, tone }: { label: string; active: boolean; busy: boolean; onClick: () => void; tone: 'green' | 'amber' | 'rose' | 'slate' }) {
+  const toneClasses = tone === 'green'
+    ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300'
+    : tone === 'amber'
+      ? 'border-amber-400/25 bg-amber-400/10 text-amber-300'
+      : tone === 'rose'
+        ? 'border-rose-400/25 bg-rose-500/10 text-rose-300'
+        : 'border-white/10 bg-white/5 text-slate-300';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={active || busy}
+      className={`rounded-xl border px-4 py-3 text-sm font-black transition ${toneClasses} disabled:cursor-default disabled:opacity-45`}
+    >
+      {busy ? 'Aplicando…' : active ? `${label} ✓` : label}
+    </button>
+  );
 }
 
 function Empty({ text }: { text: string }) {
