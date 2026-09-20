@@ -19,11 +19,9 @@ type Company = {
   membersCount: number;
   activeTagsCount: number;
   createdAt: string;
-  updatedAt: string;
 };
 
 type Summary = { total: number; active: number; trial: number; suspended: number };
-
 type Payload = { ok: boolean; companies?: Company[]; summary?: Summary; error?: string };
 
 const planLabels: Record<Company['plan'], string> = {
@@ -51,7 +49,6 @@ export default function SuperAdminCompaniesPage() {
   async function loadCompanies() {
     setLoading(true);
     setError('');
-
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (!token) {
@@ -67,7 +64,6 @@ export default function SuperAdminCompaniesPage() {
       });
       const payload = (await response.json().catch(() => ({}))) as Payload;
       if (!response.ok || !payload.ok) throw new Error(payload.error || 'No se pudo cargar Empresas.');
-
       setCompanies(payload.companies || []);
       setSummary(payload.summary || { total: 0, active: 0, trial: 0, suspended: 0 });
     } catch (loadError: any) {
@@ -85,12 +81,7 @@ export default function SuperAdminCompaniesPage() {
     const needle = search.trim().toLowerCase();
     return companies.filter((company) => {
       const statusMatch = status === 'all' || company.status === status;
-      const searchMatch =
-        !needle ||
-        [company.name, company.registeredName, company.ownerEmail, company.city, company.province, company.slug]
-          .join(' ')
-          .toLowerCase()
-          .includes(needle);
+      const searchMatch = !needle || [company.name, company.registeredName, company.ownerEmail, company.city, company.province, company.slug].join(' ').toLowerCase().includes(needle);
       return statusMatch && searchMatch;
     });
   }, [companies, search, status]);
@@ -116,17 +107,8 @@ export default function SuperAdminCompaniesPage() {
         </section>
 
         <section className="mt-6 grid gap-3 rounded-[1.5rem] border border-white/10 bg-white/[.035] p-4 md:grid-cols-[1fr_220px_auto]">
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar empresa, email, ciudad…"
-            className="rounded-xl border border-white/10 bg-black/30 px-4 py-3 font-bold text-white outline-none focus:border-orange-400"
-          />
-          <select
-            value={status}
-            onChange={(event) => setStatus(event.target.value)}
-            className="rounded-xl border border-white/10 bg-[#11161a] px-4 py-3 font-bold text-white outline-none focus:border-orange-400"
-          >
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar empresa, email, ciudad…" className="rounded-xl border border-white/10 bg-black/30 px-4 py-3 font-bold text-white outline-none focus:border-orange-400" />
+          <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-xl border border-white/10 bg-[#11161a] px-4 py-3 font-bold text-white outline-none focus:border-orange-400">
             <option value="all">Todos los estados</option>
             <option value="active">Activas</option>
             <option value="trial">En prueba</option>
@@ -136,16 +118,11 @@ export default function SuperAdminCompaniesPage() {
           <button type="button" onClick={() => void loadCompanies()} className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-black text-slate-200">Actualizar</button>
         </section>
 
-        {error ? (
-          <section className="mt-6 rounded-2xl border border-rose-400/20 bg-rose-500/[.07] px-5 py-4 font-bold text-rose-300">{error}</section>
-        ) : null}
+        {error ? <section className="mt-6 rounded-2xl border border-rose-400/20 bg-rose-500/[.07] px-5 py-4 font-bold text-rose-300">{error}</section> : null}
 
         <section className="mt-6 space-y-4">
           {loading ? <LoadingRows /> : null}
-
-          {!loading && !error && filteredCompanies.length === 0 ? (
-            <div className="rounded-[2rem] border border-white/10 bg-white/[.03] p-10 text-center text-slate-500">No hay empresas que coincidan con la búsqueda.</div>
-          ) : null}
+          {!loading && !error && filteredCompanies.length === 0 ? <div className="rounded-[2rem] border border-white/10 bg-white/[.03] p-10 text-center text-slate-500">No hay empresas que coincidan con la búsqueda.</div> : null}
 
           {!loading && filteredCompanies.map((company) => (
             <article key={company.id} className="rounded-[2rem] border border-white/10 bg-[#0d1215] p-5 shadow-xl shadow-black/20 sm:p-6">
@@ -171,15 +148,13 @@ export default function SuperAdminCompaniesPage() {
               <div className="mt-5 flex flex-col gap-3 border-t border-white/10 pt-4 text-xs font-bold text-slate-600 sm:flex-row sm:items-center sm:justify-between">
                 <span>Alta: {formatDate(company.createdAt)}</span>
                 <span className="truncate">ID: {company.id}</span>
-                <span className="rounded-lg border border-white/10 bg-white/[.03] px-3 py-2 text-slate-500">Ficha de empresa → siguiente paso</span>
+                <Link href={`/superadmin/empresas/${company.id}`} className="rounded-xl bg-orange-500 px-4 py-3 text-center text-sm font-black text-black">Abrir ficha →</Link>
               </div>
             </article>
           ))}
         </section>
 
-        <section className="mt-8 rounded-2xl border border-emerald-400/15 bg-emerald-400/[.05] px-5 py-4 text-sm font-bold text-emerald-200">
-          Paso 3: listado global de empresas conectado a la base multiempresa. Solo lectura por ahora; todavía no cambiamos planes ni estados desde SuperAdmin.
-        </section>
+        <section className="mt-8 rounded-2xl border border-emerald-400/15 bg-emerald-400/[.05] px-5 py-4 text-sm font-bold text-emerald-200">Paso 4 preparado: toca una empresa y entra en su ficha completa. Por ahora seguimos en modo lectura para no modificar planes ni estados accidentalmente.</section>
       </main>
     </div>
   );
