@@ -7,6 +7,9 @@ export const dynamic = 'force-dynamic';
 
 type RouteContext = { params: Promise<{ companyId: string }> };
 
+const allowedPlans = new Set(['gratis', 'autonomo', 'empresa', 'personalizado']);
+const allowedStatuses = new Set(['active', 'trial', 'suspended', 'cancelled']);
+
 export async function GET(request: Request, context: RouteContext) {
   try {
     const access = await superAdminContextForRequest(request);
@@ -155,6 +158,110 @@ export async function GET(request: Request, context: RouteContext) {
     console.error('superadmin/company detail error:', error);
     return NextResponse.json(
       { ok: false, error: 'No se pudo cargar la ficha de la empresa.' },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  try {
+    const access = await superAdminContextForRequest(request);
+    if (!access.ok) {
+      return NextResponse.json(
+        { ok: false, error: access.error },
+        { status: access.status, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+
+    const { companyId } = await context.params;
+    if (!companyId) {
+      return NextResponse.json(
+        { ok: false, error: 'Empresa no válida.' },
+        { status: 400, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const update: Record<string, string> = {};
+
+    if (body?.plan !== undefined) {
+      const plan = String(body.plan || '').trim().toLowerCase();
+      if (!allowedPlans.has(plan)) {
+        return NextResponse.json(
+          { ok: false, error: 'Plan no válido.' },
+          { status: 400, headers: { 'Cache-Control': 'no-store' } },
+        );
+      }
+      update.plan = plan;
+    }
+
+    if (body?.status !== undefined) {
+      const status = String(body.status || '').trim().toLowerCase();
+      if (!allowedStatuses.has(status)) {
+        return NextResponse.json(
+          { ok: false, error: 'Estado no válido.' },
+          { status: 400, headers: { 'Cache-Control': 'no-store' } },
+        );
+      }
+      update.status = status;
+    }
+
+    if (Object.keys(update).length === 0) {
+      return NextResponse.json(
+        { ok: false, error: 'No hay cambios válidos.' },
+        { status: 400, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+
+    const { data: existing, error: existingError } = await supabaseAdmin
+      .from('companies')
+      .select('id, plan, status')
+      .eq('id', companyId)
+      .maybeSingle();
+
+    if (existingError) throw existingError;
+    if (!existing) {
+      return NextResponse.json(
+        { ok: false, error: 'Empresa no encontrada.' },
+        { status: 404, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+
+    const { data: company, error: updateError } = await supabaseAdmin
+      .from('companies')
+      .update({ ...update, updated_at: new Date().toISOString() })
+      .eq('id', companyId)
+      .select('id, plan, status, updated_at')
+      .single();
+
+    if (updateError) throw updateError;
+
+    console.info('superadmin company control', {
+      superAdminUserId: access.context.userId,
+      superAdminEmail: access.context.email,
+      companyId,
+      previousPlan: existing.plan,
+      previousStatus: existing.status,
+      nextPlan: company.plan,
+      nextStatus: company.status,
+    });
+
+    return NextResponse.json(
+      {
+        ok: true,
+        company: {
+          id: company.id,
+          plan: company.plan,
+          status: company.status,
+          updatedAt: company.updated_at,
+        },
+      },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
+  } catch (error) {
+    console.error('superadmin/company control error:', error);
+    return NextResponse.json(
+      { ok: false, error: 'No se pudo actualizar la empresa.' },
       { status: 500, headers: { 'Cache-Control': 'no-store' } },
     );
   }
