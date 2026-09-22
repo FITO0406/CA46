@@ -4,14 +4,25 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import SuperAdminGate from '@/components/SuperAdminGate';
 
+const navItems = [
+  { href: '/superadmin', label: 'Panel' },
+  { href: '/superadmin/empresas', label: 'Empresas' },
+  { href: '/superadmin/planes', label: 'Planes y cobros' },
+  { href: '/superadmin/facturas', label: 'Facturas' },
+  { href: '/superadmin/incidencias', label: 'Incidencias' },
+  { href: '/superadmin/sistema', label: 'Sistema' },
+];
+
 export default function SuperAdminLayout({ children }: { children: ReactNode }) {
   return (
     <SuperAdminGate>
       <div className="border-b border-white/10 bg-[#07090b] px-4 py-2 text-white">
         <nav className="mx-auto flex max-w-7xl gap-2 overflow-x-auto">
-          <Link href="/superadmin" className="whitespace-nowrap rounded-lg px-3 py-2 text-xs font-black text-slate-400 hover:bg-white/5 hover:text-white">Panel</Link>
-          <Link href="/superadmin/empresas" className="whitespace-nowrap rounded-lg px-3 py-2 text-xs font-black text-slate-400 hover:bg-white/5 hover:text-white">Empresas</Link>
-          <Link href="/superadmin/planes" className="whitespace-nowrap rounded-lg border border-orange-400/20 bg-orange-500/10 px-3 py-2 text-xs font-black text-orange-300">Planes y cobros</Link>
+          {navItems.map((item) => (
+            <Link key={item.href} href={item.href} className="whitespace-nowrap rounded-lg border border-white/10 bg-white/[.035] px-3 py-2 text-xs font-black text-slate-300 hover:border-orange-400/20 hover:bg-orange-500/10 hover:text-orange-300">
+              {item.label}
+            </Link>
+          ))}
         </nav>
       </div>
       {children}
