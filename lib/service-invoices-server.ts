@@ -233,42 +233,101 @@ function pdfEscape(value: unknown) {
   return latin1(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
 }
 
+function pdfText(value: unknown, x: number, y: number, size = 10, bold = false) {
+  if (!String(value ?? '').trim()) return '';
+  return `BT ${bold ? '/F2' : '/F1'} ${size} Tf ${x} ${y} Td (${pdfEscape(value)}) Tj ET`;
+}
+
+function wrapPdfText(value: unknown, maxChars = 62) {
+  const words = latin1(value).trim().split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length <= maxChars) current = candidate;
+    else {
+      if (current) lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length ? lines : [''];
+}
+
 export function buildServiceInvoicePdf(invoice: ServiceInvoice) {
   const issuer = invoice.issuer_snapshot || {};
   const customer = invoice.customer_snapshot || {};
-  const lines: Array<{ text: string; size?: number; bold?: boolean; y: number }> = [
-    { text: 'CA46 · FACTURA', size: 20, bold: true, y: 800 },
-    { text: `Factura: ${invoice.invoice_number}`, size: 12, bold: true, y: 774 },
-    { text: `Fecha: ${dateEs(invoice.issued_at)}`, y: 758 },
-    { text: `Forma de pago: ${invoice.payment_provider === 'stripe' ? 'Stripe' : 'Manual'}`, y: 742 },
-    { text: 'EMISOR', size: 11, bold: true, y: 708 },
-    { text: issuer.legalName || '', y: 692 },
-    { text: `NIF/CIF: ${issuer.taxId || ''}`, y: 676 },
-    { text: `${issuer.address || ''} · ${issuer.postalCode || ''} ${issuer.city || ''}`, y: 660 },
-    { text: `${issuer.province || ''} ${issuer.country || ''}`, y: 644 },
-    { text: issuer.email || '', y: 628 },
-    { text: 'CLIENTE', size: 11, bold: true, y: 594 },
-    { text: customer.legalName || customer.businessName || '', y: 578 },
-    { text: `NIF/CIF: ${customer.taxId || ''}`, y: 562 },
-    { text: `${customer.address || ''} · ${customer.postalCode || ''} ${customer.city || ''}`, y: 546 },
-    { text: `${customer.province || ''} ${customer.country || ''}`, y: 530 },
-    { text: customer.email || '', y: 514 },
-    { text: 'CONCEPTO', size: 11, bold: true, y: 474 },
-    { text: invoice.description, y: 458 },
-    { text: `Plan: ${planNames[invoice.plan] || invoice.plan}`, y: 442 },
-    { text: invoice.service_period_start || invoice.service_period_end ? `Periodo: ${dateEs(invoice.service_period_start)} - ${dateEs(invoice.service_period_end)}` : '', y: 426 },
-    { text: `Base imponible: ${money(invoice.subtotal_cents, invoice.currency)}`, y: 382 },
-    { text: `IVA ${Number(invoice.vat_rate).toFixed(2).replace('.00', '')}%: ${money(invoice.vat_cents, invoice.currency)}`, y: 362 },
-    { text: `TOTAL: ${money(invoice.total_cents, invoice.currency)}`, size: 14, bold: true, y: 334 },
-    { text: 'Factura emitida por CA46 tras confirmación del cobro.', y: 286 },
-  ].filter((line) => line.text.trim());
+  const vatLabel = Number(invoice.vat_rate).toFixed(2).replace('.00', '');
+  const paymentLabel = invoice.payment_provider === 'stripe' ? 'Stripe' : 'Pago manual';
+  const period = invoice.service_period_start || invoice.service_period_end
+    ? `${dateEs(invoice.service_period_start) || '-'} - ${dateEs(invoice.service_period_end) || '-'}`
+    : 'Servicio mensual';
+  const docTitle = invoice.status === 'rectified' ? 'FACTURA RECTIFICATIVA' : 'FACTURA';
+  const paymentReference = invoice.payment_reference ? latin1(invoice.payment_reference).slice(0, 54) : '';
+  const descriptionLines = wrapPdfText(invoice.description, 56).slice(0, 3);
 
-  const stream = lines.map((line) => {
-    const font = line.bold ? '/F2' : '/F1';
-    const size = line.size || 10;
-    return `BT ${font} ${size} Tf 50 ${line.y} Td (${pdfEscape(line.text)}) Tj ET`;
-  }).join('\n');
+  const commands: string[] = [
+    'q 0.035 0.047 0.055 rg 0 744 595 98 re f Q',
+    'q 0.95 0.42 0.08 rg 0 738 595 6 re f Q',
+    pdfText('K46', 42, 792, 30, true),
+    pdfText('FACTURACION DE SERVICIOS', 42, 770, 10, true),
+    pdfText(docTitle, 400, 798, 10, true),
+    pdfText(invoice.invoice_number, 400, 778, 14, true),
+    pdfText(`Fecha de emision: ${dateEs(invoice.issued_at)}`, 400, 759, 9),
 
+    'q 0.965 0.97 0.975 rg 42 596 244 116 re f Q',
+    'q 0.82 0.84 0.86 RG 42 596 244 116 re S Q',
+    pdfText('EMISOR DE LA FACTURA', 56, 691, 9, true),
+    pdfText(issuer.legalName || 'Emisor no configurado', 56, 670, 11, true),
+    pdfText(`NIF/CIF: ${issuer.taxId || '-'}`, 56, 653, 9),
+    pdfText(`${issuer.address || ''}`, 56, 636, 9),
+    pdfText(`${issuer.postalCode || ''} ${issuer.city || ''}${issuer.province ? ` · ${issuer.province}` : ''}`, 56, 619, 9),
+    pdfText(issuer.email || '', 56, 603, 8),
+
+    'q 0.965 0.97 0.975 rg 309 596 244 116 re f Q',
+    'q 0.82 0.84 0.86 RG 309 596 244 116 re S Q',
+    pdfText('CLIENTE', 323, 691, 9, true),
+    pdfText(customer.legalName || customer.businessName || 'Cliente', 323, 670, 11, true),
+    pdfText(`NIF/CIF: ${customer.taxId || '-'}`, 323, 653, 9),
+    pdfText(`${customer.address || ''}`, 323, 636, 9),
+    pdfText(`${customer.postalCode || ''} ${customer.city || ''}${customer.province ? ` · ${customer.province}` : ''}`, 323, 619, 9),
+    pdfText(customer.email || '', 323, 603, 8),
+
+    pdfText('DETALLE DEL SERVICIO', 42, 558, 10, true),
+    'q 0.035 0.047 0.055 rg 42 520 511 28 re f Q',
+    pdfText('Concepto', 54, 530, 9, true),
+    pdfText('Plan', 332, 530, 9, true),
+    pdfText('Periodo', 411, 530, 9, true),
+    pdfText('Importe', 502, 530, 9, true),
+    'q 0.82 0.84 0.86 RG 42 446 511 74 re S Q',
+    ...descriptionLines.map((line, index) => pdfText(line, 54, 500 - index * 15, 9)),
+    pdfText(planNames[invoice.plan] || invoice.plan, 332, 500, 9),
+    pdfText(period, 411, 500, 8),
+    pdfText(money(invoice.total_cents, invoice.currency), 502, 500, 9, true),
+
+    'q 0.93 0.94 0.95 rg 330 338 223 90 re f Q',
+    pdfText('Base imponible', 348, 400, 9),
+    pdfText(money(invoice.subtotal_cents, invoice.currency), 472, 400, 9, true),
+    pdfText(`IVA ${vatLabel}%`, 348, 380, 9),
+    pdfText(money(invoice.vat_cents, invoice.currency), 472, 380, 9, true),
+    'q 0.035 0.047 0.055 rg 330 326 223 38 re f Q',
+    pdfText('TOTAL FACTURA', 348, 339, 11, true),
+    pdfText(money(invoice.total_cents, invoice.currency), 468, 339, 13, true),
+
+    'q 0.97 0.97 0.97 rg 42 326 265 102 re f Q',
+    'q 0.84 0.85 0.86 RG 42 326 265 102 re S Q',
+    pdfText('PAGO', 56, 404, 9, true),
+    pdfText(`Forma de pago: ${paymentLabel}`, 56, 382, 9),
+    pdfText(`Estado: Pagada`, 56, 363, 9, true),
+    paymentReference ? pdfText(`Referencia: ${paymentReference}`, 56, 344, 8) : '',
+
+    'q 0.90 0.91 0.92 RG 42 287 511 0 re S Q',
+    pdfText('Documento generado electronicamente por K46.', 42, 265, 8),
+    pdfText(`Factura ${invoice.invoice_number} · ${dateEs(invoice.issued_at)}`, 42, 248, 8),
+    pdfText('Conserva este documento como justificante de la prestacion del servicio y del pago.', 42, 231, 8),
+  ].filter(Boolean);
+
+  const stream = commands.join('\n');
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
