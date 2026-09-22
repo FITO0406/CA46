@@ -26,6 +26,12 @@ export function stripePriceId(plan: StripePlanId) {
   return PRICE_IDS[plan] || '';
 }
 
+export function stripePlanFromPriceId(priceId: string): StripePlanId | null {
+  if (priceId && priceId === PRICE_IDS.autonomo) return 'autonomo';
+  if (priceId && priceId === PRICE_IDS.empresa) return 'empresa';
+  return null;
+}
+
 export function stripeAppBaseUrl() {
   const explicit = (process.env.NEXT_PUBLIC_APP_URL || '').trim().replace(/\/$/, '');
   if (explicit) return explicit;
