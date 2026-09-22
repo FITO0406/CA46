@@ -212,23 +212,25 @@ export default function SuperAdminPage() {
             <span className="mt-6 inline-flex rounded-xl bg-orange-500 px-4 py-3 text-sm font-black text-black">Abrir Empresas →</span>
           </Link>
 
-          <div className="rounded-[2rem] border border-white/10 bg-white/[.035] p-7 opacity-80">
+          <Link href="/superadmin/planes" className="rounded-[2rem] border border-amber-400/25 bg-amber-400/[.06] p-7 transition hover:border-amber-300/45 hover:bg-amber-400/[.09] active:scale-[.99]">
             <div className="text-4xl">💳</div>
-            <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-amber-300">Siguiente</p>
+            <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-amber-300">Activo</p>
             <h2 className="mt-2 text-2xl font-black">Planes y cobros</h2>
-            <p className="mt-3 text-sm leading-6 text-slate-400">Control comercial de planes, suscripción y posterior conexión con Stripe.</p>
-          </div>
+            <p className="mt-3 text-sm leading-6 text-slate-400">Suscripciones, situación de cobro y motor Stripe preparado para producción.</p>
+            <span className="mt-6 inline-flex rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm font-black text-amber-200">Abrir Planes →</span>
+          </Link>
 
-          <div className="rounded-[2rem] border border-white/10 bg-white/[.035] p-7 opacity-70">
+          <Link href="/superadmin/sistema" className="rounded-[2rem] border border-sky-400/20 bg-sky-400/[.05] p-7 transition hover:border-sky-300/40 hover:bg-sky-400/[.08] active:scale-[.99]">
             <div className="text-4xl">🛠️</div>
-            <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-slate-500">Después</p>
+            <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-sky-300">Activo</p>
             <h2 className="mt-2 text-2xl font-black">Sistema</h2>
-            <p className="mt-3 text-sm leading-6 text-slate-400">Estado de servicios, incidencias y herramientas globales sin mezclar datos entre empresas.</p>
-          </div>
+            <p className="mt-3 text-sm leading-6 text-slate-400">Estado de servicios, contadores globales y diagnóstico seguro de CA46.</p>
+            <span className="mt-6 inline-flex rounded-xl border border-sky-400/20 bg-sky-400/10 px-4 py-3 text-sm font-black text-sky-200">Abrir Sistema →</span>
+          </Link>
         </section>
 
         <section className="mt-8 rounded-2xl border border-emerald-400/15 bg-emerald-400/[.05] px-5 py-4 text-sm font-bold text-emerald-200">
-          Paso 6 activo: cuadro de mando global conectado a las empresas, usuarios, etiquetas, planes, Drive y pantallas de CA46. El siguiente bloque será Planes y cobros.
+          Paso 8.1 activo: Empresas, Planes y cobros y Sistema ya están conectados desde el SuperAdmin. Sistema funciona en modo diagnóstico de solo lectura.
         </section>
       </main>
     </div>
