@@ -61,9 +61,9 @@ const subscriptionLabels: Record<SubscriptionStatus, string> = {
 };
 
 const providerLabels: Record<Provider, string> = {
-  none: 'Sin proveedor',
-  manual: 'Manual',
-  stripe: 'Stripe',
+  none: 'Sin gestión de cobro',
+  manual: 'Manual · lo controlas tú',
+  stripe: 'Stripe · automático',
 };
 
 const emptyStripe: StripeStatus = {
@@ -271,10 +271,7 @@ export default function SuperAdminPlansPage() {
             return (
               <div key={planId} className="rounded-[1.6rem] border border-white/10 bg-[#0d1215] p-5">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[.14em] text-slate-500">{plan.name}</p>
-                    <p className="mt-2 text-2xl font-black text-orange-300">{plan.price}</p>
-                  </div>
+                  <div><p className="text-xs font-black uppercase tracking-[.14em] text-slate-500">{plan.name}</p><p className="mt-2 text-2xl font-black text-orange-300">{plan.price}</p></div>
                   <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm font-black text-slate-300">{metrics.byPlan[planId]}</span>
                 </div>
                 <p className="mt-4 text-sm leading-6 text-slate-400">{plan.note}</p>
@@ -285,10 +282,7 @@ export default function SuperAdminPlansPage() {
 
         <section className="mt-6 rounded-[2rem] border border-white/10 bg-[#0d1215] p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[.16em] text-slate-500">Empresas</p>
-              <h2 className="mt-1 text-2xl font-black">Situación de suscripción</h2>
-            </div>
+            <div><p className="text-xs font-black uppercase tracking-[.16em] text-slate-500">Empresas</p><h2 className="mt-1 text-2xl font-black">Situación de suscripción</h2></div>
             <span className={`rounded-full border px-3 py-1 text-xs font-black ${stripe.ready ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-amber-400/20 bg-amber-400/10 text-amber-300'}`}>{stripe.ready ? 'Stripe conectado' : 'Stripe pendiente'}</span>
           </div>
 
@@ -300,21 +294,16 @@ export default function SuperAdminPlansPage() {
               const plan = sub?.plan || item.companyPlan;
               return (
                 <div key={item.companyId} className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">
-                  <div className="grid gap-3 md:grid-cols-[1.35fr_.55fr_.75fr_.65fr_auto] md:items-center">
-                    <div className="min-w-0">
-                      <p className="truncate font-black">{item.companyName}</p>
-                      <p className="mt-1 truncate text-xs font-bold text-slate-600">{item.ownerEmail || 'Sin email'}</p>
-                    </div>
+                  <div className="grid gap-3 md:grid-cols-[1.35fr_.55fr_.75fr_.8fr_auto] md:items-center">
+                    <div className="min-w-0"><p className="truncate font-black">{item.companyName}</p><p className="mt-1 truncate text-xs font-bold text-slate-600">{item.ownerEmail || 'Sin email'}</p></div>
                     <SmallData label="Plan" value={plans[plan].name} />
                     <SmallData label="Suscripción" value={subscriptionLabels[sub?.status || 'none']} />
-                    <SmallData label="Proveedor" value={providerLabels[sub?.provider || 'none']} />
+                    <SmallData label="Gestión del cobro" value={providerLabels[sub?.provider || 'none']} />
                     <button type="button" onClick={() => beginEdit(item)} className="rounded-xl border border-orange-400/20 bg-orange-500/10 px-4 py-2 text-sm font-black text-orange-300">Gestionar →</button>
                   </div>
 
                   <div className="mt-3 grid gap-2 border-t border-white/5 pt-3 text-xs font-bold text-slate-600 sm:grid-cols-3">
-                    <span>Inicio: {formatDate(sub?.startedAt)}</span>
-                    <span>Renovación: {formatDate(sub?.currentPeriodEnd)}</span>
-                    <span>Fin prueba: {formatDate(sub?.trialEndsAt)}</span>
+                    <span>Inicio: {formatDate(sub?.startedAt)}</span><span>Renovación: {formatDate(sub?.currentPeriodEnd)}</span><span>Fin prueba: {formatDate(sub?.trialEndsAt)}</span>
                   </div>
                 </div>
               );
@@ -325,82 +314,44 @@ export default function SuperAdminPlansPage() {
         {editingId ? (
           <section className="mt-6 rounded-[2rem] border border-orange-400/25 bg-orange-500/[.06] p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[.16em] text-orange-400">Gestión manual · sin cobro</p>
-                <h2 className="mt-1 text-2xl font-black">{items.find((item) => item.companyId === editingId)?.companyName}</h2>
-              </div>
+              <div><p className="text-xs font-black uppercase tracking-[.16em] text-orange-400">Gestión administrativa de la suscripción</p><h2 className="mt-1 text-2xl font-black">{items.find((item) => item.companyId === editingId)?.companyName}</h2></div>
               <button type="button" onClick={() => setEditingId(null)} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-black text-slate-300">Cerrar</button>
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <Field label="Estado de suscripción">
-                <select value={formStatus} onChange={(e) => setFormStatus(e.target.value as SubscriptionStatus)} className={inputClass}>
-                  {(Object.keys(subscriptionLabels) as SubscriptionStatus[]).map((status) => <option key={status} value={status}>{subscriptionLabels[status]}</option>)}
-                </select>
+                <select value={formStatus} onChange={(e) => setFormStatus(e.target.value as SubscriptionStatus)} className={inputClass}>{(Object.keys(subscriptionLabels) as SubscriptionStatus[]).map((status) => <option key={status} value={status}>{subscriptionLabels[status]}</option>)}</select>
               </Field>
-              <Field label="Proveedor">
+              <Field label="Forma de gestión del cobro">
                 <select value={formProvider} onChange={(e) => setFormProvider(e.target.value as 'none' | 'manual')} className={inputClass}>
-                  <option value="none">Sin proveedor</option>
-                  <option value="manual">Manual</option>
+                  <option value="none">Sin gestión de cobro</option>
+                  <option value="manual">Manual · lo controlas tú</option>
                 </select>
               </Field>
-              <Field label="Próxima renovación">
-                <input type="date" value={formRenewal} onChange={(e) => setFormRenewal(e.target.value)} className={inputClass} />
-              </Field>
-              <Field label="Fin del periodo de prueba">
-                <input type="date" value={formTrialEnd} onChange={(e) => setFormTrialEnd(e.target.value)} className={inputClass} />
-              </Field>
-              <label className="md:col-span-2">
-                <span className="mb-2 block text-[11px] font-black uppercase tracking-[.14em] text-slate-500">Notas internas</span>
-                <textarea value={formNotes} onChange={(e) => setFormNotes(e.target.value)} rows={3} maxLength={1000} className={`${inputClass} resize-none`} placeholder="Ej.: pago por transferencia, acuerdo comercial, incidencia…" />
-              </label>
+              <Field label="Próxima renovación"><input type="date" value={formRenewal} onChange={(e) => setFormRenewal(e.target.value)} className={inputClass} /></Field>
+              <Field label="Fin del periodo de prueba"><input type="date" value={formTrialEnd} onChange={(e) => setFormTrialEnd(e.target.value)} className={inputClass} /></Field>
+              <label className="md:col-span-2"><span className="mb-2 block text-[11px] font-black uppercase tracking-[.14em] text-slate-500">Notas internas</span><textarea value={formNotes} onChange={(e) => setFormNotes(e.target.value)} rows={3} maxLength={1000} className={`${inputClass} resize-none`} placeholder="Ej.: pago por transferencia, acuerdo comercial, incidencia…" /></label>
             </div>
 
+            <div className="mt-5 rounded-xl border border-sky-400/15 bg-sky-400/[.05] px-4 py-3 text-xs font-bold leading-5 text-sky-200">Si quieres regalar un plan o dejarlo gratis de forma indefinida, no lo hagas aquí: abre la ficha de la empresa y usa “Cortesía SuperAdmin”.</div>
+
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs font-bold leading-5 text-slate-500">Estas opciones siguen siendo administrativas. Stripe solo modifica suscripciones a través de Checkout y del webhook firmado.</p>
+              <p className="text-xs font-bold leading-5 text-slate-500">Manual significa que tú registras la situación; Stripe significa cobro y actualización automáticos cuando esté conectado.</p>
               <button type="button" onClick={() => void saveSubscription()} disabled={saving} className="rounded-xl bg-orange-500 px-5 py-3 font-black text-black disabled:opacity-50">{saving ? 'Guardando…' : 'Guardar situación'}</button>
             </div>
           </section>
         ) : null}
 
-        <section className="mt-6 rounded-2xl border border-emerald-400/15 bg-emerald-400/[.05] px-5 py-4 text-sm font-bold leading-6 text-emerald-200">
-          Paso 7.3 activo: CA46 ya tiene Checkout, portal de cliente, webhook firmado e idempotencia para Stripe. La activación real depende únicamente de cargar las credenciales y Price IDs de Stripe en producción.
-        </section>
+        <section className="mt-6 rounded-2xl border border-emerald-400/15 bg-emerald-400/[.05] px-5 py-4 text-sm font-bold leading-6 text-emerald-200">Paso 7.3 activo: CA46 ya tiene Checkout, portal de cliente, webhook firmado e idempotencia para Stripe. Las cortesías gratuitas se gestionan por separado desde la ficha de cada empresa.</section>
       </main>
     </div>
   );
 }
 
 const inputClass = 'w-full rounded-xl border border-white/10 bg-[#11161a] px-4 py-3 font-bold text-white outline-none focus:border-orange-400';
-
-function Stat({ label, value }: { label: string; value: number | string }) {
-  return <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-4"><p className="text-[10px] font-black uppercase tracking-[.14em] text-slate-600">{label}</p><p className="mt-1 text-3xl font-black">{value}</p></div>;
-}
-
-function Check({ label, ok }: { label: string; ok: boolean }) {
-  return <div className={`rounded-xl border px-4 py-4 ${ok ? 'border-emerald-400/15 bg-emerald-400/[.05]' : 'border-white/10 bg-black/20'}`}><p className="text-[10px] font-black uppercase tracking-[.14em] text-slate-600">{label}</p><p className={`mt-1 font-black ${ok ? 'text-emerald-300' : 'text-amber-300'}`}>{ok ? '✓ Configurado' : 'Pendiente'}</p></div>;
-}
-
-function SmallData({ label, value }: { label: string; value: string }) {
-  return <div><p className="text-[10px] font-black uppercase tracking-[.12em] text-slate-600">{label}</p><p className="mt-1 text-sm font-black text-slate-300">{value}</p></div>;
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label><span className="mb-2 block text-[11px] font-black uppercase tracking-[.14em] text-slate-500">{label}</span>{children}</label>;
-}
-
-function toDateInput(value?: string | null) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toISOString().slice(0, 10);
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return '—';
-  try {
-    return new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value));
-  } catch {
-    return '—';
-  }
-}
+function Stat({ label, value }: { label: string; value: number | string }) { return <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-4"><p className="text-[10px] font-black uppercase tracking-[.14em] text-slate-600">{label}</p><p className="mt-1 text-3xl font-black">{value}</p></div>; }
+function Check({ label, ok }: { label: string; ok: boolean }) { return <div className={`rounded-xl border px-4 py-4 ${ok ? 'border-emerald-400/15 bg-emerald-400/[.05]' : 'border-white/10 bg-black/20'}`}><p className="text-[10px] font-black uppercase tracking-[.14em] text-slate-600">{label}</p><p className={`mt-1 font-black ${ok ? 'text-emerald-300' : 'text-amber-300'}`}>{ok ? '✓ Configurado' : 'Pendiente'}</p></div>; }
+function SmallData({ label, value }: { label: string; value: string }) { return <div><p className="text-[10px] font-black uppercase tracking-[.12em] text-slate-600">{label}</p><p className="mt-1 text-sm font-black text-slate-300">{value}</p></div>; }
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label><span className="mb-2 block text-[11px] font-black uppercase tracking-[.14em] text-slate-500">{label}</span>{children}</label>; }
+function toDateInput(value?: string | null) { if (!value) return ''; const date = new Date(value); if (Number.isNaN(date.getTime())) return ''; return date.toISOString().slice(0, 10); }
+function formatDate(value?: string | null) { if (!value) return '—'; try { return new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value)); } catch { return '—'; } }
