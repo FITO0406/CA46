@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { billingAdminContextForRequest } from '@/lib/billing-auth-server';
+import { getCompanyAccessOverride } from '@/lib/company-access-server';
 import { stripePublicStatus } from '@/lib/stripe-server';
 
 export const runtime = 'nodejs';
@@ -13,13 +14,18 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: false, error: access.error }, { status: access.status, headers: { 'Cache-Control': 'no-store' } });
     }
 
-    const { data: subscription, error } = await supabaseAdmin
-      .from('company_subscriptions')
-      .select('plan, status, provider, price_cents, currency, started_at, current_period_end, trial_ends_at, cancelled_at, external_customer_id, external_subscription_id')
-      .eq('company_id', access.context.companyId)
-      .maybeSingle();
+    const [{ data: subscription, error }, complimentary] = await Promise.all([
+      supabaseAdmin
+        .from('company_subscriptions')
+        .select('plan, status, provider, price_cents, currency, started_at, current_period_end, trial_ends_at, cancelled_at, external_customer_id, external_subscription_id')
+        .eq('company_id', access.context.companyId)
+        .maybeSingle(),
+      getCompanyAccessOverride(access.context.companyId),
+    ]);
 
     if (error) throw error;
+
+    const effectivePlan = complimentary?.effective ? complimentary.plan : (subscription?.plan || access.context.plan);
 
     return NextResponse.json(
       {
@@ -28,7 +34,16 @@ export async function GET(request: Request) {
           id: access.context.companyId,
           name: access.context.companyName,
           plan: access.context.plan,
+          effectivePlan,
         },
+        complimentaryAccess: complimentary?.effective
+          ? {
+              active: true,
+              plan: complimentary.plan,
+              endsAt: complimentary.endsAt,
+              features: complimentary.features,
+            }
+          : null,
         subscription: subscription
           ? {
               plan: subscription.plan,
