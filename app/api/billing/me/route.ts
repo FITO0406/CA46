@@ -14,16 +14,23 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: false, error: access.error }, { status: access.status, headers: { 'Cache-Control': 'no-store' } });
     }
 
-    const [{ data: subscription, error }, complimentary] = await Promise.all([
+    const [{ data: subscription, error }, complimentary, invoicesResult] = await Promise.all([
       supabaseAdmin
         .from('company_subscriptions')
         .select('plan, status, provider, price_cents, currency, started_at, current_period_end, trial_ends_at, cancelled_at, external_customer_id, external_subscription_id')
         .eq('company_id', access.context.companyId)
         .maybeSingle(),
       getCompanyAccessOverride(access.context.companyId),
+      supabaseAdmin
+        .from('service_invoices')
+        .select('id, invoice_number, description, total_cents, currency, issued_at, payment_provider, email_status')
+        .eq('company_id', access.context.companyId)
+        .order('issued_at', { ascending: false })
+        .limit(50),
     ]);
 
     if (error) throw error;
+    if (invoicesResult.error) throw invoicesResult.error;
 
     const effectivePlan = complimentary?.effective ? complimentary.plan : (subscription?.plan || access.context.plan);
 
@@ -59,6 +66,16 @@ export async function GET(request: Request) {
               hasStripeSubscription: Boolean(subscription.external_subscription_id),
             }
           : null,
+        invoices: (invoicesResult.data || []).map((invoice) => ({
+          id: invoice.id,
+          number: invoice.invoice_number,
+          description: invoice.description,
+          totalCents: invoice.total_cents,
+          currency: invoice.currency,
+          issuedAt: invoice.issued_at,
+          paymentProvider: invoice.payment_provider,
+          emailStatus: invoice.email_status,
+        })),
         stripe: stripePublicStatus(),
       },
       { headers: { 'Cache-Control': 'no-store' } },
