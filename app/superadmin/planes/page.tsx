@@ -35,6 +35,14 @@ type Item = {
 };
 
 type Payload = { ok: boolean; items?: Item[]; error?: string };
+type StripeStatus = {
+  secretKeyConfigured: boolean;
+  webhookConfigured: boolean;
+  prices: { autonomo: boolean; empresa: boolean };
+  ready: boolean;
+};
+
+type StripePayload = { ok: boolean; stripe?: StripeStatus; error?: string };
 
 const plans: Record<PlanId, { name: string; price: string; note: string }> = {
   gratis: { name: 'Gratis', price: '0 €', note: 'Hasta 20 etiquetas/mes' },
@@ -58,8 +66,16 @@ const providerLabels: Record<Provider, string> = {
   stripe: 'Stripe',
 };
 
+const emptyStripe: StripeStatus = {
+  secretKeyConfigured: false,
+  webhookConfigured: false,
+  prices: { autonomo: false, empresa: false },
+  ready: false,
+};
+
 export default function SuperAdminPlansPage() {
   const [items, setItems] = useState<Item[]>([]);
+  const [stripe, setStripe] = useState<StripeStatus>(emptyStripe);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -87,13 +103,25 @@ export default function SuperAdminPlansPage() {
     }
 
     try {
-      const response = await fetch('/api/superadmin/subscriptions', {
-        cache: 'no-store',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const payload = (await response.json().catch(() => ({}))) as Payload;
-      if (!response.ok || !payload.ok) throw new Error(payload.error || 'No se pudieron cargar las suscripciones.');
+      const [subscriptionsResponse, stripeResponse] = await Promise.all([
+        fetch('/api/superadmin/subscriptions', {
+          cache: 'no-store',
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch('/api/superadmin/stripe-status', {
+          cache: 'no-store',
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+
+      const payload = (await subscriptionsResponse.json().catch(() => ({}))) as Payload;
+      const stripePayload = (await stripeResponse.json().catch(() => ({}))) as StripePayload;
+
+      if (!subscriptionsResponse.ok || !payload.ok) throw new Error(payload.error || 'No se pudieron cargar las suscripciones.');
+      if (!stripeResponse.ok || !stripePayload.ok) throw new Error(stripePayload.error || 'No se pudo consultar Stripe.');
+
       setItems(payload.items || []);
+      setStripe(stripePayload.stripe || emptyStripe);
     } catch (loadError: any) {
       setError(loadError?.message || 'No se pudieron cargar las suscripciones.');
     } finally {
@@ -195,9 +223,9 @@ export default function SuperAdminPlansPage() {
         <section className="rounded-[2rem] border border-orange-400/20 bg-gradient-to-br from-orange-500/[.10] via-white/[.035] to-white/[.02] p-6 sm:p-8">
           <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[.18em] text-orange-400">Paso 7.2</p>
-              <h2 className="mt-2 text-3xl font-black sm:text-4xl">Suscripciones y estado de cobro</h2>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">CA46 ya guarda una situación económica independiente para cada empresa: plan, estado de suscripción, proveedor y fechas. Stripe sigue desconectado y esta pantalla no realiza cargos.</p>
+              <p className="text-xs font-black uppercase tracking-[.18em] text-orange-400">Paso 7.3</p>
+              <h2 className="mt-2 text-3xl font-black sm:text-4xl">Motor de cobro Stripe</h2>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">Checkout, portal de cliente y webhook de suscripciones ya están integrados en CA46. El panel solo muestra si las credenciales de producción están configuradas; nunca expone las claves.</p>
             </div>
             <button type="button" onClick={() => void loadPlans()} disabled={loading} className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-black text-slate-200 disabled:opacity-50">
               {loading ? 'Actualizando…' : 'Actualizar'}
@@ -215,6 +243,27 @@ export default function SuperAdminPlansPage() {
 
         {error ? <div className="mt-6 rounded-2xl border border-rose-400/20 bg-rose-500/[.07] px-5 py-4 font-bold text-rose-300">{error}</div> : null}
         {message ? <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-500/[.07] px-5 py-4 font-bold text-emerald-300">{message}</div> : null}
+
+        <section className={`mt-6 rounded-[2rem] border p-5 sm:p-6 ${stripe.ready ? 'border-emerald-400/20 bg-emerald-400/[.05]' : 'border-amber-400/20 bg-amber-400/[.05]'}`}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[.16em] text-slate-500">Conexión Stripe</p>
+              <h2 className="mt-1 text-2xl font-black">{stripe.ready ? 'Preparado para cobrar' : 'Motor instalado · configuración pendiente'}</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Webhook de CA46: <span className="font-black text-slate-300">/api/stripe/webhook</span>. Los planes Gratis y Personalizado no necesitan un Price ID automático.</p>
+            </div>
+            <span className={`rounded-full border px-3 py-1 text-xs font-black ${stripe.ready ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-amber-400/20 bg-amber-400/10 text-amber-300'}`}>{stripe.ready ? 'Stripe listo' : 'Faltan credenciales'}</span>
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Check label="Clave secreta" ok={stripe.secretKeyConfigured} />
+            <Check label="Webhook secret" ok={stripe.webhookConfigured} />
+            <Check label="Precio Autónomo" ok={stripe.prices.autonomo} />
+            <Check label="Precio Empresa" ok={stripe.prices.empresa} />
+          </div>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link href="/facturacion" className="rounded-xl border border-orange-400/20 bg-orange-500/10 px-4 py-3 text-sm font-black text-orange-300">Abrir área cliente →</Link>
+            <span className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-slate-500">Checkout y portal quedan bloqueados automáticamente mientras falte configuración.</span>
+          </div>
+        </section>
 
         <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {(Object.keys(plans) as PlanId[]).map((planId) => {
@@ -240,7 +289,7 @@ export default function SuperAdminPlansPage() {
               <p className="text-xs font-black uppercase tracking-[.16em] text-slate-500">Empresas</p>
               <h2 className="mt-1 text-2xl font-black">Situación de suscripción</h2>
             </div>
-            <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-black text-amber-300">Stripe pendiente</span>
+            <span className={`rounded-full border px-3 py-1 text-xs font-black ${stripe.ready ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-amber-400/20 bg-amber-400/10 text-amber-300'}`}>{stripe.ready ? 'Stripe conectado' : 'Stripe pendiente'}</span>
           </div>
 
           <div className="mt-5 space-y-3">
@@ -308,14 +357,14 @@ export default function SuperAdminPlansPage() {
             </div>
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs font-bold leading-5 text-slate-500">Estas opciones solo registran la situación administrativa. No crean pagos, cargos ni datos bancarios.</p>
+              <p className="text-xs font-bold leading-5 text-slate-500">Estas opciones siguen siendo administrativas. Stripe solo modifica suscripciones a través de Checkout y del webhook firmado.</p>
               <button type="button" onClick={() => void saveSubscription()} disabled={saving} className="rounded-xl bg-orange-500 px-5 py-3 font-black text-black disabled:opacity-50">{saving ? 'Guardando…' : 'Guardar situación'}</button>
             </div>
           </section>
         ) : null}
 
         <section className="mt-6 rounded-2xl border border-emerald-400/15 bg-emerald-400/[.05] px-5 py-4 text-sm font-bold leading-6 text-emerald-200">
-          Paso 7.2 activo: cada empresa ya tiene un registro propio de suscripción y estado de cobro. El plan se mantiene sincronizado con la ficha de empresa. Stripe continúa desconectado hasta el Paso 7.3.
+          Paso 7.3 activo: CA46 ya tiene Checkout, portal de cliente, webhook firmado e idempotencia para Stripe. La activación real depende únicamente de cargar las credenciales y Price IDs de Stripe en producción.
         </section>
       </main>
     </div>
@@ -325,12 +374,11 @@ export default function SuperAdminPlansPage() {
 const inputClass = 'w-full rounded-xl border border-white/10 bg-[#11161a] px-4 py-3 font-bold text-white outline-none focus:border-orange-400';
 
 function Stat({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-4">
-      <p className="text-[10px] font-black uppercase tracking-[.14em] text-slate-600">{label}</p>
-      <p className="mt-1 text-3xl font-black">{value}</p>
-    </div>
-  );
+  return <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-4"><p className="text-[10px] font-black uppercase tracking-[.14em] text-slate-600">{label}</p><p className="mt-1 text-3xl font-black">{value}</p></div>;
+}
+
+function Check({ label, ok }: { label: string; ok: boolean }) {
+  return <div className={`rounded-xl border px-4 py-4 ${ok ? 'border-emerald-400/15 bg-emerald-400/[.05]' : 'border-white/10 bg-black/20'}`}><p className="text-[10px] font-black uppercase tracking-[.14em] text-slate-600">{label}</p><p className={`mt-1 font-black ${ok ? 'text-emerald-300' : 'text-amber-300'}`}>{ok ? '✓ Configurado' : 'Pendiente'}</p></div>;
 }
 
 function SmallData({ label, value }: { label: string; value: string }) {
