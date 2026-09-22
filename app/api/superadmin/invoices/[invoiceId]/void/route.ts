@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { superAdminContextForRequest } from '@/lib/superadmin-auth-server';
-import { getServiceInvoice, voidServiceInvoice } from '@/lib/service-invoices-server';
+import { getServiceInvoice } from '@/lib/service-invoices-server';
+import { voidServiceInvoice } from '@/lib/service-invoice-corrections-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
