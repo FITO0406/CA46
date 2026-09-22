@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { resolveCompanyEffectiveAccess } from '@/lib/company-access-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -61,16 +62,28 @@ async function readTenant(userId: string) {
 
   if (companyError) return { tenant: null, error: companyError };
 
-  return {
-    tenant: {
-      company,
-      membership: {
-        role: membership.role,
-        isActive: membership.is_active,
+  try {
+    const access = await resolveCompanyEffectiveAccess(company.id, company.plan as PlanId);
+    return {
+      tenant: {
+        company: {
+          ...company,
+          effective_plan: access.plan,
+          access_source: access.source,
+          complimentary_access: access.complimentary,
+          complimentary_ends_at: access.endsAt,
+          custom_features: access.features,
+        },
+        membership: {
+          role: membership.role,
+          isActive: membership.is_active,
+        },
       },
-    },
-    error: null,
-  };
+      error: null,
+    };
+  } catch (error: any) {
+    return { tenant: null, error };
+  }
 }
 
 export async function GET(request: Request) {
@@ -173,12 +186,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'La empresa existe, pero no se pudo asignar el administrador.', code }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
   }
 
+  const access = await resolveCompanyEffectiveAccess(company.id, company.plan as PlanId);
+
   return NextResponse.json(
     {
       ok: true,
       created,
       tenant: {
-        company,
+        company: {
+          ...company,
+          effective_plan: access.plan,
+          access_source: access.source,
+          complimentary_access: access.complimentary,
+          complimentary_ends_at: access.endsAt,
+          custom_features: access.features,
+        },
         membership: { role: 'admin_empresa', isActive: true },
       },
     },
