@@ -8,7 +8,13 @@ type PlanId = 'gratis' | 'autonomo' | 'empresa' | 'personalizado';
 type BillingPayload = {
   ok: boolean;
   error?: string;
-  company?: { id: string; name: string; plan: PlanId };
+  company?: { id: string; name: string; plan: PlanId; effectivePlan: PlanId };
+  complimentaryAccess?: {
+    active: boolean;
+    plan: PlanId;
+    endsAt: string | null;
+    features: Record<string, boolean>;
+  } | null;
   subscription?: {
     plan: PlanId;
     status: string;
@@ -124,6 +130,9 @@ export default function FacturacionPage() {
 
   const stripeReady = Boolean(data?.stripe?.ready);
   const subscription = data?.subscription;
+  const complimentary = data?.complimentaryAccess;
+  const effectivePlan = data?.company?.effectivePlan || subscription?.plan || data?.company?.plan || 'gratis';
+  const checkoutDisabled = !stripeReady || Boolean(action) || Boolean(complimentary?.active);
 
   return (
     <div className="min-h-screen bg-[#080b0d] text-white">
@@ -145,17 +154,25 @@ export default function FacturacionPage() {
           <>
             <section className="rounded-[2rem] border border-orange-400/20 bg-orange-500/[.06] p-6 sm:p-8">
               <p className="text-xs font-black uppercase tracking-[.18em] text-orange-400">{data.company.name}</p>
-              <h2 className="mt-2 text-3xl font-black">Plan {planNames[subscription?.plan || data.company.plan]}</h2>
+              <h2 className="mt-2 text-3xl font-black">Plan efectivo {planNames[effectivePlan]}</h2>
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 <Info label="Suscripción" value={statusNames[subscription?.status || 'none'] || subscription?.status || 'Sin suscripción'} />
-                <Info label="Proveedor" value={subscription?.provider === 'stripe' ? 'Stripe' : subscription?.provider === 'manual' ? 'Manual' : 'Sin proveedor'} />
+                <Info label="Gestión del cobro" value={subscription?.provider === 'stripe' ? 'Stripe' : subscription?.provider === 'manual' ? 'Manual' : 'Sin gestión'} />
                 <Info label="Renovación" value={formatDate(subscription?.currentPeriodEnd)} />
               </div>
             </section>
 
+            {complimentary?.active ? (
+              <section className="mt-6 rounded-[2rem] border border-sky-400/25 bg-sky-400/[.07] p-6">
+                <p className="text-xs font-black uppercase tracking-[.16em] text-sky-400">Cortesía SuperAdmin</p>
+                <h3 className="mt-2 text-2xl font-black">Acceso {planNames[complimentary.plan]} sin cobro</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-400">Mientras esta cortesía esté activa no necesitas contratar otro plan. {complimentary.endsAt ? `Finaliza el ${formatDate(complimentary.endsAt)}.` : 'No tiene fecha de fin.'}</p>
+              </section>
+            ) : null}
+
             <section className="mt-6 grid gap-4 md:grid-cols-2">
-              <PlanCard name="Autónomo" price="19,99 €/mes" detail="1 establecimiento · hasta 3 usuarios" active={subscription?.plan === 'autonomo'} disabled={!stripeReady || Boolean(action)} onClick={() => void checkout('autonomo')} buttonText={action === 'autonomo' ? 'Abriendo Stripe…' : 'Contratar Autónomo'} />
-              <PlanCard name="Empresa" price="35,99 €/mes" detail="Varios establecimientos y usuarios" active={subscription?.plan === 'empresa'} disabled={!stripeReady || Boolean(action)} onClick={() => void checkout('empresa')} buttonText={action === 'empresa' ? 'Abriendo Stripe…' : 'Contratar Empresa'} />
+              <PlanCard name="Autónomo" price="19,99 €/mes" detail="1 establecimiento · hasta 3 usuarios" active={effectivePlan === 'autonomo'} disabled={checkoutDisabled} onClick={() => void checkout('autonomo')} buttonText={complimentary?.active ? 'Incluido por cortesía' : action === 'autonomo' ? 'Abriendo Stripe…' : 'Contratar Autónomo'} />
+              <PlanCard name="Empresa" price="35,99 €/mes" detail="Varios establecimientos y usuarios" active={effectivePlan === 'empresa'} disabled={checkoutDisabled} onClick={() => void checkout('empresa')} buttonText={complimentary?.active ? 'Cobro bloqueado por cortesía' : action === 'empresa' ? 'Abriendo Stripe…' : 'Contratar Empresa'} />
             </section>
 
             <section className="mt-6 rounded-[2rem] border border-white/10 bg-[#0d1215] p-6">
@@ -195,7 +212,7 @@ function Info({ label, value }: { label: string; value: string }) {
 }
 
 function PlanCard({ name, price, detail, active, disabled, onClick, buttonText }: { name: string; price: string; detail: string; active: boolean; disabled: boolean; onClick: () => void; buttonText: string }) {
-  return <div className={`rounded-[2rem] border p-6 ${active ? 'border-orange-400/35 bg-orange-500/[.07]' : 'border-white/10 bg-[#0d1215]'}`}><div className="flex items-start justify-between gap-3"><div><h3 className="text-2xl font-black">{name}</h3><p className="mt-2 text-xl font-black text-orange-300">{price}</p></div>{active ? <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-300">Actual</span> : null}</div><p className="mt-4 text-sm text-slate-400">{detail}</p><button type="button" disabled={disabled} onClick={onClick} className="mt-6 w-full rounded-xl bg-orange-500 px-4 py-3 font-black text-black disabled:bg-slate-800 disabled:text-slate-600">{buttonText}</button></div>;
+  return <div className={`rounded-[2rem] border p-6 ${active ? 'border-orange-400/35 bg-orange-500/[.07]' : 'border-white/10 bg-[#0d1215]'}`}><div className="flex items-start justify-between gap-3"><div><h3 className="text-2xl font-black">{name}</h3><p className="mt-2 text-xl font-black text-orange-300">{price}</p></div>{active ? <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-300">Efectivo</span> : null}</div><p className="mt-4 text-sm text-slate-400">{detail}</p><button type="button" disabled={disabled} onClick={onClick} className="mt-6 w-full rounded-xl bg-orange-500 px-4 py-3 font-black text-black disabled:bg-slate-800 disabled:text-slate-600">{buttonText}</button></div>;
 }
 
 function formatDate(value?: string | null) {
