@@ -5,6 +5,16 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
 type PlanId = 'gratis' | 'autonomo' | 'empresa' | 'personalizado';
+type InvoiceItem = {
+  id: string;
+  number: string;
+  description: string;
+  totalCents: number;
+  currency: string;
+  issuedAt: string;
+  paymentProvider: 'stripe' | 'manual';
+  emailStatus: string;
+};
 type BillingPayload = {
   ok: boolean;
   error?: string;
@@ -28,6 +38,7 @@ type BillingPayload = {
     hasStripeCustomer: boolean;
     hasStripeSubscription: boolean;
   } | null;
+  invoices?: InvoiceItem[];
   stripe?: {
     secretKeyConfigured: boolean;
     webhookConfigured: boolean;
@@ -128,11 +139,37 @@ export default function FacturacionPage() {
     }
   }
 
+  async function downloadInvoice(invoice: InvoiceItem) {
+    if (action) return;
+    setAction(`invoice-${invoice.id}`);
+    setError('');
+    try {
+      const accessToken = await token();
+      if (!accessToken) throw new Error('Inicia sesión para continuar.');
+      const response = await fetch(`/api/billing/invoices/${invoice.id}/pdf`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!response.ok) throw new Error('No se pudo descargar la factura.');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `${invoice.number}.pdf`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (invoiceError: any) {
+      setError(invoiceError?.message || 'No se pudo descargar la factura.');
+    } finally {
+      setAction('');
+    }
+  }
+
   const stripeReady = Boolean(data?.stripe?.ready);
   const subscription = data?.subscription;
   const complimentary = data?.complimentaryAccess;
   const effectivePlan = data?.company?.effectivePlan || subscription?.plan || data?.company?.plan || 'gratis';
   const checkoutDisabled = !stripeReady || Boolean(action) || Boolean(complimentary?.active);
+  const invoices = data?.invoices || [];
 
   return (
     <div className="min-h-screen bg-[#080b0d] text-white">
@@ -188,6 +225,28 @@ export default function FacturacionPage() {
               </div>
             </section>
 
+            <section className="mt-6 rounded-[2rem] border border-white/10 bg-[#0d1215] p-6">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[.16em] text-slate-500">Mis facturas</p>
+                <h3 className="mt-1 text-xl font-black">Historial de facturas emitidas</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-400">Cada factura se genera después de un cobro confirmado y queda disponible para descargar en PDF.</p>
+              </div>
+              <div className="mt-5 space-y-3">
+                {invoices.length === 0 ? <div className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm font-bold text-slate-600">Todavía no tienes facturas emitidas.</div> : invoices.map((invoice) => (
+                  <div key={invoice.id} className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="font-black">{invoice.number}</p>
+                      <p className="mt-1 truncate text-sm font-bold text-slate-400">{invoice.description}</p>
+                      <p className="mt-1 text-xs font-bold text-slate-600">{formatDate(invoice.issuedAt)} · {invoice.paymentProvider === 'stripe' ? 'Stripe' : 'Pago manual'} · {money(invoice.totalCents, invoice.currency)}</p>
+                    </div>
+                    <button type="button" disabled={Boolean(action)} onClick={() => void downloadInvoice(invoice)} className="rounded-xl border border-orange-400/20 bg-orange-500/10 px-4 py-3 text-sm font-black text-orange-300 disabled:opacity-50">
+                      {action === `invoice-${invoice.id}` ? 'Generando…' : 'Descargar PDF'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+
             {!stripeReady ? (
               <section className="mt-6 rounded-2xl border border-amber-400/20 bg-amber-400/[.07] px-5 py-4 text-sm font-bold leading-6 text-amber-200">
                 El motor Stripe ya está integrado en CA46, pero faltan las credenciales y los precios de Stripe en producción. Hasta configurarlos, ningún botón puede iniciar un cobro.
@@ -220,4 +279,8 @@ function formatDate(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
   return new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+}
+
+function money(cents: number, currency = 'EUR') {
+  return new Intl.NumberFormat('es-ES', { style: 'currency', currency }).format((cents || 0) / 100);
 }
