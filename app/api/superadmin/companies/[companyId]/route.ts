@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { superAdminContextForRequest } from '@/lib/superadmin-auth-server';
+import { getCompanyAccessOverride } from '@/lib/company-access-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -42,7 +43,7 @@ export async function GET(request: Request, context: RouteContext) {
       );
     }
 
-    const [settingsResult, membersResult, tagsResult, authUsersResult] = await Promise.all([
+    const [settingsResult, membersResult, tagsResult, authUsersResult, accessGrant] = await Promise.all([
       supabaseAdmin
         .from('company_settings')
         .select('*')
@@ -60,6 +61,7 @@ export async function GET(request: Request, context: RouteContext) {
         .order('created_at', { ascending: false })
         .limit(50),
       supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+      getCompanyAccessOverride(companyId),
     ]);
 
     if (settingsResult.error) throw settingsResult.error;
@@ -118,6 +120,8 @@ export async function GET(request: Request, context: RouteContext) {
           ownerName: owner?.name || '',
           createdAt: company.created_at,
           updatedAt: company.updated_at,
+          accessGrant,
+          effectivePlan: accessGrant?.effective ? accessGrant.plan : company.plan,
           settings: settings
             ? {
                 businessName: settings.business_name || '',
