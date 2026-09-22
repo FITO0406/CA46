@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { stripePlanFromPriceId, verifyStripeWebhookSignature } from '@/lib/stripe-server';
+import { issueServiceInvoice, type ServicePlan } from '@/lib/service-invoices-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,6 +17,11 @@ function stripeId(value: any): string {
 function unixToIso(value: any) {
   const seconds = Number(value);
   return Number.isFinite(seconds) && seconds > 0 ? new Date(seconds * 1000).toISOString() : null;
+}
+
+function unixToDate(value: any) {
+  const iso = unixToIso(value);
+  return iso ? iso.slice(0, 10) : null;
 }
 
 function mapSubscriptionStatus(status: string): BillingStatus {
@@ -142,6 +148,46 @@ async function handleSubscription(subscription: any) {
   }
 }
 
+async function invoicePlan(companyId: string): Promise<ServicePlan> {
+  const { data } = await supabaseAdmin.from('company_subscriptions').select('plan').eq('company_id', companyId).maybeSingle();
+  const plan = String(data?.plan || 'personalizado');
+  return plan === 'gratis' || plan === 'autonomo' || plan === 'empresa' || plan === 'personalizado' ? plan : 'personalizado';
+}
+
+async function createPaidStripeInvoice(companyId: string, invoice: any) {
+  const totalCents = Number(invoice?.amount_paid ?? invoice?.total ?? 0);
+  if (!Number.isFinite(totalCents) || totalCents <= 0) return;
+
+  const plan = await invoicePlan(companyId);
+  const stripeInvoiceId = stripeId(invoice);
+  const line = invoice?.lines?.data?.[0] || null;
+  const periodStart = unixToDate(line?.period?.start);
+  const periodEnd = unixToDate(line?.period?.end);
+  const explicitSubtotal = Number(invoice?.subtotal_excluding_tax);
+  const subtotalCents = Number.isFinite(explicitSubtotal) && explicitSubtotal >= 0 ? explicitSubtotal : null;
+  const vatCents = subtotalCents !== null ? Math.max(0, totalCents - subtotalCents) : null;
+  const monthLabel = periodStart ? new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(new Date(`${periodStart}T12:00:00Z`)) : '';
+  const description = `Servicio CA46 · Plan ${plan === 'autonomo' ? 'Autónomo' : plan === 'empresa' ? 'Empresa' : plan === 'gratis' ? 'Gratis' : 'Personalizado'}${monthLabel ? ` · ${monthLabel}` : ''}`;
+
+  const result = await issueServiceInvoice({
+    companyId,
+    paymentProvider: 'stripe',
+    paymentReference: stripeInvoiceId || stripeId(invoice?.payment_intent) || null,
+    plan,
+    description,
+    totalCents,
+    subtotalCents,
+    vatCents,
+    currency: String(invoice?.currency || 'eur').toUpperCase(),
+    servicePeriodStart: periodStart,
+    servicePeriodEnd: periodEnd,
+  });
+
+  if (!result.invoice && result.skippedReason === 'SETTINGS_NOT_READY') {
+    console.warn('stripe invoice paid without CA46 invoice: issuer settings not ready', { companyId, stripeInvoiceId });
+  }
+}
+
 async function handleInvoice(invoice: any, paid: boolean) {
   const companyId = await findCompanyId(invoice);
   if (!companyId) return;
@@ -158,6 +204,8 @@ async function handleInvoice(invoice: any, paid: boolean) {
 
   const { error } = await supabaseAdmin.from('company_subscriptions').update(update).eq('company_id', companyId);
   if (error) throw error;
+
+  if (paid) await createPaidStripeInvoice(companyId, invoice);
 }
 
 export async function POST(request: Request) {
