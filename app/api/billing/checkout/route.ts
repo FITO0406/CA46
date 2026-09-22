@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { billingAdminContextForRequest } from '@/lib/billing-auth-server';
+import { getCompanyAccessOverride } from '@/lib/company-access-server';
 import { stripeAppBaseUrl, stripePriceId, stripePublicStatus, stripeRequest, type StripePlanId } from '@/lib/stripe-server';
 
 export const runtime = 'nodejs';
@@ -13,6 +14,18 @@ export async function POST(request: Request) {
     const access = await billingAdminContextForRequest(request);
     if (!access.ok) {
       return NextResponse.json({ ok: false, error: access.error }, { status: access.status, headers: { 'Cache-Control': 'no-store' } });
+    }
+
+    const complimentary = await getCompanyAccessOverride(access.context.companyId);
+    if (complimentary?.effective) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Tu empresa tiene acceso de cortesía SuperAdmin al plan ${complimentary.plan}. No necesitas iniciar un nuevo cobro mientras esté activo.`,
+          code: 'COMPLIMENTARY_ACCESS_ACTIVE',
+        },
+        { status: 409, headers: { 'Cache-Control': 'no-store' } },
+      );
     }
 
     const config = stripePublicStatus();
