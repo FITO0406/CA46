@@ -33,7 +33,7 @@ export default function CrearEtiquetasInicioPage() {
           </p>
         </section>
 
-        <section className="mt-9 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+        <section className="mt-9 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           <Link href="/creador-etiquetas" className="rounded-[2rem] border border-orange-400/30 bg-orange-500/[.08] p-7 transition active:scale-[.99]">
             <div className="text-5xl">📄</div>
             <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-orange-400">Carga + OCR</p>
@@ -66,6 +66,14 @@ export default function CrearEtiquetasInicioPage() {
             <span className="mt-6 inline-flex rounded-xl border border-fuchsia-300/30 bg-fuchsia-300/10 px-4 py-3 text-sm font-black text-fuchsia-200">Abrir cocina →</span>
           </Link>
 
+          <Link href="/temperaturas" className="rounded-[2rem] border border-cyan-400/25 bg-cyan-400/[.05] p-7 transition active:scale-[.99]">
+            <div className="text-5xl">🌡️</div>
+            <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-cyan-300">Control APPCC</p>
+            <h2 className="mt-2 text-3xl font-black">Temperaturas</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-400">Controla cámaras y congeladores. Registra lecturas y medidas correctoras cuando un equipo sale de rango.</p>
+            <span className="mt-6 inline-flex rounded-xl border border-cyan-300/30 bg-cyan-300/10 px-4 py-3 text-sm font-black text-cyan-200">Abrir control →</span>
+          </Link>
+
           <Link href="/etiquetas" className="rounded-[2rem] border border-emerald-400/25 bg-emerald-400/[.05] p-7 transition active:scale-[.99]">
             <div className="text-5xl">👁️</div>
             <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-emerald-300">Visor</p>
@@ -76,7 +84,7 @@ export default function CrearEtiquetasInicioPage() {
         </section>
 
         <section className="mt-6 rounded-2xl border border-white/10 bg-white/[.035] px-5 py-4 text-center text-sm font-bold text-slate-400">
-          Factura = 72 h · Etiqueta física = 24 h · Drive = 72 h · Cocina = etiqueta hija 72 h · Todo queda aislado por empresa.
+          Factura = 72 h · Etiqueta física = 24 h · Drive = 72 h · Cocina = vida útil configurable · Temperaturas = historial por equipo · Todo queda aislado por empresa.
         </section>
       </main>
     </div>

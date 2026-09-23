@@ -7,8 +7,6 @@ import { decodeTraceability, encodeTraceability, type TraceabilityData } from '@
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const DEFINITIVE_HOURS = 72;
-
 function clean(value: unknown, max = 220) {
   return String(value ?? '').trim().slice(0, max);
 }
@@ -54,7 +52,7 @@ export async function GET(request: Request) {
         .limit(200),
       supabaseAdmin
         .from('kitchen_transformations')
-        .select('id, parent_tag_id, child_tag_id, process_type, processed_at, input_weight_kg, output_weight_kg, salt_grams, ingredients, nutrition_per_100g, output_product_name, output_lot, notes, created_at')
+        .select('id, parent_tag_id, child_tag_id, process_type, processed_at, input_weight_kg, output_weight_kg, salt_grams, ingredients, nutrition_per_100g, output_product_name, output_lot, storage_max_temp_c, shelf_life_days, storage_instructions, notes, created_at')
         .eq('company_id', access.context.companyId)
         .order('processed_at', { ascending: false })
         .limit(50),
@@ -83,11 +81,14 @@ export async function POST(request: Request) {
     const inputWeightKg = Number(body?.inputWeightKg);
     const outputWeightKg = Number(body?.outputWeightKg);
     const saltGrams = numberOrZero(body?.saltGrams);
+    const storageMaxTempC = Number(body?.storageMaxTempC);
+    const shelfLifeDays = Number(body?.shelfLifeDays);
+    const storageInstructions = clean(body?.storageInstructions, 240);
     const notes = clean(body?.notes, 1000);
     const processedAt = body?.processedAt ? new Date(body.processedAt) : new Date();
 
-    if (!parentTagId || !processType || !outputProductName || !Number.isFinite(inputWeightKg) || inputWeightKg <= 0 || !Number.isFinite(outputWeightKg) || outputWeightKg <= 0 || Number.isNaN(processedAt.getTime())) {
-      return NextResponse.json({ ok: false, error: 'Producto origen, proceso, producto final y pesos son obligatorios.' }, { status: 400 });
+    if (!parentTagId || !processType || !outputProductName || !Number.isFinite(inputWeightKg) || inputWeightKg <= 0 || !Number.isFinite(outputWeightKg) || outputWeightKg <= 0 || !Number.isFinite(storageMaxTempC) || storageMaxTempC < -40 || storageMaxTempC > 30 || !Number.isInteger(shelfLifeDays) || shelfLifeDays < 1 || shelfLifeDays > 365 || Number.isNaN(processedAt.getTime())) {
+      return NextResponse.json({ ok: false, error: 'Producto origen, proceso, pesos, temperatura de conservación y vida útil son obligatorios.' }, { status: 400 });
     }
 
     const { data: parent, error: parentError } = await supabaseAdmin
@@ -131,6 +132,8 @@ export async function POST(request: Request) {
         { label: 'Lote de origen', value: parentTrace.lot || parent.id },
         { label: 'Peso antes de cocinar', value: `${inputWeightKg} kg` },
         { label: 'Peso final cocinado', value: `${outputWeightKg} kg` },
+        { label: 'Conservación', value: storageInstructions || `Conservar a ≤ ${storageMaxTempC} °C` },
+        { label: 'Consumo preferente', value: `Antes de ${shelfLifeDays} día${shelfLifeDays === 1 ? '' : 's'} desde la elaboración` },
         ...(saltGrams > 0 ? [{ label: 'Sal / salmuera', value: `${saltGrams} g de sal` }] : []),
         ...(ingredientLabel ? [{ label: 'Ingredientes / aditivos', value: ingredientLabel }] : []),
         { label: 'Valor energético', value: `${nutrition.energyKcal} kcal / 100 g` },
@@ -144,7 +147,7 @@ export async function POST(request: Request) {
     };
 
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + DEFINITIVE_HOURS * 60 * 60 * 1000);
+    const expiresAt = new Date(processedAt.getTime() + shelfLifeDays * 24 * 60 * 60 * 1000);
     const { data: child, error: childError } = await supabaseAdmin
       .from('digital_tags')
       .insert({
@@ -182,6 +185,9 @@ export async function POST(request: Request) {
         nutrition_per_100g: nutrition,
         output_product_name: outputProductName,
         output_lot: outputLot,
+        storage_max_temp_c: storageMaxTempC,
+        shelf_life_days: shelfLifeDays,
+        storage_instructions: storageInstructions || `Conservar a ≤ ${storageMaxTempC} °C`,
         notes: notes || null,
         created_by_user_id: access.context.userId,
       })

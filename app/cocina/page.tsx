@@ -26,6 +26,9 @@ type Transformation = {
   salt_grams: number;
   output_product_name: string;
   output_lot: string;
+  storage_max_temp_c: number;
+  shelf_life_days: number;
+  storage_instructions: string;
 };
 type Ingredient = { name: string; quantity: string };
 type Nutrition = { energyKcal: string; proteinG: string; carbsG: string; sugarsG: string; fatG: string; saturatedFatG: string; saltG: string };
@@ -47,6 +50,9 @@ export default function CocinaPage() {
   const [inputWeightKg, setInputWeightKg] = useState('');
   const [outputWeightKg, setOutputWeightKg] = useState('');
   const [saltGrams, setSaltGrams] = useState('');
+  const [storageMaxTempC, setStorageMaxTempC] = useState('4');
+  const [shelfLifeDays, setShelfLifeDays] = useState('3');
+  const [storageInstructions, setStorageInstructions] = useState('Conservar refrigerado a ≤ 4 °C');
   const [ingredients, setIngredients] = useState<Ingredient[]>([{ name: '', quantity: '' }]);
   const [nutrition, setNutrition] = useState<Nutrition>(emptyNutrition);
   const [notes, setNotes] = useState('');
@@ -94,8 +100,10 @@ export default function CocinaPage() {
     const input = Number(inputWeightKg.replace(',', '.'));
     const output = Number(outputWeightKg.replace(',', '.'));
     const salt = Number((saltGrams || '0').replace(',', '.'));
-    if (!parentTagId || !processType.trim() || !outputProductName.trim() || !Number.isFinite(input) || input <= 0 || !Number.isFinite(output) || output <= 0) {
-      setError('Selecciona el lote de origen e indica proceso, producto final y los dos pesos.');
+    const maxTemp = Number(storageMaxTempC.replace(',', '.'));
+    const lifeDays = Number(shelfLifeDays);
+    if (!parentTagId || !processType.trim() || !outputProductName.trim() || !Number.isFinite(input) || input <= 0 || !Number.isFinite(output) || output <= 0 || !Number.isFinite(maxTemp) || !Number.isInteger(lifeDays) || lifeDays < 1) {
+      setError('Selecciona el lote e indica proceso, pesos, temperatura máxima y vida útil.');
       return;
     }
     if (output > input * 1.5 && !window.confirm('El peso final supera ampliamente al peso de entrada. ¿Quieres guardarlo así?')) return;
@@ -114,6 +122,9 @@ export default function CocinaPage() {
           inputWeightKg: input,
           outputWeightKg: output,
           saltGrams: Number.isFinite(salt) ? salt : 0,
+          storageMaxTempC: maxTemp,
+          shelfLifeDays: lifeDays,
+          storageInstructions,
           ingredients: ingredients.filter((item) => item.name.trim()),
           nutrition: Object.fromEntries(Object.entries(nutrition).map(([key, value]) => [key, Number(String(value || '0').replace(',', '.')) || 0])),
           notes,
@@ -169,13 +180,24 @@ export default function CocinaPage() {
             </div>
           </section>
 
+          <section className="mt-6 rounded-[2rem] border border-cyan-400/20 bg-cyan-400/[.04] p-5 sm:p-7">
+            <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.16em] text-cyan-300">Seguridad alimentaria</p><h2 className="mt-1 text-2xl font-black">3. Conservación del producto cocinado</h2></div><Link href="/temperaturas" className="rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm font-black text-cyan-200">Control de equipos →</Link></div>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">Indica el límite de frío y la vida útil concreta del producto. Estos datos aparecerán en la etiqueta hija.</p>
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              <label><Label>Temperatura máxima (°C)</Label><input className={fieldClass} inputMode="decimal" value={storageMaxTempC} onChange={(e) => setStorageMaxTempC(e.target.value)} placeholder="4" /></label>
+              <label><Label>Consumir antes de (días)</Label><input className={fieldClass} inputMode="numeric" value={shelfLifeDays} onChange={(e) => setShelfLifeDays(e.target.value)} placeholder="3" /></label>
+              <label><Label>Indicación de conservación</Label><input className={fieldClass} value={storageInstructions} onChange={(e) => setStorageInstructions(e.target.value)} placeholder="Conservar refrigerado a ≤ 4 °C" /></label>
+            </div>
+            <div className="mt-4 rounded-xl border border-cyan-300/15 bg-black/20 px-4 py-3 text-sm font-bold text-cyan-100">Vista previa: {storageInstructions || `Conservar a ≤ ${storageMaxTempC || '—'} °C`} · Consumir preferentemente antes de {shelfLifeDays || '—'} días.</div>
+          </section>
+
           <section className="mt-6 rounded-[2rem] border border-sky-400/20 bg-sky-400/[.04] p-5 sm:p-7">
-            <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.16em] text-sky-300">Ingredientes y aditivos</p><h2 className="mt-1 text-2xl font-black">3. Qué has añadido</h2></div><button type="button" onClick={() => setIngredients((current) => [...current, { name: '', quantity: '' }])} className="rounded-xl border border-sky-300/20 bg-sky-300/10 px-4 py-2 text-sm font-black text-sky-200">+ Añadir</button></div>
+            <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.16em] text-sky-300">Ingredientes y aditivos</p><h2 className="mt-1 text-2xl font-black">4. Qué has añadido</h2></div><button type="button" onClick={() => setIngredients((current) => [...current, { name: '', quantity: '' }])} className="rounded-xl border border-sky-300/20 bg-sky-300/10 px-4 py-2 text-sm font-black text-sky-200">+ Añadir</button></div>
             <div className="mt-5 space-y-3">{ingredients.map((item, index) => <div key={index} className="grid gap-3 sm:grid-cols-[1fr_.55fr_auto]"><input className={fieldClass} value={item.name} onChange={(e) => ingredient(index, 'name', e.target.value)} placeholder="Ej.: sal, limón, conservante…" /><input className={fieldClass} value={item.quantity} onChange={(e) => ingredient(index, 'quantity', e.target.value)} placeholder="Ej.: 25 g" /><button type="button" onClick={() => setIngredients((current) => current.filter((_, i) => i !== index))} className="rounded-xl border border-white/10 px-4 font-black text-slate-400">×</button></div>)}</div>
           </section>
 
           <section className="mt-6 rounded-[2rem] border border-emerald-400/20 bg-emerald-400/[.04] p-5 sm:p-7">
-            <p className="text-xs font-black uppercase tracking-[.16em] text-emerald-300">Por 100 gramos</p><h2 className="mt-1 text-2xl font-black">4. Valor nutricional del producto terminado</h2>
+            <p className="text-xs font-black uppercase tracking-[.16em] text-emerald-300">Por 100 gramos</p><h2 className="mt-1 text-2xl font-black">5. Valor nutricional del producto terminado</h2>
             <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><NutritionInput label="Energía kcal" value={nutrition.energyKcal} onChange={(value) => setNutrition({ ...nutrition, energyKcal: value })} /><NutritionInput label="Proteínas g" value={nutrition.proteinG} onChange={(value) => setNutrition({ ...nutrition, proteinG: value })} /><NutritionInput label="Hidratos g" value={nutrition.carbsG} onChange={(value) => setNutrition({ ...nutrition, carbsG: value })} /><NutritionInput label="Azúcares g" value={nutrition.sugarsG} onChange={(value) => setNutrition({ ...nutrition, sugarsG: value })} /><NutritionInput label="Grasas g" value={nutrition.fatG} onChange={(value) => setNutrition({ ...nutrition, fatG: value })} /><NutritionInput label="Saturadas g" value={nutrition.saturatedFatG} onChange={(value) => setNutrition({ ...nutrition, saturatedFatG: value })} /><NutritionInput label="Sal g" value={nutrition.saltG} onChange={(value) => setNutrition({ ...nutrition, saltG: value })} /></div>
             <label className="mt-4 block"><Label>Observaciones</Label><textarea className={`${fieldClass} min-h-24`} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opcional" /></label>
             <button type="button" disabled={saving || tags.length === 0} onClick={() => void save()} className="mt-5 w-full rounded-xl bg-orange-500 px-5 py-4 text-lg font-black text-black disabled:opacity-40">{saving ? 'Guardando transformación…' : 'Guardar y crear etiqueta hija'}</button>
@@ -183,7 +205,7 @@ export default function CocinaPage() {
 
           <section className="mt-6 rounded-[2rem] border border-white/10 bg-[#0d1215] p-5 sm:p-7">
             <div className="flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-[.16em] text-slate-500">Trazabilidad</p><h2 className="mt-1 text-2xl font-black">Últimas transformaciones</h2></div><button onClick={() => void load()} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-black text-slate-300">Actualizar</button></div>
-            <div className="mt-5 space-y-3">{history.length === 0 ? <p className="rounded-xl border border-dashed border-white/10 px-4 py-7 text-center text-sm font-bold text-slate-600">Todavía no hay transformaciones.</p> : history.map((row) => <div key={row.id} className="rounded-xl border border-white/10 bg-black/20 p-4"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-black">{row.output_product_name}</p><p className="mt-1 text-xs font-bold text-slate-500">{row.process_type} · lote {row.output_lot}</p></div><p className="text-sm font-black text-orange-300">{row.input_weight_kg} kg → {row.output_weight_kg} kg</p></div></div>)}</div>
+            <div className="mt-5 space-y-3">{history.length === 0 ? <p className="rounded-xl border border-dashed border-white/10 px-4 py-7 text-center text-sm font-bold text-slate-600">Todavía no hay transformaciones.</p> : history.map((row) => <div key={row.id} className="rounded-xl border border-white/10 bg-black/20 p-4"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-black">{row.output_product_name}</p><p className="mt-1 text-xs font-bold text-slate-500">{row.process_type} · lote {row.output_lot}</p><p className="mt-2 text-xs font-black text-cyan-300">≤ {row.storage_max_temp_c} °C · {row.shelf_life_days} días</p></div><p className="text-sm font-black text-orange-300">{row.input_weight_kg} kg → {row.output_weight_kg} kg</p></div></div>)}</div>
           </section>
         </> : null}
       </main>
