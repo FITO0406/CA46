@@ -257,7 +257,7 @@ function wrapPdfText(value: unknown, maxChars = 62) {
 }
 
 export function buildServiceInvoicePdf(invoice: ServiceInvoice) {
-  const extra = invoice as ServiceInvoice & Record<string, any>;
+  const extra = invoice as any;
   const issuer = invoice.issuer_snapshot || {};
   const customer = invoice.customer_snapshot || {};
   const vatLabel = Number(invoice.vat_rate).toFixed(2).replace('.00', '');
@@ -277,7 +277,7 @@ export function buildServiceInvoicePdf(invoice: ServiceInvoice) {
   const commands: string[] = [
     'q 0.035 0.047 0.055 rg 0 744 595 98 re f Q',
     'q 0.95 0.42 0.08 rg 0 738 595 6 re f Q',
-    pdfText('K46', 42, 792, 30, true),
+    pdfText('CA46', 42, 792, 30, true),
     pdfText('FACTURACION DE SERVICIOS', 42, 770, 10, true),
     pdfText(docTitle, 400, 798, 10, true),
     pdfText(invoice.invoice_number, 400, 778, 14, true),
@@ -335,7 +335,7 @@ export function buildServiceInvoicePdf(invoice: ServiceInvoice) {
     'q 0.90 0.91 0.92 RG 42 287 511 0 re S Q',
     verifactuAccepted ? pdfText('VERI*FACTU - Factura verificable en la sede electronica de la AEAT', 42, 279, 8, true) : '',
     verifactuAccepted ? pdfText(`Contenido QR tributario: ${latin1(extra.verifactu_qr_url).slice(0, 88)}`, 42, 264, 7) : '',
-    pdfText('Documento generado electronicamente por K46.', 42, 244, 8),
+    pdfText('Documento generado electronicamente por CA46.', 42, 244, 8),
     pdfText(`Factura ${invoice.invoice_number} · ${dateEs(invoice.issued_at)}`, 42, 227, 8),
     pdfText('Conserva este documento como justificante de la prestacion del servicio y del pago.', 42, 210, 8),
   ].filter(Boolean);
@@ -367,7 +367,7 @@ export async function sendServiceInvoiceEmail(invoice: ServiceInvoice) {
   const apiKey = String(process.env.RESEND_API_KEY || '').trim();
   const from = String(process.env.INVOICE_FROM_EMAIL || '').trim();
   const to = String(invoice.email_to || invoice.customer_snapshot?.email || '').trim();
-  const extra = invoice as ServiceInvoice & Record<string, any>;
+  const extra = invoice as any;
 
   if (!apiKey || !from) {
     await supabaseAdmin.from('service_invoices').update({
