@@ -14,7 +14,7 @@ export default function CrearEtiquetasInicioPage() {
             </div>
             <div>
               <p className="text-xl font-black">CA46</p>
-              <p className="text-xs font-semibold text-slate-500">Etiquetas</p>
+              <p className="text-xs font-semibold text-slate-500">Etiquetas y cocina</p>
             </div>
           </Link>
           <Link href="/mi-empresa" className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-black text-slate-300">
@@ -27,13 +27,13 @@ export default function CrearEtiquetasInicioPage() {
         <section className="text-center">
           <div className="flex justify-center"><CreatorHealthBadge /></div>
           <p className="mt-5 text-xs font-black uppercase tracking-[.2em] text-orange-400">Circuito completo</p>
-          <h1 className="mt-2 text-4xl font-black sm:text-5xl">Crear, cargar y ver etiquetas</h1>
+          <h1 className="mt-2 text-4xl font-black sm:text-5xl">Crear, transformar y ver etiquetas</h1>
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-            Elige la forma más sencilla: foto de factura, etiqueta provisional o carpeta de Drive. Todo termina en el mismo visor de tu empresa.
+            Foto de factura, etiqueta provisional, Drive o transformación en cocina. Toda la trazabilidad queda dentro de la misma empresa.
           </p>
         </section>
 
-        <section className="mt-9 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+        <section className="mt-9 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
           <Link href="/creador-etiquetas" className="rounded-[2rem] border border-orange-400/30 bg-orange-500/[.08] p-7 transition active:scale-[.99]">
             <div className="text-5xl">📄</div>
             <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-orange-400">Carga + OCR</p>
@@ -58,6 +58,14 @@ export default function CrearEtiquetasInicioPage() {
             <div className="mt-6"><DriveSyncButton /></div>
           </div>
 
+          <Link href="/cocina" className="rounded-[2rem] border border-fuchsia-400/25 bg-fuchsia-400/[.05] p-7 transition active:scale-[.99]">
+            <div className="text-5xl">🍲</div>
+            <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-fuchsia-300">Transformación</p>
+            <h2 className="mt-2 text-3xl font-black">Cocina</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-400">Cocción, salmuera, pesos, ingredientes y nutrición. Crea una etiqueta hija sin perder el lote padre.</p>
+            <span className="mt-6 inline-flex rounded-xl border border-fuchsia-300/30 bg-fuchsia-300/10 px-4 py-3 text-sm font-black text-fuchsia-200">Abrir cocina →</span>
+          </Link>
+
           <Link href="/etiquetas" className="rounded-[2rem] border border-emerald-400/25 bg-emerald-400/[.05] p-7 transition active:scale-[.99]">
             <div className="text-5xl">👁️</div>
             <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-emerald-300">Visor</p>
@@ -68,7 +76,7 @@ export default function CrearEtiquetasInicioPage() {
         </section>
 
         <section className="mt-6 rounded-2xl border border-white/10 bg-white/[.035] px-5 py-4 text-center text-sm font-bold text-slate-400">
-          Factura = 72 h · Etiqueta física = 24 h · Drive = 72 h · Todo queda aislado por empresa.
+          Factura = 72 h · Etiqueta física = 24 h · Drive = 72 h · Cocina = etiqueta hija 72 h · Todo queda aislado por empresa.
         </section>
       </main>
     </div>
