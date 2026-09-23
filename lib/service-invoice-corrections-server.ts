@@ -27,7 +27,7 @@ function centsBreakdown(totalCents: number, vatRate: number) {
 }
 
 export async function issueRectifyingServiceInvoice(input: RectifyInput) {
-  const original = input.originalInvoice as ServiceInvoice & Record<string, any>;
+  const original: any = input.originalInvoice;
   const reason = input.reason.trim();
   if (!original?.id || original.status !== 'issued' || !reason || !input.description.trim() || !Number.isFinite(input.totalCents) || input.totalCents < 0) {
     return { invoice: null as ServiceInvoice | null, skippedReason: 'INVALID_INPUT' };
@@ -41,8 +41,7 @@ export async function issueRectifyingServiceInvoice(input: RectifyInput) {
     return { invoice: null as ServiceInvoice | null, skippedReason: 'SETTINGS_NOT_READY' };
   }
 
-  const settingsAny = settings as any;
-  const vatRate = Number(settingsAny.vat_rate || 0);
+  const vatRate = Number(settings.vat_rate || 0);
   const amounts = centsBreakdown(input.totalCents, vatRate);
   const customer = {
     ...(original.customer_snapshot || {}),
@@ -51,16 +50,16 @@ export async function issueRectifyingServiceInvoice(input: RectifyInput) {
     country: input.customer?.country || original.customer_snapshot?.country || 'España',
   };
   const issuer = {
-    legalName: settingsAny.issuer_legal_name,
-    taxId: settingsAny.issuer_tax_id,
-    email: settingsAny.issuer_email,
-    address: settingsAny.issuer_address,
-    postalCode: settingsAny.issuer_postal_code,
-    city: settingsAny.issuer_city,
-    province: settingsAny.issuer_province,
-    country: settingsAny.issuer_country || 'España',
+    legalName: settings.issuer_legal_name,
+    taxId: settings.issuer_tax_id,
+    email: settings.issuer_email,
+    address: settings.issuer_address,
+    postalCode: settings.issuer_postal_code,
+    city: settings.issuer_city,
+    province: settings.issuer_province,
+    country: settings.issuer_country || 'España',
   };
-  const emailStatus = settingsAny.auto_email ? 'pending' : 'disabled';
+  const emailStatus = settings.auto_email ? 'pending' : 'disabled';
 
   const { data, error } = await supabaseAdmin.rpc('ca46_issue_rectifying_service_invoice', {
     p_company_id: original.company_id,
@@ -87,21 +86,22 @@ export async function issueRectifyingServiceInvoice(input: RectifyInput) {
   if (error) throw error;
   if (!data) return { invoice: null as ServiceInvoice | null, skippedReason: 'INSERT_FAILED' };
 
+  const inserted: any = data;
   const { data: updated, error: updateError } = await supabaseAdmin
     .from('service_invoices')
     .update({ status: 'rectified' })
-    .eq('id', (data as any).id)
+    .eq('id', inserted.id)
     .select('*')
     .single();
   if (updateError) throw updateError;
 
   const invoice = updated as ServiceInvoice;
-  if (settingsAny.auto_email) await sendServiceInvoiceEmail(invoice).catch(() => null);
+  if (settings.auto_email) await sendServiceInvoiceEmail(invoice).catch(() => null);
   return { invoice, skippedReason: null as string | null };
 }
 
 export async function voidServiceInvoice(invoiceInput: ServiceInvoice, reason: string, userId?: string | null) {
-  const invoice = invoiceInput as ServiceInvoice & Record<string, any>;
+  const invoice: any = invoiceInput;
   const cleanReason = reason.trim();
   if (!invoice?.id || invoice.status !== 'issued' || !cleanReason) {
     return { invoice: null as ServiceInvoice | null, skippedReason: 'INVALID_INPUT' };
