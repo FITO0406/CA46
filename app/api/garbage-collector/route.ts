@@ -3,9 +3,13 @@ import { supabase } from '@/lib/supabase';
 
 export async function GET(req: Request) {
   try {
-    // Autenticar la petición cron mediante un secreto si es necesario
+    const cronSecret = process.env.CRON_SECRET;
+    if (!cronSecret) {
+      return new NextResponse('Cron no configurado', { status: 503 });
+    }
+
     const authHeader = req.headers.get('authorization');
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (authHeader !== `Bearer ${cronSecret}`) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 

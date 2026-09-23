@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { FormEvent, useEffect, useState } from 'react';
+import Link from 'next/link';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -184,7 +185,7 @@ export default function SuperAdminGate({ children }: Props) {
             <button type="submit" disabled={signingIn || creating || !email.trim() || !password} className="w-full rounded-xl bg-orange-500 px-5 py-4 font-black text-[#111416] disabled:bg-slate-800 disabled:text-slate-600">{signingIn ? 'Validando…' : 'Entrar como SuperAdmin'}</button>
             <button type="button" onClick={handleCreateAccess} disabled={signingIn || creating || !email.trim() || !password} className="w-full rounded-xl border border-white/10 bg-white/5 px-5 py-4 font-black text-white disabled:text-slate-600">{creating ? 'Creando acceso…' : 'Primer acceso · Crear SuperAdmin'}</button>
           </form>
-          <a href="/" className="mt-5 block text-center text-sm font-black text-slate-500">← Volver a CA46</a>
+          <Link href="/" className="mt-5 block text-center text-sm font-black text-slate-500">← Volver a CA46</Link>
         </section>
       </div>
     );

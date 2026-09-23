@@ -1,36 +1,38 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CA46
 
-## Getting Started
+Primera versión operativa de CA46 para trazabilidad alimentaria, etiquetado,
+gestión de cocina y control de temperaturas.
 
-First, run the development server:
+## Desarrollo local
 
 ```bash
+npm ci
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+La aplicación requiere Node.js 20 o superior y las variables de
+`.env.example`. No se deben guardar secretos reales en el repositorio.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Verificación antes de publicar
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npm run build
+```
 
-## Learn More
+## Despliegue
 
-To learn more about Next.js, take a look at the following resources:
+El repositorio está conectado al proyecto de Vercel de CA46. Los cambios en
+la rama principal generan el despliegue de producción. Antes de activar pagos,
+correo, Telegram o IA hay que completar sus variables y webhooks en Vercel.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Las migraciones versionadas de Supabase están en `supabase/migrations`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Alcance de la v1
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Acceso multiempresa y SuperAdmin.
+- Etiquetado y publicación de pantallas.
+- Cocina, conservación y control de equipos de frío.
+- Configuración de empresa e integraciones preparadas.
+- Facturación interna preparada; Stripe, correo y VERI*FACTU requieren las
+  credenciales y proveedores reales antes de considerarse activos.

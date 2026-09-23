@@ -12,4 +12,9 @@ assertProductionTarget(SUPABASE_URL);
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Server-side admin client (service_role key) – bypasses RLS, use only in API routes
-export const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY);
+// Never downgrade privileged server operations to the anonymous role when a
+// deployment is missing its service key. Requests fail closed instead.
+export const supabaseAdmin = createClient(
+  SUPABASE_URL,
+  SUPABASE_SERVICE_KEY || 'missing-service-role-key',
+);

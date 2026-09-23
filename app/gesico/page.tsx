@@ -10,7 +10,7 @@ export default function GesicoPage() {
       <header className="relative border-b border-white/10 bg-[#0d1114]/85 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
           <div>
-            <p className="text-xl font-black tracking-tight">K46</p>
+            <p className="text-xl font-black tracking-tight">CA46</p>
             <p className="text-xs font-medium text-slate-400">Ecosistema de trazabilidad</p>
           </div>
           <Link
@@ -43,7 +43,7 @@ export default function GesicoPage() {
                 <div>
                   <p className="font-bold text-emerald-200">Portal oficial de compradores de MercaSevilla</p>
                   <p className="mt-1 text-sm leading-6 text-slate-400">
-                    K46 no guarda ni procesa tus credenciales de GESICO. El inicio de sesión se realiza directamente en la web oficial.
+                    CA46 no guarda ni procesa tus credenciales de GESICO. El inicio de sesión se realiza directamente en la web oficial.
                   </p>
                 </div>
               </div>

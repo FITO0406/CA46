@@ -469,7 +469,7 @@ export default function PedirPage() {
               {productos.length > 0 && productosFiltrados.length === 0 && (
                 <div className="rounded-3xl bg-white py-10 text-center shadow-sm">
                   <div className="mb-2 text-4xl">SIN RESULTADOS</div>
-                  <p className="font-medium text-slate-500">No encontramos "{searchTerm}"</p>
+                  <p className="font-medium text-slate-500">No encontramos «{searchTerm}»</p>
                   <button onClick={() => setSearchTerm('')} className="mt-2 font-bold text-[#075e54]">
                     Ver todos los productos
                   </button>

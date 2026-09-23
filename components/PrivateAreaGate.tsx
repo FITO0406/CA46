@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, ReactNode, useEffect, useState } from 'react';
+import Link from 'next/link';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -190,7 +191,7 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
             <a href="/recuperar-clave" className="text-slate-400">¿Has olvidado tu contraseña?</a>
             <a href="/registro?plan=gratis" className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white">Crear una cuenta gratis</a>
             <a href="/planes" className="text-orange-300">Ver planes CA46</a>
-            <a href="/" className="text-slate-500">← Volver al inicio</a>
+            <Link href="/" className="text-slate-500">← Volver al inicio</Link>
           </div>
         </section>
       </div>

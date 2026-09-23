@@ -5,7 +5,7 @@ import { assertGoogleTarget, ALLOWED_GCS_BUCKET_NAME, ALLOWED_GCS_REGION } from 
 
 function formatPemPrivateKey(rawKey: string): string {
   if (!rawKey) return '';
-  let cleaned = rawKey
+  const cleaned = rawKey
     .replace(/^["']|["']$/g, '')
     .replace(/\\\\n/g, '\n')
     .replace(/\\n/g, '\n')
@@ -22,7 +22,7 @@ function formatPemPrivateKey(rawKey: string): string {
 }
 
 function getStorageClient(): Storage {
-  let saJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
+  const saJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
   if (!saJson) {
     throw new Error('[D51 GCS Error] GOOGLE_SERVICE_ACCOUNT_JSON no está presente en el entorno.');
   }

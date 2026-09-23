@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { google } from 'googleapis';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || '';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GOOGLE_SA_JSON = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
 const DRIVE_ROOT_FOLDER_ID = '1g186tAcQ10eqkUKvT9s_eDdB2S-zCeOO'; // Carpeta ETIQUETAS
@@ -75,6 +76,14 @@ async function uploadTextToDrive(drive: any, parentId: string, fileName: string,
 
 export async function POST(req: Request) {
   try {
+    if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_WEBHOOK_SECRET) {
+      return NextResponse.json({ success: false, error: 'Integración no configurada.' }, { status: 503 });
+    }
+
+    if (req.headers.get('x-telegram-bot-api-secret-token') !== TELEGRAM_WEBHOOK_SECRET) {
+      return NextResponse.json({ success: false, error: 'No autorizado.' }, { status: 401 });
+    }
+
     const update = await req.json();
 
     if (!update.message || !update.message.photo) {
