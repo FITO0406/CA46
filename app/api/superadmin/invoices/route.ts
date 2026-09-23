@@ -28,8 +28,6 @@ export async function GET(request: Request) {
       companyName: companyMap.get(invoice.company_id)?.name || invoice.customer_snapshot?.businessName || invoice.customer_snapshot?.legalName || 'Empresa',
     }));
 
-    const verifactuConnectorReady = process.env.VERIFACTU_CONNECTOR_READY === 'true';
-
     return NextResponse.json({
       ok: true,
       settings: {
@@ -43,11 +41,8 @@ export async function GET(request: Request) {
         issuerCountry: settings.issuer_country,
         issuerEmail: settings.issuer_email,
         seriesPrefix: settings.series_prefix,
-        rectificationSeriesPrefix: settings.rectification_series_prefix,
         vatRate: Number(settings.vat_rate),
         autoEmail: settings.auto_email,
-        verifactuMode: settings.verifactu_mode,
-        verifactuConnectorReady,
         ready: serviceInvoiceSettingsReady(settings),
         emailProviderReady: Boolean(process.env.RESEND_API_KEY && process.env.INVOICE_FROM_EMAIL),
       },

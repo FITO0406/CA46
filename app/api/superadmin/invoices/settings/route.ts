@@ -12,19 +12,10 @@ export async function PATCH(request: Request) {
 
     const body = await request.json().catch(() => ({}));
     const seriesPrefix = String(body?.seriesPrefix || 'CA46').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 20) || 'CA46';
-    const rectificationSeriesPrefix = String(body?.rectificationSeriesPrefix || `R-${seriesPrefix}`).trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 20) || `R-${seriesPrefix}`;
     const vatRate = Number(body?.vatRate);
     if (!Number.isFinite(vatRate) || vatRate < 0 || vatRate > 100) {
       return NextResponse.json({ ok: false, error: 'IVA no válido.' }, { status: 400 });
     }
-
-    const requestedVerifactuMode = String(body?.verifactuMode || 'off');
-    const connectorReady = process.env.VERIFACTU_CONNECTOR_READY === 'true';
-    const verifactuMode = requestedVerifactuMode === 'active' && connectorReady
-      ? 'active'
-      : requestedVerifactuMode === 'prepared' || requestedVerifactuMode === 'active'
-        ? 'prepared'
-        : 'off';
 
     const update = {
       enabled: Boolean(body?.enabled),
@@ -37,10 +28,8 @@ export async function PATCH(request: Request) {
       issuer_country: String(body?.issuerCountry || 'España').trim().slice(0, 100) || 'España',
       issuer_email: String(body?.issuerEmail || '').trim().slice(0, 180),
       series_prefix: seriesPrefix,
-      rectification_series_prefix: rectificationSeriesPrefix,
       vat_rate: vatRate,
       auto_email: Boolean(body?.autoEmail),
-      verifactu_mode: verifactuMode,
       updated_at: new Date().toISOString(),
     };
 
@@ -56,12 +45,10 @@ export async function PATCH(request: Request) {
       superAdminUserId: access.context.userId,
       enabled: data.enabled,
       seriesPrefix: data.series_prefix,
-      rectificationSeriesPrefix: data.rectification_series_prefix,
       autoEmail: data.auto_email,
-      verifactuMode: data.verifactu_mode,
     });
 
-    return NextResponse.json({ ok: true, verifactuMode: data.verifactu_mode, connectorReady }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error('superadmin/invoices/settings error:', error);
     return NextResponse.json({ ok: false, error: 'No se pudo guardar la configuración fiscal.' }, { status: 500 });

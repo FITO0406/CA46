@@ -14,10 +14,8 @@ type InvoiceSettingsRow = {
   issuer_country: string;
   issuer_email: string;
   series_prefix: string;
-  rectification_series_prefix: string;
   vat_rate: number | string;
   auto_email: boolean;
-  verifactu_mode: 'off' | 'prepared' | 'active';
 };
 
 type IssueInput = {
@@ -257,7 +255,6 @@ function wrapPdfText(value: unknown, maxChars = 62) {
 }
 
 export function buildServiceInvoicePdf(invoice: ServiceInvoice) {
-  const extra = invoice as ServiceInvoice & Record<string, any>;
   const issuer = invoice.issuer_snapshot || {};
   const customer = invoice.customer_snapshot || {};
   const vatLabel = Number(invoice.vat_rate).toFixed(2).replace('.00', '');
@@ -265,14 +262,9 @@ export function buildServiceInvoicePdf(invoice: ServiceInvoice) {
   const period = invoice.service_period_start || invoice.service_period_end
     ? `${dateEs(invoice.service_period_start) || '-'} - ${dateEs(invoice.service_period_end) || '-'}`
     : 'Servicio mensual';
-  const docTitle = extra.status === 'voided'
-    ? 'FACTURA ANULADA'
-    : extra.invoice_kind === 'rectification' || invoice.status === 'rectified'
-      ? 'FACTURA RECTIFICATIVA'
-      : 'FACTURA';
+  const docTitle = invoice.status === 'rectified' ? 'FACTURA RECTIFICATIVA' : 'FACTURA';
   const paymentReference = invoice.payment_reference ? latin1(invoice.payment_reference).slice(0, 54) : '';
   const descriptionLines = wrapPdfText(invoice.description, 56).slice(0, 3);
-  const verifactuAccepted = extra.fiscal_mode === 'verifactu' && extra.verifactu_status === 'accepted' && Boolean(extra.verifactu_qr_url);
 
   const commands: string[] = [
     'q 0.035 0.047 0.055 rg 0 744 595 98 re f Q',
@@ -312,9 +304,6 @@ export function buildServiceInvoicePdf(invoice: ServiceInvoice) {
     pdfText(planNames[invoice.plan] || invoice.plan, 332, 500, 9),
     pdfText(period, 411, 500, 8),
     pdfText(money(invoice.total_cents, invoice.currency), 502, 500, 9, true),
-    extra.invoice_kind === 'rectification' ? pdfText(`Rectifica factura: ${extra.rectifies_invoice_number || '-'}`, 54, 432, 8, true) : '',
-    extra.rectification_reason ? pdfText(`Motivo: ${latin1(extra.rectification_reason).slice(0, 84)}`, 54, 417, 8) : '',
-    extra.status === 'voided' ? pdfText(`Motivo de anulacion: ${latin1(extra.void_reason || '').slice(0, 84)}`, 54, 432, 8, true) : '',
 
     'q 0.93 0.94 0.95 rg 330 338 223 90 re f Q',
     pdfText('Base imponible', 348, 400, 9),
@@ -329,15 +318,13 @@ export function buildServiceInvoicePdf(invoice: ServiceInvoice) {
     'q 0.84 0.85 0.86 RG 42 326 265 102 re S Q',
     pdfText('PAGO', 56, 404, 9, true),
     pdfText(`Forma de pago: ${paymentLabel}`, 56, 382, 9),
-    pdfText(`Estado: ${extra.status === 'voided' ? 'Anulada' : extra.invoice_kind === 'rectification' ? 'Rectificativa' : 'Pagada'}`, 56, 363, 9, true),
+    pdfText(`Estado: Pagada`, 56, 363, 9, true),
     paymentReference ? pdfText(`Referencia: ${paymentReference}`, 56, 344, 8) : '',
 
     'q 0.90 0.91 0.92 RG 42 287 511 0 re S Q',
-    verifactuAccepted ? pdfText('VERI*FACTU - Factura verificable en la sede electronica de la AEAT', 42, 279, 8, true) : '',
-    verifactuAccepted ? pdfText(`Contenido QR tributario: ${latin1(extra.verifactu_qr_url).slice(0, 88)}`, 42, 264, 7) : '',
-    pdfText('Documento generado electronicamente por K46.', 42, 244, 8),
-    pdfText(`Factura ${invoice.invoice_number} · ${dateEs(invoice.issued_at)}`, 42, 227, 8),
-    pdfText('Conserva este documento como justificante de la prestacion del servicio y del pago.', 42, 210, 8),
+    pdfText('Documento generado electronicamente por K46.', 42, 265, 8),
+    pdfText(`Factura ${invoice.invoice_number} · ${dateEs(invoice.issued_at)}`, 42, 248, 8),
+    pdfText('Conserva este documento como justificante de la prestacion del servicio y del pago.', 42, 231, 8),
   ].filter(Boolean);
 
   const stream = commands.join('\n');
@@ -367,7 +354,6 @@ export async function sendServiceInvoiceEmail(invoice: ServiceInvoice) {
   const apiKey = String(process.env.RESEND_API_KEY || '').trim();
   const from = String(process.env.INVOICE_FROM_EMAIL || '').trim();
   const to = String(invoice.email_to || invoice.customer_snapshot?.email || '').trim();
-  const extra = invoice as ServiceInvoice & Record<string, any>;
 
   if (!apiKey || !from) {
     await supabaseAdmin.from('service_invoices').update({
@@ -391,8 +377,8 @@ export async function sendServiceInvoiceEmail(invoice: ServiceInvoice) {
     body: JSON.stringify({
       from,
       to: [to],
-      subject: `${extra.invoice_kind === 'rectification' ? 'Factura rectificativa' : 'Factura'} ${invoice.invoice_number} · CA46`,
-      html: `<p>Hola,</p><p>Adjuntamos la ${extra.invoice_kind === 'rectification' ? 'factura rectificativa' : 'factura'} <strong>${invoice.invoice_number}</strong> correspondiente a ${invoice.description}.</p><p>Total: <strong>${money(invoice.total_cents, invoice.currency)}</strong>.</p><p>Gracias por utilizar CA46.</p>`,
+      subject: `Factura ${invoice.invoice_number} · CA46`,
+      html: `<p>Hola,</p><p>Adjuntamos la factura <strong>${invoice.invoice_number}</strong> correspondiente a ${invoice.description}.</p><p>Total: <strong>${money(invoice.total_cents, invoice.currency)}</strong>.</p><p>Gracias por utilizar CA46.</p>`,
       attachments: [{ filename: `${invoice.invoice_number}.pdf`, content: pdf.toString('base64') }],
     }),
   });
