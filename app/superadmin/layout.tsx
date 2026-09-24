@@ -6,6 +6,7 @@ import SuperAdminGate from '@/components/SuperAdminGate';
 
 const navItems = [
   { href: '/superadmin', label: 'Panel' },
+  { href: '/superadmin/director', label: 'DIRECTOR CA46' },
   { href: '/superadmin/empresas', label: 'Empresas' },
   { href: '/superadmin/planes', label: 'Planes y cobros' },
   { href: '/superadmin/facturas', label: 'Facturas' },
