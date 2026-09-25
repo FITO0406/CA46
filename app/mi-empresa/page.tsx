@@ -15,6 +15,7 @@ import {
   saveTenantCompanyConfig,
   tenantAuthorizationHeader,
 } from '@/lib/tenant-company-config';
+import TenantCompanyCard from '@/components/TenantCompanyCard';
 
 const inputClass =
   'w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-bold text-white outline-none transition focus:border-orange-400';
@@ -182,6 +183,8 @@ export default function MiEmpresaPage() {
             Pon los datos de tu pescadería una vez y CA46 los usará siempre para tu empresa.
           </p>
         </section>
+
+        {!loading ? <TenantCompanyCard companyName={config.businessName || legacyDraft?.businessName || ''} /> : null}
 
         {loading ? (
           <div className="mb-6 rounded-2xl border border-white/10 bg-white/[.035] p-5 text-sm font-black text-slate-400">
