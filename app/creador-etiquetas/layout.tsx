@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import CompanyAreaNav from '@/components/CompanyAreaNav';
 import PrivateAreaGate from '@/components/PrivateAreaGate';
 
 export default function CreadorEtiquetasLayout({ children }: { children: ReactNode }) {
@@ -11,6 +12,7 @@ export default function CreadorEtiquetasLayout({ children }: { children: ReactNo
 
   return (
     <PrivateAreaGate areaName="Creador de etiquetas">
+      <CompanyAreaNav />
       {children}
 
       <div className="fixed bottom-20 left-4 z-40 flex gap-2 sm:bottom-5">
