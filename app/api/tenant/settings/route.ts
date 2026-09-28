@@ -36,8 +36,7 @@ function cleanArray(value: unknown) {
   return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
 }
 
-function accessError(access: Awaited<ReturnType<typeof tenantContextForRequest>>) {
-  if (access.ok) return null;
+function accessError(access: { ok: false; status: number; error: string }) {
   return NextResponse.json(
     { error: access.error },
     { status: access.status, headers: { 'Cache-Control': 'no-store' } },
@@ -47,7 +46,17 @@ function accessError(access: Awaited<ReturnType<typeof tenantContextForRequest>>
 export async function GET(request: Request) {
   try {
     const access = await tenantContextForRequest(request);
-    if (!access.ok) return accessError(access)!;
+    if (!access.ok) {
+      // Mi empresa también es la pantalla de alta. Un usuario autenticado que aún
+      // no tiene company_id debe poder entrar y activar su empresa.
+      if (access.status === 409) {
+        return NextResponse.json(
+          { ok: true, settings: null, code: 'TENANT_REQUIRED' },
+          { headers: { 'Cache-Control': 'no-store' } },
+        );
+      }
+      return accessError(access);
+    }
 
     const { data, error } = await supabaseAdmin
       .from('company_settings')
@@ -78,7 +87,7 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   try {
     const access = await tenantContextForRequest(request);
-    if (!access.ok) return accessError(access)!;
+    if (!access.ok) return accessError(access);
     if (access.context.role !== 'admin_empresa') {
       return NextResponse.json(
         { error: 'Solo el administrador puede modificar Mi empresa.' },
