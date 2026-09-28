@@ -1,8 +1,9 @@
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabaseClient';
 import type { CompanyConfig } from '@/lib/company-config';
 
 async function accessToken() {
-  const { data } = await supabase.auth.getSession();
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
   return data.session?.access_token || '';
 }
 
