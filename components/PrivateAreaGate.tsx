@@ -24,6 +24,21 @@ type TenantPayload = {
   };
 };
 
+const VALIDATION_TIMEOUT_MS = 12_000;
+
+async function fetchJsonWithTimeout(url: string, init: RequestInit) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), VALIDATION_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    const payload = await response.json().catch(() => ({}));
+    return { response, payload };
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 export default function PrivateAreaGate({ children, areaName = 'Zona privada', requireTenant = true }: Props) {
   const [loading, setLoading] = useState(true);
   const [hasSession, setHasSession] = useState(false);
@@ -36,31 +51,32 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
   const [signingIn, setSigningIn] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const validatedUserId = useRef<string | null>(null);
-  const validatingUserId = useRef<string | null>(null);
+  const validationSequence = useRef(0);
 
   useEffect(() => {
     let mounted = true;
-    let validationId = 0;
 
-    async function validateSession(session: Session | null, showBlockingLoader = true) {
-      const currentValidation = ++validationId;
+    function resetSession() {
+      validationSequence.current += 1;
+      validatedUserId.current = null;
+      setHasSession(false);
+      setAllowed(false);
+      setTenant(null);
+      setUserEmail('');
+      setAccessError('');
+      setLoading(false);
+    }
+
+    async function validateSession(session: Session | null, blockScreen = true) {
       if (!mounted) return;
 
       if (!session) {
-        validatedUserId.current = null;
-        validatingUserId.current = null;
-        setHasSession(false);
-        setAllowed(false);
-        setTenant(null);
-        setUserEmail('');
-        setAccessError('');
-        setLoading(false);
+        resetSession();
         return;
       }
 
-      // Supabase puede emitir SIGNED_IN/TOKEN_REFRESHED al volver de la cámara o al
-      // recuperar el foco. Si ya validamos a este mismo usuario, NO desmontamos los
-      // hijos: así se conserva el File seleccionado por Android.
+      // Renovaciones de token, volver de la cámara o recuperar el foco no deben
+      // desmontar una zona que ya fue validada para el mismo usuario.
       if (validatedUserId.current === session.user.id) {
         setHasSession(true);
         setUserEmail(session.user.email || '');
@@ -68,22 +84,25 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
         return;
       }
 
-      if (validatingUserId.current === session.user.id) return;
-      validatingUserId.current = session.user.id;
-
-      if (showBlockingLoader) setLoading(true);
-      setAccessError('');
+      const currentValidation = ++validationSequence.current;
+      if (blockScreen) setLoading(true);
       setHasSession(true);
+      setAllowed(false);
+      setTenant(null);
+      setAccessError('');
       setUserEmail(session.user.email || '');
 
       try {
         const headers = { Authorization: `Bearer ${session.access_token}` };
-        let response = await fetch('/api/tenant/me', { headers, cache: 'no-store' });
-        let payload = await response.json().catch(() => ({}));
+        let { response, payload } = await fetchJsonWithTimeout('/api/tenant/me', {
+          headers,
+          cache: 'no-store',
+        });
 
         if (response.status === 401) {
-          validatedUserId.current = null;
-          validatingUserId.current = null;
+          if (currentValidation === validationSequence.current) {
+            validatedUserId.current = null;
+          }
           await supabase.auth.signOut();
           return;
         }
@@ -94,21 +113,25 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
 
         let nextTenant = (payload?.tenant || null) as TenantPayload | null;
 
+        // Compatibilidad con altas antiguas: solo crea el vínculo si el registro
+        // guardó explícitamente el nombre de la empresa en los metadatos del usuario.
         if (!nextTenant && session.user.user_metadata?.company_name) {
-          response = await fetch('/api/tenant/me', {
+          ({ response, payload } = await fetchJsonWithTimeout('/api/tenant/me', {
             method: 'POST',
             headers: { ...headers, 'Content-Type': 'application/json' },
             body: JSON.stringify({
               companyName: session.user.user_metadata.company_name,
               plan: session.user.user_metadata.plan || 'gratis',
             }),
-          });
-          payload = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(payload?.error || 'No se pudo vincular la cuenta con su empresa.');
+          }));
+
+          if (!response.ok) {
+            throw new Error(payload?.error || 'No se pudo vincular la cuenta con su empresa.');
+          }
           nextTenant = (payload?.tenant || null) as TenantPayload | null;
         }
 
-        if (!mounted || currentValidation !== validationId) return;
+        if (!mounted || currentValidation !== validationSequence.current) return;
         setTenant(nextTenant);
 
         if (!nextTenant) {
@@ -116,8 +139,8 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
             setAllowed(false);
             setAccessError('Tu usuario está autenticado, pero todavía no está vinculado a una empresa CA46. Entra en Mi empresa para completar la vinculación.');
           } else {
-            setAllowed(true);
             validatedUserId.current = session.user.id;
+            setAllowed(true);
           }
           return;
         }
@@ -137,48 +160,70 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
         validatedUserId.current = session.user.id;
         setAllowed(true);
       } catch (validationError: any) {
-        if (!mounted || currentValidation !== validationId) return;
+        if (!mounted || currentValidation !== validationSequence.current) return;
         validatedUserId.current = null;
         setAllowed(false);
-        setAccessError(validationError?.message || 'No se pudo validar el acceso multiempresa.');
+        setAccessError(
+          validationError?.name === 'AbortError'
+            ? 'La validación está tardando demasiado. Comprueba la conexión y vuelve a intentarlo.'
+            : validationError?.message || 'No se pudo validar el acceso multiempresa.',
+        );
       } finally {
-        if (validatingUserId.current === session.user.id) validatingUserId.current = null;
-        if (mounted && currentValidation === validationId) setLoading(false);
+        if (mounted && currentValidation === validationSequence.current) {
+          setLoading(false);
+        }
       }
     }
 
-    supabase.auth.getSession().then(({ data }) => validateSession(data.session, true));
+    // getSession es la única fuente del estado inicial. Ignoramos INITIAL_SESSION
+    // del listener para evitar dos validaciones simultáneas que puedan anularse entre sí.
+    void supabase.auth.getSession()
+      .then(({ data, error: sessionError }) => {
+        if (sessionError) throw sessionError;
+        return validateSession(data.session, true);
+      })
+      .catch((sessionError: any) => {
+        if (!mounted) return;
+        setHasSession(false);
+        setAllowed(false);
+        setLoading(false);
+        setAccessError(sessionError?.message || 'No se pudo recuperar la sesión.');
+      });
 
     const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION') return;
+
       if (event === 'SIGNED_OUT' || !session) {
-        void validateSession(null, false);
+        resetSession();
         return;
       }
 
-      // Al volver de cámara Android suelen llegar eventos de reanudación/refresh.
-      // Para el mismo usuario preservamos la pantalla y su estado local.
       if (validatedUserId.current === session.user.id) {
         setHasSession(true);
         setUserEmail(session.user.email || '');
         return;
       }
 
-      void validateSession(session, validatedUserId.current === null);
+      void validateSession(session, true);
     });
 
     return () => {
       mounted = false;
+      validationSequence.current += 1;
       subscription.subscription.unsubscribe();
     };
   }, [requireTenant]);
 
   async function handleLogin(event: FormEvent) {
     event.preventDefault();
-    if (!email.trim() || !password) return;
+    if (!email.trim() || !password || signingIn) return;
     setSigningIn(true);
     setError('');
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
 
     if (signInError) {
       setError('No hemos podido entrar. Revisa email, contraseña y que hayas confirmado tu correo.');
@@ -192,7 +237,7 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
 
   async function handleLogout() {
     validatedUserId.current = null;
-    validatingUserId.current = null;
+    validationSequence.current += 1;
     await supabase.auth.signOut();
   }
 
