@@ -3,12 +3,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
+type PlanId = 'gratis' | 'autonomo' | 'empresa' | 'personalizado';
+
 type Tenant = {
   company: {
     id: string;
     name: string;
     slug: string;
-    plan: 'gratis' | 'autonomo' | 'empresa' | 'personalizado';
+    plan: PlanId;
+    effective_plan?: PlanId;
+    access_source?: 'base' | 'superadmin';
+    complimentary_access?: boolean;
+    complimentary_ends_at?: string | null;
+    custom_features?: Record<string, boolean>;
     status: string;
     created_at?: string;
     updated_at?: string;
@@ -19,7 +26,7 @@ type Tenant = {
   };
 };
 
-const PLAN_LABELS: Record<Tenant['company']['plan'], string> = {
+const PLAN_LABELS: Record<PlanId, string> = {
   gratis: 'Gratis',
   autonomo: 'Autónomo',
   empresa: 'Empresa',
@@ -33,7 +40,8 @@ export default function TenantCompanyCard({ companyName }: { companyName: string
   const [error, setError] = useState('');
 
   const requestTenant = useCallback(async (method: 'GET' | 'POST' = 'GET') => {
-    const { data } = await supabase.auth.getSession();
+    const { data, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
     const token = data.session?.access_token;
     if (!token) {
       setLoading(false);
@@ -43,6 +51,7 @@ export default function TenantCompanyCard({ companyName }: { companyName: string
     const plan = typeof window !== 'undefined' ? window.localStorage.getItem('ca46:selected-plan') || 'gratis' : 'gratis';
     const response = await fetch('/api/tenant/me', {
       method,
+      cache: 'no-store',
       headers: {
         Authorization: `Bearer ${token}`,
         ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
@@ -122,15 +131,27 @@ export default function TenantCompanyCard({ companyName }: { companyName: string
     );
   }
 
+  const effectivePlan = tenant.company.effective_plan || tenant.company.plan;
+  const complimentary = Boolean(tenant.company.complimentary_access && tenant.company.access_source === 'superadmin');
+
   return (
     <section className="mb-6 rounded-[2rem] border border-emerald-400/20 bg-emerald-400/[.045] p-6">
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div>
           <p className="text-xs font-black uppercase tracking-[.2em] text-emerald-300">Empresa multiempresa activa</p>
           <h2 className="mt-2 text-2xl font-black">{tenant.company.name}</h2>
-          <p className="mt-2 text-sm text-slate-500">Cada dato que migremos a la nueva arquitectura quedará asociado a este empresa_id.</p>
+          <p className="mt-2 text-sm text-slate-500">Los datos de esta zona quedan asociados a este empresa_id.</p>
+          {complimentary ? (
+            <p className="mt-3 inline-flex rounded-full border border-sky-400/20 bg-sky-400/[.07] px-3 py-1 text-xs font-black text-sky-300">
+              ✓ Acceso especial concedido desde SuperAdmin
+              {tenant.company.complimentary_ends_at ? ` · hasta ${new Date(tenant.company.complimentary_ends_at).toLocaleDateString('es-ES')}` : ' · sin fecha de fin'}
+            </p>
+          ) : null}
         </div>
-        <span className="rounded-full border border-orange-400/20 bg-orange-500/10 px-4 py-2 text-sm font-black text-orange-300">Plan {PLAN_LABELS[tenant.company.plan]}</span>
+        <div className="flex flex-col items-end gap-2">
+          <span className="rounded-full border border-orange-400/20 bg-orange-500/10 px-4 py-2 text-sm font-black text-orange-300">Plan {PLAN_LABELS[effectivePlan]}</span>
+          {effectivePlan !== tenant.company.plan ? <span className="text-[11px] font-bold text-slate-500">Base: {PLAN_LABELS[tenant.company.plan]}</span> : null}
+        </div>
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
