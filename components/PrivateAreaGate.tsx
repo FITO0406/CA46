@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, ReactNode, useEffect, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabaseClient';
@@ -35,27 +35,44 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
   const [accessError, setAccessError] = useState('');
   const [signingIn, setSigningIn] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const validatedUserId = useRef<string | null>(null);
+  const validatingUserId = useRef<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
     let validationId = 0;
 
-    async function validateSession(session: Session | null) {
+    async function validateSession(session: Session | null, showBlockingLoader = true) {
       const currentValidation = ++validationId;
       if (!mounted) return;
 
-      setLoading(true);
-      setAccessError('');
-      setTenant(null);
-
       if (!session) {
+        validatedUserId.current = null;
+        validatingUserId.current = null;
         setHasSession(false);
         setAllowed(false);
+        setTenant(null);
         setUserEmail('');
+        setAccessError('');
         setLoading(false);
         return;
       }
 
+      // Supabase puede emitir SIGNED_IN/TOKEN_REFRESHED al volver de la cámara o al
+      // recuperar el foco. Si ya validamos a este mismo usuario, NO desmontamos los
+      // hijos: así se conserva el File seleccionado por Android.
+      if (validatedUserId.current === session.user.id) {
+        setHasSession(true);
+        setUserEmail(session.user.email || '');
+        setLoading(false);
+        return;
+      }
+
+      if (validatingUserId.current === session.user.id) return;
+      validatingUserId.current = session.user.id;
+
+      if (showBlockingLoader) setLoading(true);
+      setAccessError('');
       setHasSession(true);
       setUserEmail(session.user.email || '');
 
@@ -65,6 +82,8 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
         let payload = await response.json().catch(() => ({}));
 
         if (response.status === 401) {
+          validatedUserId.current = null;
+          validatingUserId.current = null;
           await supabase.auth.signOut();
           return;
         }
@@ -75,7 +94,6 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
 
         let nextTenant = (payload?.tenant || null) as TenantPayload | null;
 
-        // Reparación segura para cuentas creadas desde el registro que todavía no tengan vínculo.
         if (!nextTenant && session.user.user_metadata?.company_name) {
           response = await fetch('/api/tenant/me', {
             method: 'POST',
@@ -99,6 +117,7 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
             setAccessError('Tu usuario está autenticado, pero todavía no está vinculado a una empresa CA46. Entra en Mi empresa para completar la vinculación.');
           } else {
             setAllowed(true);
+            validatedUserId.current = session.user.id;
           }
           return;
         }
@@ -115,20 +134,36 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
           return;
         }
 
+        validatedUserId.current = session.user.id;
         setAllowed(true);
       } catch (validationError: any) {
         if (!mounted || currentValidation !== validationId) return;
+        validatedUserId.current = null;
         setAllowed(false);
         setAccessError(validationError?.message || 'No se pudo validar el acceso multiempresa.');
       } finally {
+        if (validatingUserId.current === session.user.id) validatingUserId.current = null;
         if (mounted && currentValidation === validationId) setLoading(false);
       }
     }
 
-    supabase.auth.getSession().then(({ data }) => validateSession(data.session));
+    supabase.auth.getSession().then(({ data }) => validateSession(data.session, true));
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      void validateSession(session);
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        void validateSession(null, false);
+        return;
+      }
+
+      // Al volver de cámara Android suelen llegar eventos de reanudación/refresh.
+      // Para el mismo usuario preservamos la pantalla y su estado local.
+      if (validatedUserId.current === session.user.id) {
+        setHasSession(true);
+        setUserEmail(session.user.email || '');
+        return;
+      }
+
+      void validateSession(session, validatedUserId.current === null);
     });
 
     return () => {
@@ -156,6 +191,8 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
   }
 
   async function handleLogout() {
+    validatedUserId.current = null;
+    validatingUserId.current = null;
     await supabase.auth.signOut();
   }
 
