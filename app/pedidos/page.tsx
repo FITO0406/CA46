@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabaseClient';
 import type { Pedido } from '@/lib/types';
 
 export default function PedidosPage() {
@@ -10,41 +10,47 @@ export default function PedidosPage() {
 
   const reproducirSonido = () => {
     const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1010/1010-preview.mp3');
-    audio.play().catch(err => console.log('Sonido bloqueado por el navegador', err));
+    audio.play().catch((error) => console.log('Sonido bloqueado por el navegador', error));
   };
 
   useEffect(() => {
+    let active = true;
+
     const fetchPedidos = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('pedidos')
         .select('*')
         .in('estado', ['pendiente', 'preparando'])
         .order('creado_en', { ascending: true })
         .returns<Pedido[]>();
 
-      if (data) setPedidos(data);
+      if (!active) return;
+      if (error) {
+        console.error('pedidos load error:', error);
+        return;
+      }
+      setPedidos(data || []);
     };
 
-    fetchPedidos();
+    void fetchPedidos();
 
     const channel = supabase
       .channel('pedidos-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          reproducirSonido();
-        }
-        fetchPedidos();
+        if (payload.eventType === 'INSERT') reproducirSonido();
+        void fetchPedidos();
       })
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      active = false;
+      void supabase.removeChannel(channel);
     };
   }, []);
 
   const actualizarEstado = async (id: number, nuevoEstado: string) => {
     const { error } = await supabase.from('pedidos').update({ estado: nuevoEstado }).eq('id', id);
-    if (error) alert(`Error: ${error.message}`);
+    if (error) window.alert(`Error: ${error.message}`);
   };
 
   const pedidosDomicilio = pedidos.filter((pedido) => pedido.tipo_entrega === 'domicilio');
@@ -54,12 +60,10 @@ export default function PedidosPage() {
     <div className="min-h-screen bg-slate-950 text-white">
       <header className="flex items-center justify-between border-b border-slate-800 bg-slate-900 p-6 shadow-xl">
         <div>
-          <h1 className="text-4xl font-black uppercase italic tracking-tighter text-indigo-400">
-            Gestion de pedidos
-          </h1>
-          <p className="font-bold text-slate-500">Pescaderia R. Vicente - Panel realtime</p>
+          <h1 className="text-4xl font-black uppercase italic tracking-tighter text-indigo-400">Gestión de pedidos</h1>
+          <p className="font-bold text-slate-500">CA46 · Panel en tiempo real</p>
           {!sonidoHabilitado && (
-            <button 
+            <button
               onClick={() => {
                 setSonidoHabilitado(true);
                 reproducirSonido();
@@ -70,23 +74,16 @@ export default function PedidosPage() {
             </button>
           )}
         </div>
-        <div className="text-right">
-          <div className="text-5xl font-black leading-none text-white">
-            {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </div>
-        </div>
       </header>
 
       <main className="flex min-h-[calc(100vh-113px)] overflow-hidden">
         <section className="flex flex-1 flex-col border-r border-slate-800 bg-slate-900/30">
           <div className="flex items-center justify-between border-b border-rose-500/30 bg-rose-600/10 p-6">
             <h2 className="flex items-center gap-3 text-2xl font-black uppercase tracking-widest text-rose-500">
-              <span className="h-4 w-4 rounded-full bg-rose-500 animate-ping" />
+              <span className="h-4 w-4 animate-ping rounded-full bg-rose-500" />
               A domicilio (prioridad)
             </h2>
-            <span className="rounded-full bg-rose-500 px-4 py-1 text-xl font-black text-white">
-              {pedidosDomicilio.length}
-            </span>
+            <span className="rounded-full bg-rose-500 px-4 py-1 text-xl font-black text-white">{pedidosDomicilio.length}</span>
           </div>
 
           <div className="flex-1 space-y-4 overflow-y-auto p-4">
@@ -94,21 +91,15 @@ export default function PedidosPage() {
               <OrderCard key={pedido.id} pedido={pedido} onUpdate={actualizarEstado} />
             ))}
             {pedidosDomicilio.length === 0 && (
-              <p className="py-20 text-center text-xl italic text-slate-700">
-                Sin repartos pendientes
-              </p>
+              <p className="py-20 text-center text-xl italic text-slate-700">Sin repartos pendientes</p>
             )}
           </div>
         </section>
 
         <section className="flex flex-1 flex-col">
           <div className="flex items-center justify-between border-b border-indigo-500/30 bg-indigo-600/10 p-6">
-            <h2 className="text-2xl font-black uppercase tracking-widest text-indigo-400">
-              Recoger en tienda
-            </h2>
-            <span className="rounded-full bg-indigo-500 px-4 py-1 text-xl font-black text-white">
-              {pedidosRecogida.length}
-            </span>
+            <h2 className="text-2xl font-black uppercase tracking-widest text-indigo-400">Recoger en tienda</h2>
+            <span className="rounded-full bg-indigo-500 px-4 py-1 text-xl font-black text-white">{pedidosRecogida.length}</span>
           </div>
 
           <div className="flex-1 space-y-4 overflow-y-auto p-4">
@@ -116,9 +107,7 @@ export default function PedidosPage() {
               <OrderCard key={pedido.id} pedido={pedido} onUpdate={actualizarEstado} />
             ))}
             {pedidosRecogida.length === 0 && (
-              <p className="py-20 text-center text-xl italic text-slate-700">
-                Sin recogidas pendientes
-              </p>
+              <p className="py-20 text-center text-xl italic text-slate-700">Sin recogidas pendientes</p>
             )}
           </div>
         </section>
@@ -127,13 +116,7 @@ export default function PedidosPage() {
   );
 }
 
-function OrderCard({
-  pedido,
-  onUpdate,
-}: {
-  pedido: Pedido;
-  onUpdate: (id: number, nuevoEstado: string) => void;
-}) {
+function OrderCard({ pedido, onUpdate }: { pedido: Pedido; onUpdate: (id: number, nuevoEstado: string) => void }) {
   const [itemsListos, setItemsListos] = useState<Record<number, boolean>>({});
 
   const toggleItem = (index: number) => {
@@ -151,9 +134,7 @@ function OrderCard({
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-3xl font-black uppercase leading-tight text-white">
-              {pedido.nombre_cliente}
-            </h3>
+            <h3 className="text-3xl font-black uppercase leading-tight text-white">{pedido.nombre_cliente}</h3>
             <div className="text-2xl font-black text-slate-500">#{pedido.id}</div>
           </div>
 
@@ -165,35 +146,19 @@ function OrderCard({
               const isChecked = itemsListos[index];
 
               return (
-                <div
+                <button
                   key={`${pedido.id}-${index}`}
+                  type="button"
                   onClick={() => toggleItem(index)}
-                  className={`cursor-pointer select-none rounded-2xl border-2 p-4 transition-all ${
+                  className={`w-full select-none rounded-2xl border-2 p-4 text-left transition-all ${
                     isChecked
                       ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400 shadow-inner'
                       : 'border-slate-700 bg-slate-900/50 text-slate-300'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className={`text-xl font-bold ${isChecked ? 'line-through opacity-50' : ''}`}>
-                      {namePart}
-                    </span>
-                    {isChecked && (
-                      <span className="rounded-full bg-emerald-500 p-1 text-white">
-                        <svg
-                          viewBox="0 0 24 24"
-                          width="20"
-                          height="20"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      </span>
-                    )}
+                    <span className={`text-xl font-bold ${isChecked ? 'line-through opacity-50' : ''}`}>{namePart}</span>
+                    {isChecked && <span className="rounded-full bg-emerald-500 px-2 py-1 text-sm font-black text-white">✓</span>}
                   </div>
                   {prepPart && (
                     <div
@@ -206,7 +171,7 @@ function OrderCard({
                       {prepPart}
                     </div>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>
@@ -215,9 +180,7 @@ function OrderCard({
 
       {pedido.tipo_entrega === 'domicilio' && pedido.direccion && (
         <div className="rounded-2xl border-2 border-rose-400 bg-rose-500 p-4 shadow-lg">
-          <p className="mb-1 text-xs font-black uppercase tracking-widest text-rose-100">
-            Direccion de entrega:
-          </p>
+          <p className="mb-1 text-xs font-black uppercase tracking-widest text-rose-100">Dirección de entrega:</p>
           <p className="text-xl font-bold text-white">{pedido.direccion}</p>
         </div>
       )}
@@ -235,7 +198,7 @@ function OrderCard({
             onClick={() => onUpdate(pedido.id, 'listo')}
             className="flex-1 rounded-2xl bg-emerald-500 py-5 text-2xl font-black uppercase tracking-tighter text-white shadow-lg shadow-emerald-900/20"
           >
-            Listo?
+            Listo
           </button>
         )}
       </div>
