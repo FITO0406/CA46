@@ -1,34 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { tenantContextForRequest } from '@/lib/tenant-auth-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-function bearerToken(request: Request) {
-  const authorization = request.headers.get('authorization') || '';
-  const match = authorization.match(/^Bearer\s+(.+)$/i);
-  return match?.[1]?.trim() || '';
-}
-
-async function authenticatedUser(request: Request) {
-  const token = bearerToken(request);
-  if (!token) return null;
-  const { data, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !data.user) return null;
-  return data.user;
-}
-
-async function activeMembership(userId: string) {
-  const { data, error } = await supabaseAdmin
-    .from('company_members')
-    .select('company_id, role, is_active')
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
-}
 
 function toClient(row: any) {
   if (!row) return null;
@@ -61,47 +36,61 @@ function cleanArray(value: unknown) {
   return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
 }
 
+function accessError(access: Awaited<ReturnType<typeof tenantContextForRequest>>) {
+  if (access.ok) return null;
+  return NextResponse.json(
+    { error: access.error },
+    { status: access.status, headers: { 'Cache-Control': 'no-store' } },
+  );
+}
+
 export async function GET(request: Request) {
   try {
-    const user = await authenticatedUser(request);
-    if (!user) return NextResponse.json({ error: 'No autorizado.' }, { status: 401 });
-
-    const membership = await activeMembership(user.id);
-    if (!membership) {
-      return NextResponse.json({ ok: true, settings: null, code: 'TENANT_REQUIRED' }, { headers: { 'Cache-Control': 'no-store' } });
-    }
+    const access = await tenantContextForRequest(request);
+    if (!access.ok) return accessError(access)!;
 
     const { data, error } = await supabaseAdmin
       .from('company_settings')
       .select('*')
-      .eq('company_id', membership.company_id)
+      .eq('company_id', access.context.companyId)
       .maybeSingle();
 
     if (error) throw error;
 
     return NextResponse.json(
-      { ok: true, companyId: membership.company_id, role: membership.role, settings: toClient(data) },
+      {
+        ok: true,
+        companyId: access.context.companyId,
+        role: access.context.role,
+        settings: toClient(data),
+      },
       { headers: { 'Cache-Control': 'no-store' } },
     );
-  } catch {
-    return NextResponse.json({ error: 'No se pudo cargar la configuración.' }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
+  } catch (error) {
+    console.error('tenant/settings GET error:', error);
+    return NextResponse.json(
+      { error: 'No se pudo cargar la configuración.' },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } },
+    );
   }
 }
 
 export async function PUT(request: Request) {
   try {
-    const user = await authenticatedUser(request);
-    if (!user) return NextResponse.json({ error: 'No autorizado.' }, { status: 401 });
-
-    const membership = await activeMembership(user.id);
-    if (!membership) return NextResponse.json({ error: 'Primero debes crear o activar tu empresa.' }, { status: 409 });
-    if (membership.role !== 'admin_empresa') return NextResponse.json({ error: 'Solo el administrador puede modificar Mi empresa.' }, { status: 403 });
+    const access = await tenantContextForRequest(request);
+    if (!access.ok) return accessError(access)!;
+    if (access.context.role !== 'admin_empresa') {
+      return NextResponse.json(
+        { error: 'Solo el administrador puede modificar Mi empresa.' },
+        { status: 403, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
 
     const body = await request.json().catch(() => ({}));
     const labelsHours = Math.max(1, Math.min(720, Number(body?.labelsHours || 72)));
 
     const record = {
-      company_id: membership.company_id,
+      company_id: access.context.companyId,
       business_name: String(body?.businessName || '').trim(),
       legal_name: String(body?.legalName || '').trim(),
       tax_id: String(body?.taxId || '').trim(),
@@ -133,17 +122,22 @@ export async function PUT(request: Request) {
     if (error) throw error;
 
     if (record.business_name) {
-      await supabaseAdmin
+      const { error: companyError } = await supabaseAdmin
         .from('companies')
         .update({ name: record.business_name })
-        .eq('id', membership.company_id);
+        .eq('id', access.context.companyId);
+      if (companyError) throw companyError;
     }
 
     return NextResponse.json(
-      { ok: true, companyId: membership.company_id, settings: toClient(data) },
+      { ok: true, companyId: access.context.companyId, settings: toClient(data) },
       { headers: { 'Cache-Control': 'no-store' } },
     );
-  } catch {
-    return NextResponse.json({ error: 'No se pudo guardar la configuración.' }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
+  } catch (error) {
+    console.error('tenant/settings PUT error:', error);
+    return NextResponse.json(
+      { error: 'No se pudo guardar la configuración.' },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } },
+    );
   }
 }
