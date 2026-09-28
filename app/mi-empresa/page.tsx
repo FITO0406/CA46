@@ -20,6 +20,24 @@ import TenantCompanyCard from '@/components/TenantCompanyCard';
 const inputClass =
   'w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-bold text-white outline-none transition focus:border-orange-400';
 
+type DriveStatus = {
+  connected: boolean;
+  mode: 'none' | 'legacy' | 'oauth';
+  accountEmail: string;
+  folderId: string;
+  folderUrl: string;
+  oauthReady: boolean;
+};
+
+const EMPTY_DRIVE_STATUS: DriveStatus = {
+  connected: false,
+  mode: 'none',
+  accountEmail: '',
+  folderId: '',
+  folderUrl: '',
+  oauthReady: false,
+};
+
 function hasLegacyData(config: CompanyConfig) {
   return Boolean(
     config.businessName.trim() ||
@@ -40,19 +58,43 @@ export default function MiEmpresaPage() {
   const [saved, setSaved] = useState(false);
   const [message, setMessage] = useState('');
   const [driveLoading, setDriveLoading] = useState(false);
+  const [driveStatus, setDriveStatus] = useState<DriveStatus>(EMPTY_DRIVE_STATUS);
 
   useEffect(() => {
     let active = true;
     const legacy = loadCompanyConfig();
     if (hasLegacyData(legacy)) setLegacyDraft(legacy);
 
-    loadTenantCompanyConfig()
-      .then((settings) => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const driveResult = params.get('drive');
+      if (driveResult === 'connected') {
+        const account = params.get('account') || '';
+        setMessage(account ? `✓ Google Drive conectado con ${account}.` : '✓ Google Drive conectado correctamente.');
+      } else if (driveResult === 'error') {
+        setMessage(params.get('reason') || 'No se pudo conectar Google Drive.');
+      }
+      if (driveResult) window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    Promise.all([
+      loadTenantCompanyConfig(),
+      tenantAuthorizationHeader()
+        .then((headers) => fetch('/api/company-drive/status', { cache: 'no-store', headers }))
+        .then(async (response) => {
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload?.error || 'No se pudo consultar Google Drive.');
+          return payload as DriveStatus;
+        })
+        .catch(() => EMPTY_DRIVE_STATUS),
+    ])
+      .then(([settings, status]) => {
         if (!active) return;
         if (settings) {
           setConfig({ ...DEFAULT_COMPANY_CONFIG, ...settings, labelsHours: 72 });
           setLegacyDraft(null);
         }
+        setDriveStatus({ ...EMPTY_DRIVE_STATUS, ...status });
       })
       .catch((error: Error) => {
         if (active) setMessage(error.message || 'No se pudo cargar Mi empresa.');
@@ -119,9 +161,13 @@ export default function MiEmpresaPage() {
     }
   }
 
-  async function prepareDrive() {
+  async function connectDrive() {
     if (!config.businessName.trim()) {
       setMessage('Escribe primero el nombre comercial.');
+      return;
+    }
+    if (!driveStatus.oauthReady) {
+      setMessage('La conexión por cuenta de Google todavía está pendiente de configurar en CA46.');
       return;
     }
 
@@ -131,25 +177,17 @@ export default function MiEmpresaPage() {
       const stored = await saveTenantCompanyConfig({ ...config, labelsHours: 72 });
       setConfig({ ...DEFAULT_COMPANY_CONFIG, ...stored, labelsHours: 72 });
 
-      const response = await fetch('/api/company-drive', {
+      const response = await fetch('/api/company-drive/connect', {
         method: 'POST',
         headers: await tenantAuthorizationHeader(),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload?.error || 'No se pudo preparar Drive.');
+      if (!response.ok) throw new Error(payload?.error || 'No se pudo abrir Google Drive.');
+      if (!payload?.url) throw new Error('Google Drive no devolvió la pantalla de conexión.');
 
-      setConfig((current) => ({
-        ...current,
-        driveConnected: true,
-        driveFolderId: payload.folderId || current.driveFolderId,
-        driveFolderUrl: payload.folderUrl || current.driveFolderUrl,
-      }));
-      window.localStorage.removeItem(COMPANY_STORAGE_KEY);
-      setLegacyDraft(null);
-      setSaved(true);
+      window.location.assign(payload.url);
     } catch (error: any) {
-      setMessage(error?.message || 'No se pudo preparar Drive.');
-    } finally {
+      setMessage(error?.message || 'No se pudo conectar Google Drive.');
       setDriveLoading(false);
     }
   }
@@ -300,12 +338,29 @@ export default function MiEmpresaPage() {
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
                 <h3 className="text-lg font-black">Google Drive</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-400">Carpeta de tu empresa para Facturas, Etiquetas e Histórico.</p>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  Elige la cuenta de Google que usará esta empresa. CA46 creará dentro de Mi unidad una carpeta propia con Facturas, Etiquetas e Histórico.
+                </p>
+
+                {driveStatus.mode === 'oauth' && driveStatus.accountEmail ? (
+                  <p className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-400/[.06] px-3 py-2 text-sm font-bold text-emerald-200">
+                    ✓ Cuenta conectada: {driveStatus.accountEmail}
+                  </p>
+                ) : driveStatus.mode === 'legacy' ? (
+                  <p className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/[.06] px-3 py-2 text-sm font-bold text-amber-100">
+                    Conexión antigua detectada. Elige una cuenta de Google para que la carpeta quede dentro del Drive correcto.
+                  </p>
+                ) : null}
+
+                {!driveStatus.oauthReady ? (
+                  <p className="mt-3 text-xs font-bold text-rose-300">La conexión por cuenta está preparada en CA46, pero falta activar las credenciales OAuth de Google.</p>
+                ) : null}
+
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <button type="button" onClick={prepareDrive} disabled={driveLoading || loading} className="rounded-xl bg-orange-500 px-4 py-3 text-sm font-black text-[#111416] disabled:opacity-50">
-                    {driveLoading ? 'Preparando…' : config.driveConnected ? 'Revisar Drive' : 'Preparar Drive'}
+                  <button type="button" onClick={connectDrive} disabled={driveLoading || loading || !driveStatus.oauthReady} className="rounded-xl bg-orange-500 px-4 py-3 text-sm font-black text-[#111416] disabled:opacity-50">
+                    {driveLoading ? 'Abriendo Google…' : driveStatus.mode === 'oauth' ? 'Cambiar cuenta de Google' : 'Elegir cuenta de Google'}
                   </button>
-                  {config.driveFolderUrl ? <a href={config.driveFolderUrl} target="_blank" rel="noreferrer" className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-black">Abrir carpeta ↗</a> : null}
+                  {(driveStatus.folderUrl || config.driveFolderUrl) ? <a href={driveStatus.folderUrl || config.driveFolderUrl} target="_blank" rel="noreferrer" className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-black">Abrir carpeta ↗</a> : null}
                 </div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
