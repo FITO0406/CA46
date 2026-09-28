@@ -15,25 +15,14 @@ export async function GET(request: Request) {
 
     const { data: settings, error: settingsError } = await supabaseAdmin
       .from('company_settings')
-      .select('drive_connected, drive_folder_id, drive_folder_url')
+      .select('drive_connected, drive_folder_id, drive_folder_url, drive_account_email')
       .eq('company_id', tenant.context.companyId)
       .maybeSingle();
     if (settingsError) throw settingsError;
 
-    const oauthReady = driveOAuthConfigured();
-    let accountEmail = '';
-
-    if (oauthReady) {
-      const { data: credentials, error: credentialsError } = await supabaseAdmin
-        .from('company_drive_credentials')
-        .select('google_account_email')
-        .eq('company_id', tenant.context.companyId)
-        .maybeSingle();
-      if (credentialsError) throw credentialsError;
-      accountEmail = credentials?.google_account_email || '';
-    }
-
+    const accountEmail = String(settings?.drive_account_email || '').trim();
     const connected = Boolean(settings?.drive_connected && settings?.drive_folder_id);
+
     return NextResponse.json(
       {
         connected,
@@ -41,7 +30,7 @@ export async function GET(request: Request) {
         accountEmail,
         folderId: settings?.drive_folder_id || '',
         folderUrl: settings?.drive_folder_url || '',
-        oauthReady,
+        oauthReady: driveOAuthConfigured(),
       },
       { headers: { 'Cache-Control': 'no-store' } },
     );
