@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabaseClient';
@@ -14,6 +14,21 @@ type SuperAdminPayload = {
   displayName: string;
 };
 
+const VALIDATION_TIMEOUT_MS = 12_000;
+
+async function fetchJsonWithTimeout(url: string, init: RequestInit) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), VALIDATION_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    const payload = await response.json().catch(() => ({}));
+    return { response, payload };
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 export default function SuperAdminGate({ children }: Props) {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
@@ -25,30 +40,49 @@ export default function SuperAdminGate({ children }: Props) {
   const [message, setMessage] = useState('');
   const [signingIn, setSigningIn] = useState(false);
   const [creating, setCreating] = useState(false);
+  const validatedUserId = useRef<string | null>(null);
+  const validationSequence = useRef(0);
 
   useEffect(() => {
     let mounted = true;
-    let validationId = 0;
+
+    function resetSession() {
+      validationSequence.current += 1;
+      validatedUserId.current = null;
+      setSession(null);
+      setAllowed(false);
+      setAdmin(null);
+      setError('');
+      setLoading(false);
+    }
 
     async function validate(nextSession: Session | null) {
-      const currentValidation = ++validationId;
       if (!mounted) return;
 
+      if (!nextSession) {
+        resetSession();
+        return;
+      }
+
+      if (validatedUserId.current === nextSession.user.id) {
+        setSession(nextSession);
+        setLoading(false);
+        return;
+      }
+
+      const currentValidation = ++validationSequence.current;
       setLoading(true);
       setSession(nextSession);
       setAllowed(false);
       setAdmin(null);
       setError('');
 
-      if (!nextSession) {
-        setLoading(false);
-        return;
-      }
-
       try {
         const headers = { Authorization: `Bearer ${nextSession.access_token}` };
-        let response = await fetch('/api/superadmin/me', { cache: 'no-store', headers });
-        let payload = await response.json().catch(() => ({}));
+        let { response, payload } = await fetchJsonWithTimeout('/api/superadmin/me', {
+          cache: 'no-store',
+          headers,
+        });
 
         if (response.status === 401) {
           await supabase.auth.signOut();
@@ -56,19 +90,14 @@ export default function SuperAdminGate({ children }: Props) {
         }
 
         if (response.status === 403) {
-          const bootstrap = await fetch('/api/superadmin/bootstrap', {
+          ({ response, payload } = await fetchJsonWithTimeout('/api/superadmin/bootstrap', {
             method: 'POST',
             cache: 'no-store',
             headers,
-          });
-          const bootstrapPayload = await bootstrap.json().catch(() => ({}));
-          if (bootstrap.ok) {
-            response = bootstrap;
-            payload = bootstrapPayload;
-          }
+          }));
         }
 
-        if (!mounted || currentValidation !== validationId) return;
+        if (!mounted || currentValidation !== validationSequence.current) return;
 
         if (!response.ok) {
           setAllowed(false);
@@ -76,24 +105,57 @@ export default function SuperAdminGate({ children }: Props) {
           return;
         }
 
+        validatedUserId.current = nextSession.user.id;
         setAdmin(payload.superAdmin || null);
         setAllowed(true);
       } catch (validationError: any) {
-        if (!mounted || currentValidation !== validationId) return;
+        if (!mounted || currentValidation !== validationSequence.current) return;
+        validatedUserId.current = null;
         setAllowed(false);
-        setError(validationError?.message || 'No se pudo validar SuperAdmin.');
+        setError(
+          validationError?.name === 'AbortError'
+            ? 'La validación SuperAdmin está tardando demasiado. Comprueba la conexión y vuelve a intentarlo.'
+            : validationError?.message || 'No se pudo validar SuperAdmin.',
+        );
       } finally {
-        if (mounted && currentValidation === validationId) setLoading(false);
+        if (mounted && currentValidation === validationSequence.current) {
+          setLoading(false);
+        }
       }
     }
 
-    supabase.auth.getSession().then(({ data }) => validate(data.session));
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    void supabase.auth.getSession()
+      .then(({ data, error: sessionError }) => {
+        if (sessionError) throw sessionError;
+        return validate(data.session);
+      })
+      .catch((sessionError: any) => {
+        if (!mounted) return;
+        setSession(null);
+        setAllowed(false);
+        setLoading(false);
+        setError(sessionError?.message || 'No se pudo recuperar la sesión SuperAdmin.');
+      });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === 'INITIAL_SESSION') return;
+
+      if (event === 'SIGNED_OUT' || !nextSession) {
+        resetSession();
+        return;
+      }
+
+      if (validatedUserId.current === nextSession.user.id) {
+        setSession(nextSession);
+        return;
+      }
+
       void validate(nextSession);
     });
 
     return () => {
       mounted = false;
+      validationSequence.current += 1;
       authListener.subscription.unsubscribe();
     };
   }, []);
@@ -153,6 +215,8 @@ export default function SuperAdminGate({ children }: Props) {
   }
 
   async function logout() {
+    validatedUserId.current = null;
+    validationSequence.current += 1;
     await supabase.auth.signOut();
   }
 
