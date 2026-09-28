@@ -40,6 +40,24 @@ function shouldFallback(status: number, message: string) {
   return status === 429 || status >= 500 || normalized.includes('overloaded') || normalized.includes('high demand') || normalized.includes('temporarily unavailable');
 }
 
+function resolveImageMimeType(file: File) {
+  const declared = String(file.type || '').toLowerCase().trim();
+  if (declared.startsWith('image/')) return declared;
+
+  const extension = String(file.name || '').toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] || '';
+  const byExtension: Record<string, string> = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+    gif: 'image/gif',
+    heic: 'image/heic',
+    heif: 'image/heif',
+    avif: 'image/avif',
+  };
+  return byExtension[extension] || '';
+}
+
 async function callGemini(model: string, imageBase64: string, mimeType: string, prompt: string): Promise<ProviderResult> {
   try {
     const response = await fetch(
@@ -136,7 +154,8 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const file = formData.get('image');
     if (!(file instanceof File)) return NextResponse.json({ error: 'No se ha recibido ninguna fotografía.' }, { status: 400 });
-    if (!file.type.startsWith('image/')) return NextResponse.json({ error: 'El archivo recibido no es una imagen.' }, { status: 400 });
+    const mimeType = resolveImageMimeType(file);
+    if (!mimeType) return NextResponse.json({ error: 'El archivo recibido no es una imagen compatible.' }, { status: 400 });
     if (file.size > MAX_IMAGE_BYTES) return NextResponse.json({ error: 'La fotografía es demasiado grande. Usa una imagen de menos de 6 MB.' }, { status: 413 });
 
     const imageBase64 = Buffer.from(await file.arrayBuffer()).toString('base64');
@@ -196,7 +215,7 @@ Devuelve EXCLUSIVAMENTE JSON válido con esta estructura:
     const models = [GEMINI_MODEL, ...FALLBACK_MODELS].filter((model, index, all) => all.indexOf(model) === index);
     let result: ProviderResult | null = null;
     for (const model of models) {
-      const attempt = await callGemini(model, imageBase64, file.type || 'image/jpeg', prompt);
+      const attempt = await callGemini(model, imageBase64, mimeType, prompt);
       if (attempt.ok && attempt.text) { result = attempt; break; }
       result = attempt;
       if (!shouldFallback(attempt.status, attempt.error)) break;
