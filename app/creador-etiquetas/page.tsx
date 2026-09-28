@@ -107,7 +107,8 @@ async function compressForUpload(file: File): Promise<File> {
     bitmap.close();
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.84));
     if (!blob) return file;
-    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg', lastModified: Date.now() });
+    const baseName = file.name?.replace(/\.[^.]+$/, '') || `foto-${Date.now()}`;
+    return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
   } catch {
     return file;
   }
@@ -149,6 +150,7 @@ export default function CreadorEtiquetasPage() {
   const [publishError, setPublishError] = useState('');
   const [publishedCount, setPublishedCount] = useState<number | null>(null);
   const [publishedExpiresAt, setPublishedExpiresAt] = useState('');
+  const [captureMessage, setCaptureMessage] = useState('');
 
   const totalSize = useMemo(() => photos.reduce((sum, photo) => sum + photo.file.size, 0), [photos]);
   const totalLabels = useMemo(() => results.reduce((sum, invoice) => sum + invoice.labels.length, 0), [results]);
@@ -162,14 +164,26 @@ export default function CreadorEtiquetasPage() {
     setPublishError('');
   }
 
-  function addFiles(fileList: FileList | null) {
-    if (!fileList) return;
-    const incoming = Array.from(fileList).filter((file) => file.type.startsWith('image/')).map((file) => ({
-      id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
-      file,
-      url: URL.createObjectURL(file),
-    }));
-    if (!incoming.length) return;
+  function addFiles(fileList: FileList | null, source: 'camera' | 'gallery') {
+    const files = fileList ? Array.from(fileList) : [];
+    const incoming = files
+      .filter((file) => file.size > 0)
+      .map((file) => ({
+        id: `${file.name || 'foto'}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
+        file,
+        url: URL.createObjectURL(file),
+      }));
+
+    if (!incoming.length) {
+      setCaptureMessage(source === 'camera'
+        ? 'No se recibió la fotografía. Vuelve a hacerla y confirma el uso de la cámara si el móvil lo solicita.'
+        : 'No se recibió ninguna imagen.');
+      return;
+    }
+
+    setCaptureMessage(source === 'camera'
+      ? '✓ Foto recibida. Ya puedes pulsar “Analizar y separar etiquetas”.'
+      : `✓ ${incoming.length} ${incoming.length === 1 ? 'imagen recibida' : 'imágenes recibidas'}.`);
     setPublishedCount(null);
     resetAnalysis();
     setPhotos((current) => [...current, ...incoming]);
@@ -178,6 +192,7 @@ export default function CreadorEtiquetasPage() {
   function clearAll() {
     photos.forEach((photo) => URL.revokeObjectURL(photo.url));
     setPhotos([]);
+    setCaptureMessage('');
     resetAnalysis();
   }
 
@@ -260,6 +275,7 @@ export default function CreadorEtiquetasPage() {
       setPublishedCount(payload?.published || totalLabels);
       setPublishedExpiresAt(payload?.expires_at || '');
       setPhotos([]);
+      setCaptureMessage('');
       setResults([]);
       setPhotoStates({});
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -305,13 +321,15 @@ export default function CreadorEtiquetasPage() {
         <section className="mx-auto mt-9 grid max-w-5xl gap-5 md:grid-cols-2">
           <button onClick={() => cameraInput.current?.click()} disabled={analyzing || publishing} className="rounded-[2rem] border border-orange-400/25 bg-orange-500/[.08] p-8 text-left disabled:opacity-50"><div className="text-4xl">📷</div><p className="mt-6 text-xs font-black uppercase tracking-[.2em] text-orange-400">Desde el móvil</p><h2 className="mt-2 text-3xl font-black">Hacer foto</h2><p className="mt-3 text-slate-400">Factura completa, recta y con buena luz.</p></button>
           <button onClick={() => galleryInput.current?.click()} disabled={analyzing || publishing} className="rounded-[2rem] border border-white/10 bg-white/[.04] p-8 text-left disabled:opacity-50"><div className="text-4xl">🖼️</div><p className="mt-6 text-xs font-black uppercase tracking-[.2em] text-slate-500">Selección múltiple</p><h2 className="mt-2 text-3xl font-black">Elegir facturas</h2><p className="mt-3 text-slate-400">Procesa varias imágenes seguidas.</p></button>
-          <input ref={cameraInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addFiles(e.target.files); e.currentTarget.value = ''; }} />
-          <input ref={galleryInput} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.currentTarget.value = ''; }} />
+          <input ref={cameraInput} type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif" capture="environment" className="hidden" onChange={(e) => { addFiles(e.target.files, 'camera'); e.currentTarget.value = ''; }} />
+          <input ref={galleryInput} type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif" multiple className="hidden" onChange={(e) => { addFiles(e.target.files, 'gallery'); e.currentTarget.value = ''; }} />
         </section>
+
+        {captureMessage ? <p aria-live="polite" className={`mx-auto mt-4 max-w-5xl rounded-2xl border px-4 py-3 text-sm font-bold ${captureMessage.startsWith('✓') ? 'border-emerald-400/20 bg-emerald-400/[.06] text-emerald-200' : 'border-amber-400/20 bg-amber-400/[.06] text-amber-100'}`}>{captureMessage}</p> : null}
 
         <section className="mx-auto mt-8 max-w-5xl rounded-[2rem] border border-white/10 bg-white/[.035] p-6">
           <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.2em] text-orange-400">Paso 1</p><h2 className="mt-2 text-2xl font-black">{photos.length ? `${photos.length} ${photos.length === 1 ? 'factura' : 'facturas'} seleccionadas` : 'Añade facturas para empezar'}</h2>{photos.length ? <p className="mt-2 text-sm text-slate-500">{(totalSize / 1024 / 1024).toFixed(1)} MB originales</p> : null}</div>{photos.length && !analyzing ? <button onClick={clearAll} className="rounded-full border border-white/10 px-4 py-2 text-sm font-black text-slate-400">Quitar todas</button> : null}</div>
-          {photos.length ? <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{photos.map((photo, index) => <div key={photo.id} className="overflow-hidden rounded-2xl border border-white/10 bg-black/20"><img src={photo.url} alt={`Factura ${index + 1}`} className="aspect-[4/3] w-full object-cover"/><div className="p-3"><p className="truncate text-sm font-bold">Factura {index + 1} · {photo.file.name}</p>{photoStates[photo.id] ? <p className="mt-1 text-xs font-black text-orange-300">{photoStates[photo.id].state === 'analyzing' ? 'Analizando…' : photoStates[photo.id].message || 'En cola'}</p> : null}</div></div>)}</div> : null}
+          {photos.length ? <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{photos.map((photo, index) => <div key={photo.id} className="overflow-hidden rounded-2xl border border-white/10 bg-black/20"><img src={photo.url} alt={`Factura ${index + 1}`} className="aspect-[4/3] w-full object-cover"/><div className="p-3"><p className="truncate text-sm font-bold">Factura {index + 1} · {photo.file.name || 'foto'}</p>{photoStates[photo.id] ? <p className="mt-1 text-xs font-black text-orange-300">{photoStates[photo.id].state === 'analyzing' ? 'Analizando…' : photoStates[photo.id].message || 'En cola'}</p> : null}</div></div>)}</div> : null}
           <button onClick={analyzePhotos} disabled={!photos.length || analyzing || publishing} className="mt-6 w-full rounded-2xl bg-orange-500 px-6 py-4 text-lg font-black text-[#111416] disabled:bg-slate-800 disabled:text-slate-600">{analyzing ? 'Analizando facturas…' : `Analizar y separar etiquetas (${photos.length})`}</button>
           {analysisErrors.length ? <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-500/[.07] p-4 text-sm text-rose-200">{analysisErrors.map((item) => <p key={item}>• {item}</p>)}</div> : null}
         </section>
