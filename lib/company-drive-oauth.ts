@@ -7,7 +7,6 @@ const DRIVE_OAUTH_STATE_SECRET = process.env.DRIVE_OAUTH_STATE_SECRET || process
 
 export const DRIVE_OAUTH_SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
-  'https://www.googleapis.com/auth/drive.readonly',
   'https://www.googleapis.com/auth/userinfo.email',
 ];
 
