@@ -6,6 +6,8 @@ import { driveOAuthClient, verifyDriveOAuthState } from '@/lib/company-drive-oau
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const GOOGLE_SA_JSON = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
+
 function redirectToMiEmpresa(request: Request, params: Record<string, string>) {
   const url = new URL('/mi-empresa', request.url);
   Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
@@ -14,6 +16,18 @@ function redirectToMiEmpresa(request: Request, params: Record<string, string>) {
 
 function escapeDriveQuery(value: string) {
   return value.replace(/'/g, "\\'");
+}
+
+function serviceAccountEmail() {
+  let jsonString = GOOGLE_SA_JSON.trim();
+  if (!jsonString) throw new Error('Falta configurar GOOGLE_SERVICE_ACCOUNT_JSON en CA46.');
+  if ((jsonString.startsWith("'") && jsonString.endsWith("'")) || (jsonString.startsWith('"') && jsonString.endsWith('"'))) {
+    jsonString = jsonString.slice(1, -1);
+  }
+  const parsed = JSON.parse(jsonString);
+  const email = String(parsed?.client_email || '').trim();
+  if (!email) throw new Error('La cuenta de servicio de Google Drive no tiene client_email.');
+  return email;
 }
 
 async function findRootFolder(drive: any, companyId: string) {
@@ -57,6 +71,28 @@ async function findOrCreateSubfolder(drive: any, companyId: string, name: string
     fields: 'id,name,webViewLink',
   });
   return created.data;
+}
+
+async function ensureServiceAccountAccess(drive: any, folderId: string, email: string) {
+  const permissions = await drive.permissions.list({
+    fileId: folderId,
+    fields: 'permissions(id,emailAddress,role,type)',
+    pageSize: 100,
+  });
+  const existing = (permissions.data.permissions || []).find(
+    (permission: any) => String(permission.emailAddress || '').toLowerCase() === email.toLowerCase(),
+  );
+  if (existing?.id) return;
+
+  await drive.permissions.create({
+    fileId: folderId,
+    sendNotificationEmail: false,
+    requestBody: {
+      type: 'user',
+      role: 'writer',
+      emailAddress: email,
+    },
+  });
 }
 
 export async function GET(request: Request) {
@@ -112,22 +148,6 @@ export async function GET(request: Request) {
     const accountEmail = String(userInfo.data.email || '').trim();
     if (!accountEmail) throw new Error('Google no devolvió el correo de la cuenta seleccionada.');
 
-    const { data: existingCredentials, error: existingCredentialsError } = await supabaseAdmin
-      .from('company_drive_credentials')
-      .select('google_account_email, refresh_token')
-      .eq('company_id', state.companyId)
-      .maybeSingle();
-    if (existingCredentialsError) throw existingCredentialsError;
-
-    const refreshToken = String(
-      tokens.refresh_token ||
-      (existingCredentials?.google_account_email === accountEmail ? existingCredentials.refresh_token : '') ||
-      '',
-    );
-    if (!refreshToken) {
-      throw new Error('Google no entregó permiso permanente para Drive. Repite la conexión y acepta los permisos.');
-    }
-
     const drive = google.drive({ version: 'v3', auth: oauth });
     const rootName = `CA46 - ${businessName}`.slice(0, 120);
     let root = await findRootFolder(drive, state.companyId);
@@ -138,37 +158,19 @@ export async function GET(request: Request) {
       await findOrCreateSubfolder(drive, state.companyId, subfolder, root.id);
     }
 
+    await ensureServiceAccountAccess(drive, root.id, serviceAccountEmail());
+
     const folderUrl = root.webViewLink || `https://drive.google.com/drive/folders/${root.id}`;
-    const expiryIso = tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null;
-
-    const { error: credentialsError } = await supabaseAdmin
-      .from('company_drive_credentials')
-      .upsert(
-        {
-          company_id: state.companyId,
-          google_account_email: accountEmail,
-          refresh_token: refreshToken,
-          access_token: String(tokens.access_token || ''),
-          token_expiry: expiryIso,
-          scope: String(tokens.scope || ''),
-        },
-        { onConflict: 'company_id' },
-      );
-    if (credentialsError) throw credentialsError;
-
     const { error: settingsSaveError } = await supabaseAdmin
       .from('company_settings')
-      .upsert(
-        {
-          company_id: state.companyId,
-          business_name: businessName,
-          drive_connected: true,
-          drive_folder_id: root.id,
-          drive_folder_url: folderUrl,
-          drive_last_sync_at: null,
-        },
-        { onConflict: 'company_id' },
-      );
+      .update({
+        drive_connected: true,
+        drive_folder_id: root.id,
+        drive_folder_url: folderUrl,
+        drive_account_email: accountEmail,
+        drive_last_sync_at: null,
+      })
+      .eq('company_id', state.companyId);
     if (settingsSaveError) throw settingsSaveError;
 
     return redirectToMiEmpresa(request, { drive: 'connected', account: accountEmail });
