@@ -19,8 +19,8 @@ export async function POST(request: Request) {
     const oauth = driveOAuthClient(origin);
     const state = createDriveOAuthState(tenant.context.companyId, tenant.context.userId);
     const url = oauth.generateAuthUrl({
-      access_type: 'offline',
-      prompt: 'consent select_account',
+      access_type: 'online',
+      prompt: 'select_account consent',
       include_granted_scopes: true,
       scope: DRIVE_OAUTH_SCOPES,
       state,
