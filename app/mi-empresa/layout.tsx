@@ -2,11 +2,13 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import CompanyAreaNav from '@/components/CompanyAreaNav';
 import PrivateAreaGate from '@/components/PrivateAreaGate';
 
 export default function MiEmpresaLayout({ children }: { children: ReactNode }) {
   return (
     <PrivateAreaGate areaName="Mi empresa" requireTenant={false}>
+      <CompanyAreaNav />
       {children}
       <Link
         href="/crear"
