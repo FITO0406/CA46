@@ -24,7 +24,15 @@ type TenantPayload = {
   };
 };
 
+type TenantCache = {
+  userId: string;
+  tenant: TenantPayload;
+  expiresAt: number;
+};
+
 const VALIDATION_TIMEOUT_MS = 12_000;
+const TENANT_CACHE_TTL_MS = 60_000;
+let tenantCache: TenantCache | null = null;
 
 async function fetchJsonWithTimeout(url: string, init: RequestInit) {
   const controller = new AbortController();
@@ -37,6 +45,14 @@ async function fetchJsonWithTimeout(url: string, init: RequestInit) {
   } finally {
     window.clearTimeout(timeoutId);
   }
+}
+
+function cachedTenantFor(userId: string) {
+  if (!tenantCache || tenantCache.userId !== userId || tenantCache.expiresAt <= Date.now()) {
+    if (tenantCache?.expiresAt && tenantCache.expiresAt <= Date.now()) tenantCache = null;
+    return null;
+  }
+  return tenantCache.tenant;
 }
 
 export default function PrivateAreaGate({ children, areaName = 'Zona privada', requireTenant = true }: Props) {
@@ -59,12 +75,46 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
     function resetSession() {
       validationSequence.current += 1;
       validatedUserId.current = null;
+      tenantCache = null;
       setHasSession(false);
       setAllowed(false);
       setTenant(null);
       setUserEmail('');
       setAccessError('');
       setLoading(false);
+    }
+
+    function applyTenant(session: Session, nextTenant: TenantPayload | null) {
+      setHasSession(true);
+      setUserEmail(session.user.email || '');
+      setTenant(nextTenant);
+
+      if (!nextTenant) {
+        validatedUserId.current = requireTenant ? null : session.user.id;
+        setAllowed(!requireTenant);
+        if (requireTenant) {
+          setAccessError('Tu usuario está autenticado, pero todavía no está vinculado a una empresa CA46. Entra en Mi empresa para completar la vinculación.');
+        }
+        return;
+      }
+
+      if (!nextTenant.membership?.isActive) {
+        validatedUserId.current = null;
+        setAllowed(false);
+        setAccessError('Tu acceso a esta empresa está desactivado.');
+        return;
+      }
+
+      if (!['active', 'trial'].includes(nextTenant.company.status)) {
+        validatedUserId.current = null;
+        setAllowed(false);
+        setAccessError('Esta empresa no tiene el acceso activo en este momento.');
+        return;
+      }
+
+      validatedUserId.current = session.user.id;
+      setAccessError('');
+      setAllowed(true);
     }
 
     async function validateSession(session: Session | null, blockScreen = true) {
@@ -80,6 +130,16 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
       if (validatedUserId.current === session.user.id) {
         setHasSession(true);
         setUserEmail(session.user.email || '');
+        setLoading(false);
+        return;
+      }
+
+      // Los layouts privados son hermanos en Next.js y se vuelven a montar al cambiar
+      // de módulo. Reutilizamos durante un minuto una validación positiva para que la
+      // navegación Mi empresa -> Etiquetas -> Cocina no enseñe un spinner en cada salto.
+      const cachedTenant = cachedTenantFor(session.user.id);
+      if (cachedTenant) {
+        applyTenant(session, cachedTenant);
         setLoading(false);
         return;
       }
@@ -102,6 +162,7 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
         if (response.status === 401) {
           if (currentValidation === validationSequence.current) {
             validatedUserId.current = null;
+            tenantCache = null;
           }
           await supabase.auth.signOut();
           return;
@@ -132,36 +193,22 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
         }
 
         if (!mounted || currentValidation !== validationSequence.current) return;
-        setTenant(nextTenant);
 
-        if (!nextTenant) {
-          if (requireTenant) {
-            setAllowed(false);
-            setAccessError('Tu usuario está autenticado, pero todavía no está vinculado a una empresa CA46. Entra en Mi empresa para completar la vinculación.');
-          } else {
-            validatedUserId.current = session.user.id;
-            setAllowed(true);
-          }
-          return;
+        // Solo cacheamos validaciones positivas. Un usuario sin empresa debe poder
+        // crearla en Mi empresa y obtener acceso al resto inmediatamente después.
+        if (nextTenant?.membership?.isActive && ['active', 'trial'].includes(nextTenant.company.status)) {
+          tenantCache = {
+            userId: session.user.id,
+            tenant: nextTenant,
+            expiresAt: Date.now() + TENANT_CACHE_TTL_MS,
+          };
         }
 
-        if (!nextTenant.membership?.isActive) {
-          setAllowed(false);
-          setAccessError('Tu acceso a esta empresa está desactivado.');
-          return;
-        }
-
-        if (!['active', 'trial'].includes(nextTenant.company.status)) {
-          setAllowed(false);
-          setAccessError('Esta empresa no tiene el acceso activo en este momento.');
-          return;
-        }
-
-        validatedUserId.current = session.user.id;
-        setAllowed(true);
+        applyTenant(session, nextTenant);
       } catch (validationError: any) {
         if (!mounted || currentValidation !== validationSequence.current) return;
         validatedUserId.current = null;
+        tenantCache = null;
         setAllowed(false);
         setAccessError(
           validationError?.name === 'AbortError'
@@ -238,6 +285,7 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
   async function handleLogout() {
     validatedUserId.current = null;
     validationSequence.current += 1;
+    tenantCache = null;
     await supabase.auth.signOut();
   }
 
