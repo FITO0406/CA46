@@ -51,12 +51,27 @@ export async function GET(request: Request) {
       // El visor sigue funcionando con las etiquetas que ya estaban publicadas.
     }
 
+    const nowIso = new Date().toISOString();
+
+    // La caducidad no depende de un cron externo: cada refresco del visor
+    // desactiva de forma persistente las etiquetas cuyo plazo ya terminó.
+    const { error: expiryError } = await supabaseAdmin
+      .from('digital_tags')
+      .update({ is_active: false })
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+      .lt('expires_at', nowIso);
+
+    if (expiryError) {
+      console.warn('Expired labels could not be deactivated:', expiryError);
+    }
+
     const { data, error } = await supabaseAdmin
       .from('digital_tags')
       .select('id, drive_file_id, product_name, origin, category, is_active, created_at, expires_at, source, status')
       .eq('company_id', companyId)
       .eq('is_active', true)
-      .gte('expires_at', new Date().toISOString())
+      .gte('expires_at', nowIso)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
