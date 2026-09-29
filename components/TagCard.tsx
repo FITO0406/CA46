@@ -9,6 +9,9 @@ interface Tag {
   category: string;
   is_active: boolean;
   drive_file_id?: string;
+  expires_at?: string;
+  source?: 'invoice' | 'physical_label' | 'legacy' | null;
+  status?: 'definitive' | 'provisional' | null;
 }
 
 const accentStyles = [
@@ -46,7 +49,11 @@ export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentInde
     ? /\bkg\b/i.test(trace.netWeight) ? trace.netWeight : `${trace.netWeight} kg`
     : '';
   const isDefrosted = /descongelad/i.test(trace?.freshness || '');
+  const isProvisional = tag.status === 'provisional' || tag.source === 'physical_label';
   const consumerNotice = trace?.consumerNotice || (isDefrosted ? 'Consumir preferentemente en 3 días' : '');
+  const expiresLabel = tag.expires_at
+    ? new Date(tag.expires_at).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '';
 
   const traceFields = [
     ['Especie', trace?.description],
@@ -79,9 +86,16 @@ export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentInde
   const extraFields = (trace?.extraFields || []).filter(({ label, value }) => label && value);
 
   return (
-    <article className={`group relative isolate overflow-hidden rounded-[2rem] border ${accent.border} bg-[#12171a] shadow-2xl shadow-black/25`}>
-      <div className={`pointer-events-none absolute inset-x-0 top-0 -z-10 h-44 bg-gradient-to-b ${accent.glow} to-transparent`} />
-      <div className="absolute left-0 top-0 h-full w-1 bg-orange-400" />
+    <article className={`group relative isolate overflow-hidden rounded-[2rem] border ${isProvisional ? 'border-amber-400/35' : accent.border} bg-[#12171a] shadow-2xl shadow-black/25`}>
+      <div className={`pointer-events-none absolute inset-x-0 top-0 -z-10 h-44 bg-gradient-to-b ${isProvisional ? 'from-amber-500/15' : accent.glow} to-transparent`} />
+      <div className={`absolute left-0 top-0 h-full w-1 ${isProvisional ? 'bg-amber-400' : 'bg-orange-400'}`} />
+
+      {isProvisional ? (
+        <div className="flex flex-col gap-1 border-b border-amber-300/20 bg-amber-400/[.10] px-5 py-3 text-amber-100 sm:flex-row sm:items-center sm:justify-between sm:px-7 lg:px-8">
+          <strong className="text-xs font-black uppercase tracking-[.16em]">TEMPORAL · 24 HORAS · FACTURA PENDIENTE</strong>
+          {expiresLabel ? <span className="text-xs font-bold text-amber-200">Caduca {expiresLabel}</span> : null}
+        </div>
+      ) : null}
 
       <div className="p-5 sm:p-7 lg:p-8">
         <header className="border-b border-white/[.09] pb-5">
@@ -95,14 +109,16 @@ export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentInde
         </div>
 
         <section className="mt-5">
-          <p className={`mb-3 text-[10px] font-black uppercase tracking-[.2em] ${accent.label}`}>Trazabilidad del producto</p>
+          <p className={`mb-3 text-[10px] font-black uppercase tracking-[.2em] ${isProvisional ? 'text-amber-300' : accent.label}`}>Trazabilidad del producto</p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {traceFields.map(([label, value]) => <Field key={label} label={label} value={value} />)}
           </div>
         </section>
 
         <section className="mt-6 border-t border-white/[.08] pt-5">
-          <p className={`mb-3 text-[10px] font-black uppercase tracking-[.2em] ${accent.label}`}>Factura y expedidor</p>
+          <p className={`mb-3 text-[10px] font-black uppercase tracking-[.2em] ${isProvisional ? 'text-amber-300' : accent.label}`}>
+            {isProvisional ? 'Datos de la etiqueta física' : 'Factura y expedidor'}
+          </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {invoiceFields.map(([label, value]) => <Field key={label} label={label} value={value} />)}
           </div>
@@ -110,7 +126,7 @@ export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentInde
 
         {extraFields.length > 0 ? (
           <section className="mt-6 border-t border-white/[.08] pt-5">
-            <p className={`mb-3 text-[10px] font-black uppercase tracking-[.2em] ${accent.label}`}>Otros datos de la factura</p>
+            <p className={`mb-3 text-[10px] font-black uppercase tracking-[.2em] ${isProvisional ? 'text-amber-300' : accent.label}`}>Otros datos de trazabilidad</p>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {extraFields.map(({ label, value }, index) => (
                 <Field key={`${label}-${index}`} label={label} value={value} />
@@ -130,7 +146,10 @@ export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentInde
       ) : null}
 
       <footer className="flex items-center justify-between gap-4 border-t border-white/[.07] bg-black/20 px-5 py-3 text-[10px] font-bold uppercase tracking-[.14em] text-slate-500 sm:px-7 lg:px-8">
-        <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-400" />Ficha activa</span>
+        <span className="flex items-center gap-2">
+          <span className={`h-2 w-2 rounded-full ${isProvisional ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+          {isProvisional ? 'Temporal activa' : 'Ficha activa'}
+        </span>
         <span>CA46 · Trazabilidad alimentaria</span>
       </footer>
     </article>
