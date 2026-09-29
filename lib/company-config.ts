@@ -22,6 +22,7 @@ export type CompanyConfig = {
   businessName: string;
   legalName: string;
   taxId: string;
+  gesicoBuyerNumber: string;
   address: string;
   postalCode: string;
   city: string;
@@ -48,6 +49,7 @@ export const DEFAULT_COMPANY_CONFIG: CompanyConfig = {
   businessName: '',
   legalName: '',
   taxId: '',
+  gesicoBuyerNumber: '',
   address: '',
   postalCode: '',
   city: '',
