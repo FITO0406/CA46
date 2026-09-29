@@ -93,12 +93,19 @@ export async function POST(request: Request) {
 
     const { data: parent, error: parentError } = await supabaseAdmin
       .from('digital_tags')
-      .select('id, product_name, origin, category, company_id')
+      .select('id, product_name, origin, category, company_id, source, status, is_active, expires_at')
       .eq('id', parentTagId)
       .eq('company_id', access.context.companyId)
       .maybeSingle();
     if (parentError) throw parentError;
     if (!parent) return NextResponse.json({ ok: false, error: 'La etiqueta origen no pertenece a tu empresa o ya no existe.' }, { status: 404 });
+
+    const parentExpiresAt = new Date(parent.expires_at).getTime();
+    if (!parent.is_active || !Number.isFinite(parentExpiresAt) || parentExpiresAt <= processedAt.getTime()) {
+      return NextResponse.json({ ok: false, error: 'La etiqueta origen ya no está activa y no puede generar nuevas etiquetas hijas.' }, { status: 409 });
+    }
+
+    const temporaryChain = parent.status === 'provisional' && (parent.source === 'physical_label' || parent.source === 'kitchen');
 
     const ingredientsRaw = Array.isArray(body?.ingredients) ? body.ingredients : [];
     const ingredients = ingredientsRaw
@@ -130,6 +137,10 @@ export async function POST(request: Request) {
         ...(parentTrace.extraFields || []),
         { label: 'Transformación', value: processType },
         { label: 'Lote de origen', value: parentTrace.lot || parent.id },
+        ...(temporaryChain ? [
+          { label: 'Cadena CA46', value: 'Hija de etiqueta temporal · 72 h' },
+          { label: 'Origen provisional', value: 'Etiqueta física de caja · factura pendiente' },
+        ] : []),
         { label: 'Peso antes de cocinar', value: `${inputWeightKg} kg` },
         { label: 'Peso final cocinado', value: `${outputWeightKg} kg` },
         { label: 'Conservación', value: storageInstructions || `Conservar a ≤ ${storageMaxTempC} °C` },
@@ -147,7 +158,9 @@ export async function POST(request: Request) {
     };
 
     const now = new Date();
-    const expiresAt = new Date(processedAt.getTime() + shelfLifeDays * 24 * 60 * 60 * 1000);
+    const expiresAt = temporaryChain
+      ? new Date(processedAt.getTime() + 72 * 60 * 60 * 1000)
+      : new Date(processedAt.getTime() + shelfLifeDays * 24 * 60 * 60 * 1000);
     const { data: child, error: childError } = await supabaseAdmin
       .from('digital_tags')
       .insert({
@@ -155,7 +168,7 @@ export async function POST(request: Request) {
         created_by_user_id: access.context.userId,
         parent_tag_id: parent.id,
         source: 'kitchen',
-        status: 'definitive',
+        status: temporaryChain ? 'provisional' : 'definitive',
         drive_file_id: `kitchen-${randomUUID()}`,
         product_name: outputProductName,
         price: 0,
@@ -166,7 +179,7 @@ export async function POST(request: Request) {
         created_at: now.toISOString(),
         expires_at: expiresAt.toISOString(),
       })
-      .select('id, product_name, category, expires_at')
+      .select('id, product_name, category, expires_at, source, status, parent_tag_id')
       .single();
     if (childError) throw childError;
 
@@ -199,7 +212,13 @@ export async function POST(request: Request) {
       throw transformationError;
     }
 
-    return NextResponse.json({ ok: true, child, transformation }, { status: 201, headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({
+      ok: true,
+      child,
+      transformation,
+      temporary_chain: temporaryChain,
+      valid_hours: temporaryChain ? 72 : shelfLifeDays * 24,
+    }, { status: 201, headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error('kitchen POST error:', error);
     return NextResponse.json({ ok: false, error: 'No se pudo guardar la transformación.' }, { status: 500 });
