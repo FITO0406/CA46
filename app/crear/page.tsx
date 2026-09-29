@@ -58,6 +58,14 @@ export default function CrearEtiquetasInicioPage() {
             <div className="mt-6"><DriveSyncButton /></div>
           </div>
 
+          <Link href="/creador-etiquetas/gestionar" className="rounded-[2rem] border border-rose-400/25 bg-rose-400/[.05] p-7 transition active:scale-[.99]">
+            <div className="text-5xl">🗑️</div>
+            <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-rose-300">Control y auditoría</p>
+            <h2 className="mt-2 text-3xl font-black">Gestionar etiquetas</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-400">Anula etiquetas equivocadas o duplicadas sin borrar la trazabilidad. Consulta también el historial de anulaciones.</p>
+            <span className="mt-6 inline-flex rounded-xl border border-rose-300/30 bg-rose-300/10 px-4 py-3 text-sm font-black text-rose-200">Gestionar →</span>
+          </Link>
+
           <Link href="/cocina" className="rounded-[2rem] border border-fuchsia-400/25 bg-fuchsia-400/[.05] p-7 transition active:scale-[.99]">
             <div className="text-5xl">🍲</div>
             <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-fuchsia-300">Transformación</p>
@@ -84,7 +92,7 @@ export default function CrearEtiquetasInicioPage() {
         </section>
 
         <section className="mt-6 rounded-2xl border border-white/10 bg-white/[.035] px-5 py-4 text-center text-sm font-bold text-slate-400">
-          Factura = 72 h · Etiqueta física = 24 h · Drive = 72 h · Cocina = vida útil configurable · Temperaturas = historial por equipo · Todo queda aislado por empresa.
+          Factura = 72 h · Etiqueta física = 24 h · Drive = 72 h · Cocina = vida útil configurable · Las etiquetas anuladas salen del visor pero permanecen auditadas por empresa.
         </section>
       </main>
     </div>
