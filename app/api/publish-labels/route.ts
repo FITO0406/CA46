@@ -255,6 +255,8 @@ export async function POST(request: Request) {
       .from('digital_tags')
       .select('drive_file_id, product_name, expires_at, source, status')
       .eq('company_id', tenant.context.companyId)
+      .eq('is_active', true)
+      .gt('expires_at', now.toISOString())
       .in('drive_file_id', ids);
 
     if (duplicateError) {
@@ -266,8 +268,8 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: sourceMode === 'physical_label'
-            ? 'CA46 ha detectado que esta etiqueta provisional ya fue publicada por tu empresa.'
-            : 'CA46 ha detectado etiquetas de esta misma factura que ya fueron publicadas por tu empresa.',
+            ? 'CA46 ha detectado que esta etiqueta provisional ya está publicada y activa en tu empresa.'
+            : 'CA46 ha detectado etiquetas activas de esta misma factura que ya fueron publicadas por tu empresa.',
           code: 'DUPLICATE_LABELS',
           duplicates: existing,
         },
