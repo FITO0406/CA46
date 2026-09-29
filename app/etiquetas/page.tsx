@@ -14,7 +14,7 @@ interface Tag {
   is_active: boolean;
   expires_at: string;
   drive_file_id?: string;
-  source?: 'invoice' | 'physical_label' | null;
+  source?: 'invoice' | 'physical_label' | 'kitchen' | null;
   status?: 'definitive' | 'provisional' | null;
 }
 
@@ -41,6 +41,18 @@ function searchableText(tag: Tag) {
     trace?.origin || '',
     trace?.fao || '',
   ].join(' '));
+}
+
+function tagValidityLabel(tag: Tag) {
+  if (tag.status === 'provisional' && tag.source === 'kitchen') return 'TEMPORAL HIJA · 72 H';
+  if (tag.status === 'provisional') return 'PROVISIONAL · 24 H';
+  return 'ACTIVA · 72 H';
+}
+
+function shortValidityLabel(tag: Tag) {
+  if (tag.status === 'provisional' && tag.source === 'kitchen') return 'HIJA · 72 H';
+  if (tag.status === 'provisional') return '24 H';
+  return '';
 }
 
 export default function EtiquetasPage() {
@@ -207,7 +219,7 @@ export default function EtiquetasPage() {
           </div>
           {currentTag ? (
             <span className={`rounded-full px-3 py-2 text-xs font-black ${currentTag.status === 'provisional' ? 'bg-amber-400/10 text-amber-300' : 'bg-emerald-400/10 text-emerald-300'}`}>
-              {currentTag.status === 'provisional' ? 'PROVISIONAL · 24 H' : 'ACTIVA · 72 H'}
+              {tagValidityLabel(currentTag)}
             </span>
           ) : null}
         </header>
@@ -276,11 +288,12 @@ export default function EtiquetasPage() {
           <section className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filteredTags.map((tag) => {
               const trace = decodeTraceability(tag.category);
+              const validity = shortValidityLabel(tag);
               return (
                 <button key={tag.id} type="button" onClick={() => setSelectedTagId(tag.id)} className="rounded-2xl border border-white/10 bg-white/[.04] p-5 text-left active:scale-[.99]">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-black uppercase tracking-[.15em] text-orange-400">Ver etiqueta</span>
-                    {tag.status === 'provisional' ? <span className="rounded-full bg-amber-400/10 px-2 py-1 text-[10px] font-black text-amber-300">24 H</span> : null}
+                    {validity ? <span className="rounded-full bg-amber-400/10 px-2 py-1 text-[10px] font-black text-amber-300">{validity}</span> : null}
                   </div>
                   <h2 className="mt-2 text-2xl font-black uppercase">{trace?.description || tag.product_name}</h2>
                   <p className="mt-3 text-sm font-bold text-slate-400">Lote: <span className="text-white">{trace?.lot || '—'}</span></p>
