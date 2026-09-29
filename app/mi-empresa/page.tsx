@@ -43,6 +43,7 @@ function hasLegacyData(config: CompanyConfig) {
     config.businessName.trim() ||
       config.legalName.trim() ||
       config.taxId.trim() ||
+      config.gesicoBuyerNumber.trim() ||
       config.contactFirstName.trim() ||
       config.contactLastName.trim() ||
       config.selectedBankIds.length ||
@@ -271,6 +272,18 @@ export default function MiEmpresaPage() {
                   />
                 </label>
               ))}
+              <label className="sm:col-span-2">
+                <span className="mb-2 block text-[11px] font-black uppercase tracking-[.15em] text-orange-300">N.º minorista / comprador GESICO</span>
+                <input
+                  disabled={loading}
+                  inputMode="numeric"
+                  value={config.gesicoBuyerNumber}
+                  onChange={(event) => patch('gesicoBuyerNumber', event.target.value)}
+                  placeholder="Ej.: 494"
+                  className={inputClass}
+                />
+                <span className="mt-2 block text-xs font-semibold leading-5 text-slate-500">CA46 compara este número con cada factura de 72 horas. Si no coincide, esa factura se rechaza y no genera etiquetas.</span>
+              </label>
             </div>
           </section>
 
@@ -365,7 +378,7 @@ export default function MiEmpresaPage() {
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
                 <h3 className="text-lg font-black">GESICO</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-400">Acceso directo. CA46 no guarda tus credenciales.</p>
+                <p className="mt-2 text-sm leading-6 text-slate-400">Acceso directo. CA46 no guarda tus credenciales. El N.º minorista configurado arriba sí se usa para validar que cada factura de 72 h pertenece a esta empresa.</p>
                 <a href="https://sevilla.gesicosistemas.es/login" target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-black">
                   Abrir GESICO ↗
                 </a>
@@ -383,7 +396,7 @@ export default function MiEmpresaPage() {
           </button>
 
           <p className="pb-4 text-center text-xs font-bold text-slate-600">
-            Todo queda vinculado a esta empresa. No tienes que configurar nada más para las etiquetas.
+            Todo queda vinculado a esta empresa. Las facturas de 72 h se validan contra su N.º minorista GESICO.
           </p>
         </div>
       </main>
