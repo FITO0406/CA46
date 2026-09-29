@@ -52,6 +52,35 @@ function clean(value: unknown) {
   return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
 }
 
+function normalizeIdentifier(value: unknown) {
+  return clean(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+function normalizeLabel(value: unknown) {
+  return clean(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function invoiceGesicoBuyerNumber(invoice: InvoiceDraft) {
+  const extras = Array.isArray(invoice.invoice_extra_fields) ? invoice.invoice_extra_fields : [];
+  for (const item of extras) {
+    const label = normalizeLabel(item?.label);
+    if (label.includes('minorista') || (label.includes('comprador') && label.includes('gesico'))) {
+      const value = clean(item?.value);
+      if (value) return value;
+    }
+  }
+  return '';
+}
+
 function cleanExtras(values: ExtraField[] | undefined) {
   if (!Array.isArray(values)) return [];
   return values
@@ -93,6 +122,52 @@ export async function POST(request: Request) {
 
     if (flattened.length === 0) {
       return NextResponse.json({ error: 'No hay etiquetas para publicar.' }, { status: 400 });
+    }
+
+    if (sourceMode === 'invoice') {
+      const { data: settings, error: settingsError } = await supabaseAdmin
+        .from('company_settings')
+        .select('gesico_buyer_number')
+        .eq('company_id', tenant.context.companyId)
+        .maybeSingle();
+      if (settingsError) throw settingsError;
+
+      const authorizedBuyerNumber = normalizeIdentifier(settings?.gesico_buyer_number);
+      if (!authorizedBuyerNumber) {
+        return NextResponse.json(
+          {
+            error: 'Configura en Mi empresa el N.º minorista / comprador GESICO antes de publicar etiquetas de 72 horas.',
+            code: 'GESICO_BUYER_NUMBER_REQUIRED',
+          },
+          { status: 422, headers: { 'Cache-Control': 'no-store' } },
+        );
+      }
+
+      for (const invoice of invoices) {
+        if (!Array.isArray(invoice.labels) || invoice.labels.length === 0) continue;
+        const rawBuyerNumber = invoiceGesicoBuyerNumber(invoice);
+        const detectedBuyerNumber = normalizeIdentifier(rawBuyerNumber);
+
+        if (!detectedBuyerNumber) {
+          return NextResponse.json(
+            {
+              error: 'Una de las facturas no conserva el N.º minorista GESICO validado. Vuelve a analizarla antes de publicar.',
+              code: 'GESICO_BUYER_NUMBER_NOT_READ',
+            },
+            { status: 422, headers: { 'Cache-Control': 'no-store' } },
+          );
+        }
+
+        if (detectedBuyerNumber !== authorizedBuyerNumber) {
+          return NextResponse.json(
+            {
+              error: `Factura rechazada: el N.º comprador GESICO ${rawBuyerNumber || detectedBuyerNumber} no pertenece a esta empresa.`,
+              code: 'INVOICE_NOT_OWNED',
+            },
+            { status: 409, headers: { 'Cache-Control': 'no-store' } },
+          );
+        }
+      }
     }
 
     const invalid = flattened.find(({ label }) => {
