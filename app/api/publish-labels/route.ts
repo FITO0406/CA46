@@ -113,7 +113,17 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => null);
-    const sourceMode: SourceMode = body?.sourceMode === 'physical_label' ? 'physical_label' : 'invoice';
+    const requestedSourceMode = body?.sourceMode;
+    if (requestedSourceMode !== 'physical_label' && requestedSourceMode !== 'invoice') {
+      return NextResponse.json(
+        {
+          error: 'CA46 no ha recibido el tipo de documento. Vuelve a entrar por Etiqueta temporal · 24 h o Factura · 72 h.',
+          code: 'SOURCE_MODE_REQUIRED',
+        },
+        { status: 400, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+    const sourceMode: SourceMode = requestedSourceMode;
     const invoices: InvoiceDraft[] = Array.isArray(body?.invoices) ? body.invoices : [];
 
     const flattened = invoices.flatMap((invoice) =>
