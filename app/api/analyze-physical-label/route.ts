@@ -206,23 +206,31 @@ export async function POST(request: Request) {
 
     const imageBase64 = Buffer.from(await file.arrayBuffer()).toString('base64');
     const prompt = `
-Actúas como lector de trazabilidad alimentaria de CA46. La imagen contiene UNA ETIQUETA FÍSICA de una caja de pescado o marisco, NO una factura.
+Actúas como lector de trazabilidad alimentaria de CA46. Esta ruta es EXCLUSIVAMENTE para una ETIQUETA FÍSICA de caja de pescado o marisco que generará una etiqueta TEMPORAL de 24 horas mientras la factura está pendiente.
 
-OBJETIVO:
-- Recupera toda la trazabilidad legible de la etiqueta física para crear una etiqueta digital TEMPORAL de 24 horas mientras la factura está pendiente.
+PRIMERO CLASIFICA EL DOCUMENTO:
+- document_type = "physical_label" si es una etiqueta física de caja/producto.
+- document_type = "invoice" si es una factura, albarán o documento de compra con partidas y datos fiscales.
+- document_type = "unknown" solo si realmente no puede determinarse.
+- Si la imagen está girada o inclinada, interprétala en la orientación correcta antes de leerla.
+
+OBJETIVO PARA physical_label:
+- Recupera toda la trazabilidad legible de la etiqueta física.
 - Revisa la etiqueta completa dos veces antes de responder para no omitir campos.
 - No inventes ningún dato ni completes información por conocimiento general.
 - No extraigas precios, importes, IVA, totales ni costes.
+- NO busques ni exijas número de comprador GESICO en esta ruta.
 - Si un dato parece existir pero no se lee con seguridad, déjalo vacío y añádelo a review_fields.
 - Si un campo no aparece, puede quedar vacío.
 - Especie, lote y procedencia son críticos y deben revisarse antes de publicar.
-- Cualquier dato de trazabilidad visible que no encaje en los campos principales debe conservarse en extra_fields como {"label":"","value":""}.
+- Cualquier dato visible que no encaje en los campos principales debe conservarse en extra_fields como {"label":"","value":""}.
 
 PRESTA ESPECIAL ATENCIÓN A:
-Descripción/especie, nombre científico, lote completo, marca, kg/peso neto, método de producción, presentación, procedencia/origen, FAO, frescura/estado, arte de pesca, CE/RGS, subzona, primer expedidor, población, fecha de captura, comprador y NIF cuando figuren.
+Descripción/especie, nombre científico, lote completo, proveedor/expedidor, marca, talla, número de piezas, kg/peso neto, método de producción, presentación, procedencia/origen, FAO, frescura/estado, arte de pesca, CE/RGS/registro sanitario, subzona, primer expedidor, población, fecha de captura, fecha de caducidad y condiciones de conservación.
 
 Devuelve EXCLUSIVAMENTE JSON válido:
 {
+  "document_type":"physical_label",
   "warnings": [],
   "label": {
     "description":"",
@@ -243,7 +251,7 @@ Devuelve EXCLUSIVAMENTE JSON válido:
     "fecha_captura":"",
     "comprador":"",
     "nif":"",
-    "extra_fields":[{"label":"","value":""}],
+    "extra_fields":[{"label":"Caducidad","value":""},{"label":"Conservación","value":""},{"label":"Talla","value":""},{"label":"Piezas","value":""}],
     "confidence":0.0,
     "needs_review":true,
     "review_fields":[]
@@ -265,10 +273,25 @@ Devuelve EXCLUSIVAMENTE JSON válido:
     }
 
     const parsed = parseModelJson(result.text);
+    const documentType = cleanString(parsed?.document_type).toLowerCase() || 'unknown';
+    if (documentType === 'invoice') {
+      return NextResponse.json(
+        {
+          error: 'Has fotografiado una factura o albarán. Para ese documento usa Factura · 72 h.',
+          code: 'WRONG_DOCUMENT_TYPE',
+          document_type: 'invoice',
+        },
+        { status: 409, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+
     const label = normalizeLabel(parsed?.label || parsed);
     if (!label.description && !label.lote && !label.procedencia) {
-      return NextResponse.json({ error: 'No se han podido identificar datos suficientes de trazabilidad en esta etiqueta.', warnings: parsed?.warnings || [] }, { status: 422 });
+      return NextResponse.json({ error: 'No se han podido identificar datos suficientes de trazabilidad en esta etiqueta.', warnings: parsed?.warnings || [], document_type: documentType }, { status: 422 });
     }
+
+    const warnings = Array.isArray(parsed?.warnings) ? parsed.warnings.map(cleanString).filter(Boolean) : [];
+    if (documentType === 'unknown') warnings.unshift('CA46 no ha podido confirmar al 100 % el tipo de documento. Revisa los datos antes de publicar.');
 
     return NextResponse.json({
       analysis: {
@@ -280,10 +303,11 @@ Devuelve EXCLUSIVAMENTE JSON válido:
         buyer: label.comprador,
         buyer_nif: label.nif,
         invoice_extra_fields: [],
-        warnings: Array.isArray(parsed?.warnings) ? parsed.warnings.map(cleanString).filter(Boolean) : [],
+        warnings,
         labels: [label],
       },
       mode: 'physical_label',
+      document_type: documentType,
       provisional_hours: 24,
       model: result.model,
       source: file.name,
