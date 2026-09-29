@@ -10,7 +10,7 @@ interface Tag {
   is_active: boolean;
   drive_file_id?: string;
   expires_at?: string;
-  source?: 'invoice' | 'physical_label' | 'legacy' | null;
+  source?: 'invoice' | 'physical_label' | 'legacy' | 'kitchen' | null;
   status?: 'definitive' | 'provisional' | null;
 }
 
@@ -49,6 +49,7 @@ export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentInde
     ? /\bkg\b/i.test(trace.netWeight) ? trace.netWeight : `${trace.netWeight} kg`
     : '';
   const isDefrosted = /descongelad/i.test(trace?.freshness || '');
+  const isTemporaryChild = tag.status === 'provisional' && tag.source === 'kitchen';
   const isProvisional = tag.status === 'provisional' || tag.source === 'physical_label';
   const consumerNotice = trace?.consumerNotice || (isDefrosted ? 'Consumir preferentemente en 3 días' : '');
   const expiresLabel = tag.expires_at
@@ -92,7 +93,9 @@ export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentInde
 
       {isProvisional ? (
         <div className="flex flex-col gap-1 border-b border-amber-300/20 bg-amber-400/[.10] px-5 py-3 text-amber-100 sm:flex-row sm:items-center sm:justify-between sm:px-7 lg:px-8">
-          <strong className="text-xs font-black uppercase tracking-[.16em]">TEMPORAL · 24 HORAS · FACTURA PENDIENTE</strong>
+          <strong className="text-xs font-black uppercase tracking-[.16em]">
+            {isTemporaryChild ? 'TEMPORAL HIJA · 72 HORAS · TRAZABILIDAD HEREDADA' : 'TEMPORAL · 24 HORAS · FACTURA PENDIENTE'}
+          </strong>
           {expiresLabel ? <span className="text-xs font-bold text-amber-200">Caduca {expiresLabel}</span> : null}
         </div>
       ) : null}
@@ -117,7 +120,7 @@ export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentInde
 
         <section className="mt-6 border-t border-white/[.08] pt-5">
           <p className={`mb-3 text-[10px] font-black uppercase tracking-[.2em] ${isProvisional ? 'text-amber-300' : accent.label}`}>
-            {isProvisional ? 'Datos de la etiqueta física' : 'Factura y expedidor'}
+            {isProvisional ? 'Datos de trazabilidad heredados' : 'Factura y expedidor'}
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {invoiceFields.map(([label, value]) => <Field key={label} label={label} value={value} />)}
@@ -148,7 +151,7 @@ export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentInde
       <footer className="flex items-center justify-between gap-4 border-t border-white/[.07] bg-black/20 px-5 py-3 text-[10px] font-bold uppercase tracking-[.14em] text-slate-500 sm:px-7 lg:px-8">
         <span className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${isProvisional ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-          {isProvisional ? 'Temporal activa' : 'Ficha activa'}
+          {isTemporaryChild ? 'Temporal hija activa' : isProvisional ? 'Temporal activa' : 'Ficha activa'}
         </span>
         <span>CA46 · Trazabilidad alimentaria</span>
       </footer>
