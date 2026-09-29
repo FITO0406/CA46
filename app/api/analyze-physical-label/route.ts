@@ -8,7 +8,9 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY 
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 const FALLBACK_MODELS = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
+const PRIVATE_PRICE_FIELD = /(?:^|\s)(precio|importe|total|iva|coste|costo|euros?|€)(?:\s|$)/i;
 
+type ExtraField = { label: string; value: string };
 type ProviderResult = {
   ok: boolean;
   status: number;
@@ -17,16 +19,86 @@ type ProviderResult = {
   error: string;
 };
 
+const KNOWN_LABEL_KEYS = [
+  'description', 'descripcion', 'especie', 'scientific_name', 'nombre_cientifico',
+  'lote', 'lot', 'marca', 'brand', 'kg_neto', 'kg', 'peso', 'peso_neto', 'net_weight',
+  'metodo', 'metodo_produccion', 'production_method', 'presentacion', 'presentation',
+  'procedencia', 'origin', 'origen', 'fao', 'zona_fao', 'frescura', 'freshness',
+  'arte', 'arte_pesca', 'fishing_gear', 'ce', 'registro_ce', 'ce_code', 'subzona', 'subzone',
+  'primer_expedidor', 'prim_expedidor', 'first_shipper', 'poblacion', 'population',
+  'fecha_captura', 'fec_captura', 'capture_date', 'comprador', 'buyer', 'nif', 'buyer_nif',
+  'extra_fields', 'confidence', 'needs_review', 'review_fields',
+];
+
 function cleanString(value: unknown): string {
   return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
 }
 
-function cleanExtras(value: unknown) {
+function humanizeKey(value: string) {
+  return value
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function cleanExtras(value: unknown): ExtraField[] {
   if (!Array.isArray(value)) return [];
   return value
-    .map((item: any) => ({ label: cleanString(item?.label), value: cleanString(item?.value) }))
+    .map((item: any) => ({ label: cleanString(item?.label || item?.key || item?.name), value: cleanString(item?.value ?? item?.valor) }))
     .filter((item) => item.label && item.value)
-    .filter((item) => !/(precio|importe|total|iva|coste|€)/i.test(item.label));
+    .filter((item) => !PRIVATE_PRICE_FIELD.test(item.label));
+}
+
+function collectUnknownFields(record: unknown): ExtraField[] {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return [];
+  const known = new Set(KNOWN_LABEL_KEYS.map((key) => key.toLowerCase()));
+  const rows: ExtraField[] = [];
+
+  for (const [key, rawValue] of Object.entries(record as Record<string, unknown>)) {
+    if (known.has(key.toLowerCase())) continue;
+    if (rawValue === null || rawValue === undefined || typeof rawValue === 'object') continue;
+    const value = cleanString(rawValue);
+    const label = humanizeKey(key);
+    if (!label || !value || PRIVATE_PRICE_FIELD.test(label)) continue;
+    rows.push({ label, value });
+  }
+  return rows;
+}
+
+function mergeExtras(...groups: ExtraField[][]) {
+  const seen = new Set<string>();
+  const result: ExtraField[] = [];
+  for (const group of groups) {
+    for (const item of group) {
+      const label = cleanString(item.label);
+      const value = cleanString(item.value);
+      if (!label || !value || PRIVATE_PRICE_FIELD.test(label)) continue;
+      const key = `${label.toLowerCase()}::${value.toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push({ label, value });
+    }
+  }
+  return result;
+}
+
+function resolveImageMimeType(file: File) {
+  const declared = String(file.type || '').toLowerCase().trim();
+  if (declared.startsWith('image/')) return declared;
+
+  const extension = String(file.name || '').toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] || '';
+  const byExtension: Record<string, string> = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+    gif: 'image/gif',
+    heic: 'image/heic',
+    heif: 'image/heif',
+    avif: 'image/avif',
+  };
+  return byExtension[extension] || '';
 }
 
 function parseModelJson(text: string): any {
@@ -55,7 +127,7 @@ async function callGemini(model: string, imageBase64: string, mimeType: string, 
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
         body: JSON.stringify({
           contents: [{ parts: [{ inlineData: { mimeType, data: imageBase64 } }, { text: prompt }] }],
-          generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+          generationConfig: { temperature: 0.05, responseMimeType: 'application/json' },
         }),
         signal: AbortSignal.timeout(45000),
       },
@@ -87,23 +159,23 @@ function normalizeLabel(raw: any) {
   const label = {
     description: cleanString(raw?.description || raw?.descripcion || raw?.especie),
     scientific_name: cleanString(raw?.scientific_name || raw?.nombre_cientifico),
-    lote: cleanString(raw?.lote),
-    marca: cleanString(raw?.marca),
-    kg_neto: cleanString(raw?.kg_neto || raw?.kg || raw?.peso),
-    metodo: cleanString(raw?.metodo || raw?.metodo_produccion),
-    presentacion: cleanString(raw?.presentacion),
-    procedencia: cleanString(raw?.procedencia || raw?.origin),
-    fao: cleanString(raw?.fao),
-    frescura: cleanString(raw?.frescura),
-    arte: cleanString(raw?.arte),
-    ce: cleanString(raw?.ce),
-    subzona: cleanString(raw?.subzona),
-    primer_expedidor: cleanString(raw?.primer_expedidor),
-    poblacion: cleanString(raw?.poblacion),
-    fecha_captura: cleanString(raw?.fecha_captura),
-    comprador: cleanString(raw?.comprador),
-    nif: cleanString(raw?.nif),
-    extra_fields: cleanExtras(raw?.extra_fields),
+    lote: cleanString(raw?.lote || raw?.lot),
+    marca: cleanString(raw?.marca || raw?.brand),
+    kg_neto: cleanString(raw?.kg_neto || raw?.kg || raw?.peso || raw?.peso_neto || raw?.net_weight),
+    metodo: cleanString(raw?.metodo || raw?.metodo_produccion || raw?.production_method),
+    presentacion: cleanString(raw?.presentacion || raw?.presentation),
+    procedencia: cleanString(raw?.procedencia || raw?.origin || raw?.origen),
+    fao: cleanString(raw?.fao || raw?.zona_fao),
+    frescura: cleanString(raw?.frescura || raw?.freshness),
+    arte: cleanString(raw?.arte || raw?.arte_pesca || raw?.fishing_gear),
+    ce: cleanString(raw?.ce || raw?.registro_ce || raw?.ce_code),
+    subzona: cleanString(raw?.subzona || raw?.subzone),
+    primer_expedidor: cleanString(raw?.primer_expedidor || raw?.prim_expedidor || raw?.first_shipper),
+    poblacion: cleanString(raw?.poblacion || raw?.population),
+    fecha_captura: cleanString(raw?.fecha_captura || raw?.fec_captura || raw?.capture_date),
+    comprador: cleanString(raw?.comprador || raw?.buyer),
+    nif: cleanString(raw?.nif || raw?.buyer_nif),
+    extra_fields: mergeExtras(cleanExtras(raw?.extra_fields), collectUnknownFields(raw)),
     confidence,
     needs_review: Boolean(raw?.needs_review) || confidence < 0.78 || reviewFields.length > 0,
     review_fields: reviewFields,
@@ -127,22 +199,27 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const file = formData.get('image');
     if (!(file instanceof File)) return NextResponse.json({ error: 'No se ha recibido ninguna fotografía.' }, { status: 400 });
-    if (!file.type.startsWith('image/')) return NextResponse.json({ error: 'El archivo recibido no es una imagen.' }, { status: 400 });
+
+    const mimeType = resolveImageMimeType(file);
+    if (!mimeType) return NextResponse.json({ error: 'El archivo recibido no es una imagen compatible.' }, { status: 400 });
     if (file.size > MAX_IMAGE_BYTES) return NextResponse.json({ error: 'La fotografía es demasiado grande. Usa una imagen de menos de 6 MB.' }, { status: 413 });
 
     const imageBase64 = Buffer.from(await file.arrayBuffer()).toString('base64');
     const prompt = `
-Actúas como lector de trazabilidad alimentaria de CA46. La imagen contiene UNA ETIQUETA FÍSICA de pescado o marisco, no una factura.
+Actúas como lector de trazabilidad alimentaria de CA46. La imagen contiene UNA ETIQUETA FÍSICA de una caja de pescado o marisco, NO una factura.
 
 OBJETIVO:
-- Extraer exclusivamente los datos visibles para crear una etiqueta digital PROVISIONAL de 24 horas.
-- No inventes ningún dato.
-- No extraigas precios, importes, IVA ni totales.
+- Recupera toda la trazabilidad legible de la etiqueta física para crear una etiqueta digital TEMPORAL de 24 horas mientras la factura está pendiente.
+- Revisa la etiqueta completa dos veces antes de responder para no omitir campos.
+- No inventes ningún dato ni completes información por conocimiento general.
+- No extraigas precios, importes, IVA, totales ni costes.
 - Si un dato parece existir pero no se lee con seguridad, déjalo vacío y añádelo a review_fields.
 - Si un campo no aparece, puede quedar vacío.
-- Lote, especie y procedencia son críticos.
+- Especie, lote y procedencia son críticos y deben revisarse antes de publicar.
+- Cualquier dato de trazabilidad visible que no encaje en los campos principales debe conservarse en extra_fields como {"label":"","value":""}.
 
-Extrae: description, scientific_name, lote, marca, kg_neto, metodo, presentacion, procedencia, fao, frescura, arte, ce, subzona, primer_expedidor, poblacion, fecha_captura, comprador, nif y extra_fields.
+PRESTA ESPECIAL ATENCIÓN A:
+Descripción/especie, nombre científico, lote completo, marca, kg/peso neto, método de producción, presentación, procedencia/origen, FAO, frescura/estado, arte de pesca, CE/RGS, subzona, primer expedidor, población, fecha de captura, comprador y NIF cuando figuren.
 
 Devuelve EXCLUSIVAMENTE JSON válido:
 {
@@ -166,7 +243,7 @@ Devuelve EXCLUSIVAMENTE JSON válido:
     "fecha_captura":"",
     "comprador":"",
     "nif":"",
-    "extra_fields":[],
+    "extra_fields":[{"label":"","value":""}],
     "confidence":0.0,
     "needs_review":true,
     "review_fields":[]
@@ -177,7 +254,7 @@ Devuelve EXCLUSIVAMENTE JSON válido:
     const models = [GEMINI_MODEL, ...FALLBACK_MODELS].filter((model, index, all) => all.indexOf(model) === index);
     let result: ProviderResult | null = null;
     for (const model of models) {
-      const attempt = await callGemini(model, imageBase64, file.type || 'image/jpeg', prompt);
+      const attempt = await callGemini(model, imageBase64, mimeType, prompt);
       if (attempt.ok && attempt.text) { result = attempt; break; }
       result = attempt;
       if (!shouldFallback(attempt.status, attempt.error)) break;
@@ -210,7 +287,8 @@ Devuelve EXCLUSIVAMENTE JSON válido:
       provisional_hours: 24,
       model: result.model,
       source: file.name,
-    });
+      company_id: tenant.context.companyId,
+    }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error: any) {
     console.error('Analyze physical label error:', error);
     return NextResponse.json({ error: error?.message || 'Error inesperado al analizar la etiqueta física.' }, { status: 500 });
