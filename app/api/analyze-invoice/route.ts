@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase';
 import { tenantContextForRequest } from '@/lib/tenant-auth-server';
 
 export const runtime = 'nodejs';
@@ -15,6 +16,14 @@ type ProviderResult = { ok: boolean; status: number; text: string; model: string
 
 function cleanString(value: unknown): string {
   return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
+}
+
+function normalizeIdentifier(value: unknown) {
+  return cleanString(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
 }
 
 function humanizeKey(value: string) {
@@ -166,8 +175,9 @@ const INVOICE_KNOWN_KEYS = [
   'invoice_number', 'numero_factura', 'invoice_date', 'fecha_factura',
   'expedidor', 'shipper', 'cif_expedidor', 'shipper_tax_id',
   'registro_sanitario_expedidor', 'rgs', 'registro_sanitario',
-  'buyer', 'comprador', 'buyer_nif', 'nif', 'invoice_extra_fields',
-  'warnings', 'labels',
+  'buyer', 'comprador', 'buyer_nif', 'nif',
+  'buyer_number', 'numero_comprador', 'n_comprador', 'n_minorista', 'numero_minorista',
+  'invoice_extra_fields', 'warnings', 'labels',
 ];
 
 const LABEL_KNOWN_KEYS = [
@@ -185,8 +195,12 @@ const LABEL_KNOWN_KEYS = [
 function normalizeAnalysis(raw: any) {
   const buyer = cleanString(raw?.buyer || raw?.comprador);
   const buyerNif = cleanString(raw?.buyer_nif || raw?.nif);
+  const buyerNumber = cleanString(
+    raw?.buyer_number || raw?.numero_comprador || raw?.n_comprador || raw?.n_minorista || raw?.numero_minorista,
+  );
   const labels = Array.isArray(raw?.labels) ? raw.labels : [];
   const invoiceExtras = mergeExtras(
+    buyerNumber ? [{ label: 'N.º minorista GESICO', value: buyerNumber }] : [],
     cleanExtraFields(raw?.invoice_extra_fields),
     collectUnknownFields(raw, INVOICE_KNOWN_KEYS),
   );
@@ -246,6 +260,7 @@ function normalizeAnalysis(raw: any) {
     registro_sanitario_expedidor: cleanString(raw?.registro_sanitario_expedidor || raw?.rgs || raw?.registro_sanitario),
     buyer,
     buyer_nif: buyerNif,
+    buyer_number: buyerNumber,
     invoice_extra_fields: invoiceExtras,
     warnings,
     labels: normalizedLabels,
@@ -264,6 +279,24 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: 'El lector inteligente todavía no tiene configurada su clave de IA.', code: 'AI_NOT_CONFIGURED' },
         { status: 503 },
+      );
+    }
+
+    const { data: companySettings, error: settingsError } = await supabaseAdmin
+      .from('company_settings')
+      .select('gesico_buyer_number, tax_id')
+      .eq('company_id', tenant.context.companyId)
+      .maybeSingle();
+    if (settingsError) throw settingsError;
+
+    const authorizedBuyerNumber = normalizeIdentifier(companySettings?.gesico_buyer_number);
+    if (!authorizedBuyerNumber) {
+      return NextResponse.json(
+        {
+          error: 'Antes de crear etiquetas de 72 horas, configura en Mi empresa el N.º minorista / comprador GESICO.',
+          code: 'GESICO_BUYER_NUMBER_REQUIRED',
+        },
+        { status: 422, headers: { 'Cache-Control': 'no-store' } },
       );
     }
 
@@ -287,10 +320,17 @@ OBJETIVO OBLIGATORIO:
 - Una factura puede contener UNA O MUCHAS partidas. Devuelve UN objeto de etiqueta por CADA partida/lote detectado.
 - Nunca unas dos partidas solo porque tengan la misma especie. Si cambia lote, procedencia, método, CE, peso, expedidor u otro dato de trazabilidad, son etiquetas distintas.
 
+VALIDACIÓN DEL COMPRADOR GESICO:
+- Debes localizar el N.º de comprador / N.º minorista GESICO de la factura y devolverlo SIEMPRE en buyer_number cuando sea legible.
+- Es un identificador corto distinto del NIF/CIF. En facturas GESICO puede aparecer como "N.º comprador", "N.º minorista", "Nº cliente", "N. cliente", o como un número corto repetido junto/al extremo derecho del bloque COMPRADOR. Por ejemplo: 494.
+- Si ves un número corto junto al comprador y el mismo número se repite en el bloque inferior de trazabilidad del comprador, trátalo como buyer_number.
+- NO confundas buyer_number con: número de factura, NIF/CIF, R.G.S./CE, lote, bultos, kilos, fechas o importes.
+- Si buyer_number no es legible, déjalo vacío. No lo inventes.
+
 REGLAS DE LECTURA:
 - El LOTE es prioritario. Cópialo COMPLETO, respetando barras, guiones, fechas, prefijos, sufijos y códigos que formen parte de él. Nunca lo inventes.
 - Extrae TODOS los campos visibles de trazabilidad. Si un dato no encaja en los campos definidos, guárdalo en extra_fields (si pertenece a una partida) o invoice_extra_fields (si es general de la factura).
-- En documentos de GESICO / MERCASEVILLA presta especial atención a abreviaturas como: DESCRIPCIÓN/ESPECIE, LOTE, MARCA, KG NETO/PESO, MÉTODO, PRESENTACIÓN, PROCEDENCIA/ORIGEN, FAO, FRESCURA/ESTADO, ARTE, CE/R.G.S., NOM. CIENTÍFICO, SUBZONA, PRIM. EXPEDIDOR, POBLACIÓN, FEC. CAPTURA, COMPRADOR/CLIENTE y N/NIF/CIF.
+- En documentos de GESICO / MERCASEVILLA presta especial atención a abreviaturas como: DESCRIPCIÓN/ESPECIE, LOTE, MARCA, KG NETO/PESO, MÉTODO, PRESENTACIÓN, PROCEDENCIA/ORIGEN, FAO, FRESCURA/ESTADO, ARTE, CE/R.G.S., NOM. CIENTÍFICO, SUBZONA, PRIM. EXPEDIDOR, POBLACIÓN, FEC. CAPTURA, COMPRADOR/CLIENTE, N/NIF/CIF y N.º MINORISTA/COMPRADOR.
 - Copia comprador y NIF/CIF a cada etiqueta cuando sean datos comunes a todas las partidas.
 - No extraigas precios, importes, bases imponibles, IVA, totales, costes ni datos económicos: no forman parte de la etiqueta pública.
 - No inventes ni completes por conocimiento general. Si un dato parece estar presente pero no se lee con seguridad, déjalo vacío y añádelo a review_fields.
@@ -303,7 +343,8 @@ DATOS GENERALES DE LA FACTURA:
 - cif_expedidor: CIF/NIF del expedidor.
 - registro_sanitario_expedidor: R.G.S., RGSEAA, CE o registro sanitario del expedidor cuando sea un dato general.
 - buyer: comprador/cliente.
-- buyer_nif: CIF/NIF/N del comprador.
+- buyer_nif: CIF/NIF/N fiscal del comprador.
+- buyer_number: N.º minorista / N.º comprador GESICO. Es distinto de buyer_nif.
 - invoice_extra_fields: array de {"label":"","value":""} con CUALQUIER otro dato general de trazabilidad legible no incluido arriba.
 
 CAMPOS DE CADA PARTIDA / ETIQUETA:
@@ -331,7 +372,7 @@ CAMPOS DE CADA PARTIDA / ETIQUETA:
 - review_fields: nombres de campos visibles pero dudosos/ilegibles.
 
 EJEMPLO DEL TIPO DE INFORMACIÓN QUE CA46 DEBE CONSERVAR SI APARECE:
-Descripción, nombre científico, lote, marca, kg neto, método, presentación, procedencia, FAO, frescura, arte, CE, subzona, primer expedidor, población, fecha de captura, comprador y NIF/CIF, además del número/fecha de factura y datos del expedidor.
+Descripción, nombre científico, lote, marca, kg neto, método, presentación, procedencia, FAO, frescura, arte, CE, subzona, primer expedidor, población, fecha de captura, comprador, NIF/CIF y N.º minorista/comprador GESICO, además del número/fecha de factura y datos del expedidor.
 
 Devuelve EXCLUSIVAMENTE JSON válido, sin markdown ni comentarios, con esta estructura:
 {
@@ -342,6 +383,7 @@ Devuelve EXCLUSIVAMENTE JSON válido, sin markdown ni comentarios, con esta estr
   "registro_sanitario_expedidor":"",
   "buyer":"",
   "buyer_nif":"",
+  "buyer_number":"",
   "invoice_extra_fields":[{"label":"","value":""}],
   "warnings":[],
   "labels":[{
@@ -400,14 +442,53 @@ Si no identificas ninguna partida, devuelve "labels":[] y explica brevemente el 
     }
 
     const analysis = normalizeAnalysis(parseModelJson(result.text));
+    const detectedBuyerNumber = normalizeIdentifier(analysis.buyer_number);
+
+    if (!detectedBuyerNumber) {
+      return NextResponse.json(
+        {
+          error: 'No se ha podido leer el N.º minorista / comprador GESICO de esta factura. Haz una foto completa y nítida; por seguridad no se crearán etiquetas.',
+          code: 'GESICO_BUYER_NUMBER_NOT_READ',
+          buyer: analysis.buyer,
+        },
+        { status: 422, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+
+    if (detectedBuyerNumber !== authorizedBuyerNumber) {
+      return NextResponse.json(
+        {
+          error: `Factura rechazada: pertenece al comprador GESICO ${analysis.buyer_number || detectedBuyerNumber}, no al N.º minorista autorizado de esta empresa.`,
+          code: 'INVOICE_NOT_OWNED',
+          detected_buyer_number: analysis.buyer_number || detectedBuyerNumber,
+        },
+        { status: 409, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+
+    const configuredTaxId = normalizeIdentifier(companySettings?.tax_id);
+    const detectedTaxId = normalizeIdentifier(analysis.buyer_nif);
+    if (configuredTaxId && detectedTaxId && configuredTaxId !== detectedTaxId) {
+      analysis.warnings = [
+        ...analysis.warnings,
+        'El N.º minorista GESICO coincide, pero el NIF/CIF leído no coincide con Mi empresa. Revisa visualmente el documento antes de publicar.',
+      ];
+    }
+
+    analysis.invoice_extra_fields = mergeExtras(
+      [{ label: 'N.º minorista GESICO', value: analysis.buyer_number }],
+      analysis.invoice_extra_fields,
+    );
+
     return NextResponse.json({
       analysis,
+      ownership_verified: true,
       model: result.model,
       source: file.name,
       fallback_used: result.model !== GEMINI_MODEL,
       attempts,
       company_id: tenant.context.companyId,
-    });
+    }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error: any) {
     console.error('Analyze invoice error:', error);
     return NextResponse.json({ error: error?.message || 'Error inesperado al analizar la factura.' }, { status: 500 });
