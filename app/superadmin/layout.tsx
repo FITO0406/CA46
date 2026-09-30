@@ -13,40 +13,50 @@ const navItems = [
   { href: '/superadmin/facturas', label: 'Facturas' },
   { href: '/superadmin/incidencias', label: 'Incidencias' },
   { href: '/superadmin/sistema', label: 'Sistema' },
+  { href: '/superadmin/seguridad', label: 'Seguridad' },
 ] as const;
 
 export default function SuperAdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   return (
-    <SuperAdminGate>
-      <div className="border-b border-white/10 bg-[#07090b] px-4 py-2 text-white">
-        <nav className="mx-auto flex max-w-7xl items-center gap-2 overflow-x-auto">
-          {navItems.map((item) => {
-            const active = item.href === '/superadmin'
-              ? pathname === item.href
-              : pathname === item.href || pathname.startsWith(`${item.href}/`);
+    <>
+      <SuperAdminGate>
+        <div className="border-b border-white/10 bg-[#07090b] px-4 py-2 text-white">
+          <nav className="mx-auto flex max-w-7xl items-center gap-2 overflow-x-auto">
+            {navItems.map((item) => {
+              const active = item.href === '/superadmin'
+                ? pathname === item.href
+                : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`whitespace-nowrap rounded-lg border px-3 py-2 text-xs font-black transition ${
-                  active
-                    ? 'border-orange-400/30 bg-orange-500/10 text-orange-300'
-                    : 'border-white/10 bg-white/[.035] text-slate-400 hover:border-orange-400/20 hover:text-white'
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-          <Link href="/" className="ml-auto whitespace-nowrap rounded-lg border border-white/10 bg-white/[.035] px-3 py-2 text-xs font-black text-slate-500 hover:text-white">
-            CA46 ↗
-          </Link>
-        </nav>
-      </div>
-      {children}
-    </SuperAdminGate>
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`whitespace-nowrap rounded-lg border px-3 py-2 text-xs font-black transition ${
+                    active
+                      ? 'border-orange-400/30 bg-orange-500/10 text-orange-300'
+                      : 'border-white/10 bg-white/[.035] text-slate-400 hover:border-orange-400/20 hover:text-white'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+            <Link href="/" className="ml-auto whitespace-nowrap rounded-lg border border-white/10 bg-white/[.035] px-3 py-2 text-xs font-black text-slate-500 hover:text-white">
+              CA46 ↗
+            </Link>
+          </nav>
+        </div>
+        {children}
+      </SuperAdminGate>
+
+      <Link
+        href="/superadmin-recuperar"
+        className="fixed bottom-4 left-4 z-[60] rounded-full border border-orange-400/20 bg-[#0c1013]/95 px-4 py-2 text-xs font-black text-orange-300 shadow-xl backdrop-blur-xl"
+      >
+        ¿Olvidaste la contraseña?
+      </Link>
+    </>
   );
 }
