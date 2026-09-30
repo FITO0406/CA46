@@ -34,16 +34,16 @@ export default function RecuperarClavePage() {
         <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl border border-orange-400/20 bg-orange-500/10 text-3xl">🔑</div>
         <p className="mt-6 text-center text-xs font-black uppercase tracking-[.22em] text-orange-400">CA46 · Seguridad</p>
         <h1 className="mt-2 text-center text-3xl font-black">Recuperar contraseña</h1>
-        <p className="mt-3 text-center text-sm leading-6 text-slate-400">Te enviaremos un enlace para elegir una nueva contraseña.</p>
+        <p className="mt-3 text-center text-sm leading-6 text-slate-400">Introduce el email de tu cuenta. Si existe en CA46, recibirás un enlace para elegir una nueva contraseña.</p>
 
         {!sent ? (
           <form onSubmit={handleSubmit} className="mt-7 space-y-4">
-            <label className="block"><span className="mb-2 block text-[11px] font-black uppercase tracking-[.16em] text-slate-500">Email</span><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 font-bold outline-none focus:border-orange-400" /></label>
+            <label className="block"><span className="mb-2 block text-[11px] font-black uppercase tracking-[.16em] text-slate-500">Email</span><input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 font-bold outline-none focus:border-orange-400" /></label>
             {error ? <p className="rounded-xl border border-rose-400/20 bg-rose-500/[.08] px-4 py-3 text-sm font-bold text-rose-300">{error}</p> : null}
             <button type="submit" disabled={loading || !email.trim()} className="w-full rounded-xl bg-orange-500 px-5 py-4 font-black text-[#111416] disabled:bg-slate-800 disabled:text-slate-600">{loading ? 'Enviando…' : 'Enviar enlace de recuperación'}</button>
           </form>
         ) : (
-          <div className="mt-7 rounded-2xl border border-emerald-400/20 bg-emerald-400/[.08] p-5 text-center"><p className="font-black text-emerald-300">✓ Correo enviado</p><p className="mt-2 text-sm leading-6 text-slate-400">Revisa tu bandeja de entrada y abre el enlace de CA46.</p></div>
+          <div className="mt-7 rounded-2xl border border-emerald-400/20 bg-emerald-400/[.08] p-5 text-center"><p className="font-black text-emerald-300">✓ Solicitud enviada</p><p className="mt-2 text-sm leading-6 text-slate-400">Si existe una cuenta asociada a ese email, recibirás un mensaje de CA46. Revisa también Spam o Promociones.</p></div>
         )}
 
         <Link href="/acceso" className="mt-6 block text-center text-sm font-black text-slate-400">← Volver al acceso</Link>
