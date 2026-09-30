@@ -11,6 +11,7 @@ const items = [
   { href: '/facturacion', label: 'Facturación', matches: ['/facturacion'] },
   { href: '/gesico', label: 'GESICO', matches: ['/gesico'] },
   { href: '/bancos', label: 'Bancos', matches: ['/bancos'] },
+  { href: '/seguridad', label: 'Seguridad', matches: ['/seguridad'] },
 ] as const;
 
 export default function CompanyAreaNav() {
