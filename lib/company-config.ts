@@ -22,7 +22,7 @@ export type CompanyConfig = {
   businessName: string;
   legalName: string;
   taxId: string;
-  gesicoBuyerNumber: string;
+  marketBuyerNumber: string;
   address: string;
   postalCode: string;
   city: string;
@@ -49,7 +49,7 @@ export const DEFAULT_COMPANY_CONFIG: CompanyConfig = {
   businessName: '',
   legalName: '',
   taxId: '',
-  gesicoBuyerNumber: '',
+  marketBuyerNumber: '',
   address: '',
   postalCode: '',
   city: '',
@@ -75,7 +75,14 @@ export function loadCompanyConfig(): CompanyConfig {
   try {
     const raw = window.localStorage.getItem(COMPANY_STORAGE_KEY);
     if (!raw) return DEFAULT_COMPANY_CONFIG;
-    return { ...DEFAULT_COMPANY_CONFIG, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const legacyBuyerNumber = typeof parsed.gesicoBuyerNumber === 'string' ? parsed.gesicoBuyerNumber : '';
+    return {
+      ...DEFAULT_COMPANY_CONFIG,
+      ...parsed,
+      marketBuyerNumber:
+        typeof parsed.marketBuyerNumber === 'string' ? parsed.marketBuyerNumber : legacyBuyerNumber,
+    } as CompanyConfig;
   } catch {
     return DEFAULT_COMPANY_CONFIG;
   }
