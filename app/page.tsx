@@ -181,7 +181,7 @@ export default function Home() {
               </span>
             </h1>
             <p className="mt-6 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg">
-              Crea, publica y muestra la trazabilidad de tus productos. Accede también a GESICO, tus bancos y la configuración de tu empresa desde un único panel.
+              Crea, publica y muestra la trazabilidad de tus productos. Accede también a Mi Merca, tus bancos y la configuración de tu empresa desde un único panel.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href="/planes" className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-6 py-4 font-black text-[#111416] shadow-lg shadow-orange-950/30 transition hover:bg-orange-400">
@@ -256,10 +256,10 @@ export default function Home() {
             />
 
             <ModuleCard
-              title="GESICO"
-              description="Acceso directo e independiente a GESICO Sevilla para consultar o contrastar información cuando lo necesites."
+              title="Mi Merca"
+              description="Acceso directo al portal profesional del mercado mayorista que utilices, sin guardar credenciales externas en CA46."
               eyebrow="Acceso externo"
-              href="/gesico"
+              href="/mi-merca"
               icon={<ExternalIcon />}
             />
 
@@ -273,7 +273,7 @@ export default function Home() {
 
             <ModuleCard
               title="Mi empresa"
-              description="Datos de empresa y responsable, bancos, Drive, GESICO y configuración de etiquetas."
+              description="Datos de empresa y responsable, bancos, Drive, Mi Merca y configuración de etiquetas."
               eyebrow="Configuración"
               href="/mi-empresa"
               badge="Privado"
