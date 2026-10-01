@@ -9,7 +9,7 @@ const plans = [
     cadence: '/mes',
     eyebrow: 'Para probar CA46',
     description: 'Empieza sin coste y comprueba cómo funciona la trazabilidad digital en tu establecimiento.',
-    features: ['1 establecimiento','1 usuario','Hasta 20 etiquetas al mes','Pantalla de etiquetas','Mi empresa básico','1 banco configurado','Acceso a GESICO'],
+    features: ['1 establecimiento','1 usuario','Hasta 20 etiquetas al mes','Pantalla de etiquetas','Mi empresa básico','1 banco configurado','Acceso a Mi Merca'],
     limitations: ['Sin conexión de Google Drive', 'Historial limitado'],
   },
   {
@@ -20,7 +20,7 @@ const plans = [
     eyebrow: 'Para un negocio individual',
     description: 'El plan principal para una pescadería o comercio que quiere trabajar con CA46 a diario.',
     featured: true,
-    features: ['1 establecimiento','Hasta 3 usuarios','Etiquetas sin límite comercial previsto','Pantalla de etiquetas completa','Historial completo','Varios bancos','Google Drive','Acceso a GESICO','Personalización del establecimiento'],
+    features: ['1 establecimiento','Hasta 3 usuarios','Etiquetas sin límite comercial previsto','Pantalla de etiquetas completa','Historial completo','Varios bancos','Google Drive','Acceso a Mi Merca','Personalización del establecimiento'],
     limitations: [],
   },
   {
@@ -30,7 +30,7 @@ const plans = [
     cadence: '/mes',
     eyebrow: 'Para varios centros',
     description: 'Para empresas con más de un establecimiento y una administración común de usuarios y centros.',
-    features: ['Varios establecimientos','Varios usuarios','Etiquetas sin límite comercial previsto','Pantalla independiente por centro','Historial completo','Varios bancos','Google Drive','Acceso a GESICO','Administración centralizada','Soporte prioritario'],
+    features: ['Varios establecimientos','Varios usuarios','Etiquetas sin límite comercial previsto','Pantalla independiente por centro','Historial completo','Varios bancos','Google Drive','Acceso a Mi Merca','Administración centralizada','Soporte prioritario'],
     limitations: [],
   },
   {
