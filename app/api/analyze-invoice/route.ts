@@ -200,7 +200,7 @@ function normalizeAnalysis(raw: any) {
   );
   const labels = Array.isArray(raw?.labels) ? raw.labels : [];
   const invoiceExtras = mergeExtras(
-    buyerNumber ? [{ label: 'N.º minorista GESICO', value: buyerNumber }] : [],
+    buyerNumber ? [{ label: 'N.º de comprador / cliente', value: buyerNumber }] : [],
     cleanExtraFields(raw?.invoice_extra_fields),
     collectUnknownFields(raw, INVOICE_KNOWN_KEYS),
   );
@@ -293,8 +293,8 @@ export async function POST(request: Request) {
     if (!authorizedBuyerNumber) {
       return NextResponse.json(
         {
-          error: 'Antes de crear etiquetas de 72 horas, configura en Mi empresa el N.º minorista / comprador GESICO.',
-          code: 'GESICO_BUYER_NUMBER_REQUIRED',
+          error: 'Antes de crear etiquetas de 72 horas, configura en Mi empresa el N.º de comprador / cliente de tu Merca.',
+          code: 'BUYER_NUMBER_REQUIRED',
         },
         { status: 422, headers: { 'Cache-Control': 'no-store' } },
       );
@@ -312,7 +312,7 @@ export async function POST(request: Request) {
 
     const imageBase64 = Buffer.from(await file.arrayBuffer()).toString('base64');
     const prompt = `
-Actúas como el lector de trazabilidad alimentaria de CA46. Analiza ESTA fotografía de una factura o documento de trazabilidad GESICO / MERCASEVILLA de pescado o marisco.
+Actúas como el lector de trazabilidad alimentaria de CA46. Analiza ESTA fotografía de una factura, albarán o documento de trazabilidad de pescado o marisco emitido por un mercado mayorista, lonja o proveedor.
 
 OBJETIVO OBLIGATORIO:
 - Recupera la ficha de trazabilidad COMPLETA que sea legible en el documento, no solo los campos principales.
@@ -320,9 +320,9 @@ OBJETIVO OBLIGATORIO:
 - Una factura puede contener UNA O MUCHAS partidas. Devuelve UN objeto de etiqueta por CADA partida/lote detectado.
 - Nunca unas dos partidas solo porque tengan la misma especie. Si cambia lote, procedencia, método, CE, peso, expedidor u otro dato de trazabilidad, son etiquetas distintas.
 
-VALIDACIÓN DEL COMPRADOR GESICO:
-- Debes localizar el N.º de comprador / N.º minorista GESICO de la factura y devolverlo SIEMPRE en buyer_number cuando sea legible.
-- Es un identificador corto distinto del NIF/CIF. En facturas GESICO puede aparecer como "N.º comprador", "N.º minorista", "Nº cliente", "N. cliente", o como un número corto repetido junto/al extremo derecho del bloque COMPRADOR. Por ejemplo: 494.
+VALIDACIÓN DEL COMPRADOR:
+- Debes localizar el N.º de comprador, N.º minorista o N.º cliente del documento y devolverlo SIEMPRE en buyer_number cuando sea legible.
+- Es un identificador distinto del NIF/CIF. Puede aparecer como "N.º comprador", "N.º minorista", "Nº cliente", "N. cliente" u otra denominación equivalente.
 - Si ves un número corto junto al comprador y el mismo número se repite en el bloque inferior de trazabilidad del comprador, trátalo como buyer_number.
 - NO confundas buyer_number con: número de factura, NIF/CIF, R.G.S./CE, lote, bultos, kilos, fechas o importes.
 - Si buyer_number no es legible, déjalo vacío. No lo inventes.
@@ -330,7 +330,7 @@ VALIDACIÓN DEL COMPRADOR GESICO:
 REGLAS DE LECTURA:
 - El LOTE es prioritario. Cópialo COMPLETO, respetando barras, guiones, fechas, prefijos, sufijos y códigos que formen parte de él. Nunca lo inventes.
 - Extrae TODOS los campos visibles de trazabilidad. Si un dato no encaja en los campos definidos, guárdalo en extra_fields (si pertenece a una partida) o invoice_extra_fields (si es general de la factura).
-- En documentos de GESICO / MERCASEVILLA presta especial atención a abreviaturas como: DESCRIPCIÓN/ESPECIE, LOTE, MARCA, KG NETO/PESO, MÉTODO, PRESENTACIÓN, PROCEDENCIA/ORIGEN, FAO, FRESCURA/ESTADO, ARTE, CE/R.G.S., NOM. CIENTÍFICO, SUBZONA, PRIM. EXPEDIDOR, POBLACIÓN, FEC. CAPTURA, COMPRADOR/CLIENTE, N/NIF/CIF y N.º MINORISTA/COMPRADOR.
+- Presta especial atención a abreviaturas como: DESCRIPCIÓN/ESPECIE, LOTE, MARCA, KG NETO/PESO, MÉTODO, PRESENTACIÓN, PROCEDENCIA/ORIGEN, FAO, FRESCURA/ESTADO, ARTE, CE/R.G.S., NOM. CIENTÍFICO, SUBZONA, PRIM. EXPEDIDOR, POBLACIÓN, FEC. CAPTURA, COMPRADOR/CLIENTE, N/NIF/CIF y N.º MINORISTA/COMPRADOR/CLIENTE.
 - Copia comprador y NIF/CIF a cada etiqueta cuando sean datos comunes a todas las partidas.
 - No extraigas precios, importes, bases imponibles, IVA, totales, costes ni datos económicos: no forman parte de la etiqueta pública.
 - No inventes ni completes por conocimiento general. Si un dato parece estar presente pero no se lee con seguridad, déjalo vacío y añádelo a review_fields.
@@ -344,7 +344,7 @@ DATOS GENERALES DE LA FACTURA:
 - registro_sanitario_expedidor: R.G.S., RGSEAA, CE o registro sanitario del expedidor cuando sea un dato general.
 - buyer: comprador/cliente.
 - buyer_nif: CIF/NIF/N fiscal del comprador.
-- buyer_number: N.º minorista / N.º comprador GESICO. Es distinto de buyer_nif.
+- buyer_number: N.º minorista / N.º comprador / N.º cliente. Es distinto de buyer_nif.
 - invoice_extra_fields: array de {"label":"","value":""} con CUALQUIER otro dato general de trazabilidad legible no incluido arriba.
 
 CAMPOS DE CADA PARTIDA / ETIQUETA:
@@ -372,7 +372,7 @@ CAMPOS DE CADA PARTIDA / ETIQUETA:
 - review_fields: nombres de campos visibles pero dudosos/ilegibles.
 
 EJEMPLO DEL TIPO DE INFORMACIÓN QUE CA46 DEBE CONSERVAR SI APARECE:
-Descripción, nombre científico, lote, marca, kg neto, método, presentación, procedencia, FAO, frescura, arte, CE, subzona, primer expedidor, población, fecha de captura, comprador, NIF/CIF y N.º minorista/comprador GESICO, además del número/fecha de factura y datos del expedidor.
+Descripción, nombre científico, lote, marca, kg neto, método, presentación, procedencia, FAO, frescura, arte, CE, subzona, primer expedidor, población, fecha de captura, comprador, NIF/CIF e identificador de comprador, además del número/fecha de factura y datos del expedidor.
 
 Devuelve EXCLUSIVAMENTE JSON válido, sin markdown ni comentarios, con esta estructura:
 {
@@ -447,8 +447,8 @@ Si no identificas ninguna partida, devuelve "labels":[] y explica brevemente el 
     if (!detectedBuyerNumber) {
       return NextResponse.json(
         {
-          error: 'No se ha podido leer el N.º minorista / comprador GESICO de esta factura. Haz una foto completa y nítida; por seguridad no se crearán etiquetas.',
-          code: 'GESICO_BUYER_NUMBER_NOT_READ',
+          error: 'No se ha podido leer el N.º de comprador / cliente de esta factura. Haz una foto completa y nítida; por seguridad no se crearán etiquetas.',
+          code: 'BUYER_NUMBER_NOT_READ',
           buyer: analysis.buyer,
         },
         { status: 422, headers: { 'Cache-Control': 'no-store' } },
@@ -458,7 +458,7 @@ Si no identificas ninguna partida, devuelve "labels":[] y explica brevemente el 
     if (detectedBuyerNumber !== authorizedBuyerNumber) {
       return NextResponse.json(
         {
-          error: `Factura rechazada: pertenece al comprador GESICO ${analysis.buyer_number || detectedBuyerNumber}, no al N.º minorista autorizado de esta empresa.`,
+          error: `Factura rechazada: pertenece al comprador ${analysis.buyer_number || detectedBuyerNumber}, no al identificador autorizado de esta empresa.`,
           code: 'INVOICE_NOT_OWNED',
           detected_buyer_number: analysis.buyer_number || detectedBuyerNumber,
         },
@@ -471,12 +471,12 @@ Si no identificas ninguna partida, devuelve "labels":[] y explica brevemente el 
     if (configuredTaxId && detectedTaxId && configuredTaxId !== detectedTaxId) {
       analysis.warnings = [
         ...analysis.warnings,
-        'El N.º minorista GESICO coincide, pero el NIF/CIF leído no coincide con Mi empresa. Revisa visualmente el documento antes de publicar.',
+        'El identificador de comprador coincide, pero el NIF/CIF leído no coincide con Mi empresa. Revisa visualmente el documento antes de publicar.',
       ];
     }
 
     analysis.invoice_extra_fields = mergeExtras(
-      [{ label: 'N.º minorista GESICO', value: analysis.buyer_number }],
+      [{ label: 'N.º de comprador / cliente', value: analysis.buyer_number }],
       analysis.invoice_extra_fields,
     );
 
