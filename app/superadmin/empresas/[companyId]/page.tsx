@@ -106,7 +106,7 @@ const featureLabels: Record<FeatureKey, string> = {
   drive: 'Google Drive',
   screen: 'Pantalla de etiquetas',
   banks: 'Bancos',
-  gesico: 'GESICO',
+  gesico: 'Mi Merca',
   store: 'Tienda / pedidos',
 };
 
