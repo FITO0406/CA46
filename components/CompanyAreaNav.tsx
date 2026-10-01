@@ -9,7 +9,7 @@ const items = [
   { href: '/cocina', label: 'Cocina', matches: ['/cocina'] },
   { href: '/temperaturas', label: 'Temperaturas', matches: ['/temperaturas'] },
   { href: '/facturacion', label: 'Facturación', matches: ['/facturacion'] },
-  { href: '/gesico', label: 'Mi Merca', matches: ['/gesico'] },
+  { href: '/mi-merca', label: 'Mi Merca', matches: ['/mi-merca', '/gesico'] },
   { href: '/bancos', label: 'Bancos', matches: ['/bancos'] },
   { href: '/seguridad', label: 'Seguridad', matches: ['/seguridad'] },
 ] as const;
