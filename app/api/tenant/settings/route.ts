@@ -11,7 +11,7 @@ function toClient(row: any) {
     businessName: row.business_name || '',
     legalName: row.legal_name || '',
     taxId: row.tax_id || '',
-    gesicoBuyerNumber: row.gesico_buyer_number || '',
+    marketBuyerNumber: row.gesico_buyer_number || '',
     phone: row.phone || '',
     email: row.email || '',
     address: row.address || '',
@@ -48,8 +48,6 @@ export async function GET(request: Request) {
   try {
     const access = await tenantContextForRequest(request);
     if (!access.ok) {
-      // Mi empresa también es la pantalla de alta. Un usuario autenticado que aún
-      // no tiene company_id debe poder entrar y activar su empresa.
       if (access.status === 409) {
         return NextResponse.json(
           { ok: true, settings: null, code: 'TENANT_REQUIRED' },
@@ -98,13 +96,14 @@ export async function PUT(request: Request) {
 
     const body = await request.json().catch(() => ({}));
     const labelsHours = Math.max(1, Math.min(720, Number(body?.labelsHours || 72)));
+    const marketBuyerNumber = String(body?.marketBuyerNumber || body?.gesicoBuyerNumber || '').trim().slice(0, 80);
 
     const record = {
       company_id: access.context.companyId,
       business_name: String(body?.businessName || '').trim(),
       legal_name: String(body?.legalName || '').trim(),
       tax_id: String(body?.taxId || '').trim(),
-      gesico_buyer_number: String(body?.gesicoBuyerNumber || '').trim().slice(0, 80),
+      gesico_buyer_number: marketBuyerNumber,
       phone: String(body?.phone || '').trim(),
       email: String(body?.email || '').trim(),
       address: String(body?.address || '').trim(),
