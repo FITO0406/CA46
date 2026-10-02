@@ -157,7 +157,10 @@ export default function Home() {
             </div>
           </div>
 
-          <nav className="flex items-center gap-2 sm:gap-3">
+          <nav className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+            <Link href="https://ca46-demo.fesaro0406.chatgpt.site/?utm_source=ca46&utm_medium=web&utm_campaign=demo" prefetch={false} className="rounded-full border border-orange-400/30 bg-orange-500/10 px-4 py-2 text-sm font-black text-orange-300 transition hover:bg-orange-500/20">
+              Solicitar demo
+            </Link>
             <Link href="/planes" className="hidden rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-black text-slate-300 transition hover:border-orange-400/30 hover:text-orange-300 sm:inline-flex">
               Planes
             </Link>
