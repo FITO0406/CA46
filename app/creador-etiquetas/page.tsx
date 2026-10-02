@@ -44,6 +44,7 @@ type InvoiceResult = {
   registro_sanitario_expedidor: string;
   buyer: string;
   buyer_nif: string;
+  buyer_number: string;
   invoice_extra_fields: ExtraField[];
   warnings: string[];
   labels: LabelDraft[];
@@ -125,6 +126,7 @@ function normalizeInvoice(photo: SelectedPhoto, analysis: any): InvoiceResult {
     registro_sanitario_expedidor: analysis?.registro_sanitario_expedidor || '',
     buyer: analysis?.buyer || '',
     buyer_nif: analysis?.buyer_nif || '',
+    buyer_number: analysis?.buyer_number || '',
     invoice_extra_fields: Array.isArray(analysis?.invoice_extra_fields) ? analysis.invoice_extra_fields : [],
     warnings: Array.isArray(analysis?.warnings) ? analysis.warnings : [],
     labels: Array.isArray(analysis?.labels) ? analysis.labels.map((label: any) => ({

@@ -42,6 +42,7 @@ type InvoiceDraft = {
   registro_sanitario_expedidor?: string;
   buyer?: string;
   buyer_nif?: string;
+  buyer_number?: string;
   invoice_extra_fields?: ExtraField[];
   labels?: LabelDraft[];
 };
@@ -70,10 +71,12 @@ function normalizeLabel(value: unknown) {
 }
 
 function invoiceGesicoBuyerNumber(invoice: InvoiceDraft) {
+  const buyerNumber = clean(invoice.buyer_number);
+  if (buyerNumber) return buyerNumber;
   const extras = Array.isArray(invoice.invoice_extra_fields) ? invoice.invoice_extra_fields : [];
   for (const item of extras) {
     const label = normalizeLabel(item?.label);
-    if (label.includes('minorista') || (label.includes('comprador') && label.includes('gesico'))) {
+    if (label.includes('minorista') || (label.includes('comprador') && (label.includes('gesico') || label === 'n de comprador cliente'))) {
       const value = clean(item?.value);
       if (value) return value;
     }
