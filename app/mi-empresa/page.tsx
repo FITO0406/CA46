@@ -27,6 +27,10 @@ type DriveStatus = {
   folderId: string;
   folderUrl: string;
   oauthReady: boolean;
+  archiveReady?: boolean;
+  archivedAt?: string;
+  archiveError?: string;
+  pendingLabels?: number;
 };
 
 const EMPTY_DRIVE_STATUS: DriveStatus = {
@@ -160,6 +164,30 @@ export default function MiEmpresaPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function archiveDrive() {
+    setDriveLoading(true);
+    try {
+      let pending = 1;
+      let total = 0;
+      // Each request is bounded; continue batches until the backlog is saved.
+      while (pending > 0) {
+        const response = await fetch('/api/company-drive/archive', { method: 'POST', headers: await tenantAuthorizationHeader() });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Conecta Google Drive para guardar el histórico.');
+        total += result.archived || 0;
+        pending = result.pending || 0;
+        if (result.busy) { setMessage('El histórico ya se está guardando. Vuelve a revisar Drive en unos instantes.'); return; }
+        if (!result.archived && pending) throw new Error('Hay etiquetas pendientes. Vuelve a intentar guardar el histórico.');
+        if (result.archived === 30) pending = Math.max(1, pending);
+      }
+      setMessage(`✓ Histórico guardado en Drive: ${total} etiquetas nuevas. Las de 24 y 72 horas se conservan al caducar.`);
+      const status = await fetch('/api/company-drive/status', { headers: await tenantAuthorizationHeader(), cache: 'no-store' });
+      if (status.ok) setDriveStatus(await status.json());
+    } catch (error: unknown) {
+      setMessage(error instanceof Error ? error.message : 'No se pudo guardar el histórico en Drive.');
+    } finally { setDriveLoading(false); }
   }
 
   async function connectDrive() {
@@ -352,7 +380,7 @@ export default function MiEmpresaPage() {
               <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
                 <h3 className="text-lg font-black">Google Drive</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Elige la cuenta de Google que usará esta empresa. CA46 creará dentro de Mi unidad una carpeta propia con Facturas, Etiquetas e Histórico.
+                  Conecta la cuenta de Google de esta empresa. Todas las etiquetas de 24 y 72 horas se guardarán en Histórico, incluso cuando dejen de verse en pantalla. Puedes recuperar también las anteriores.
                 </p>
 
                 {driveStatus.mode === 'oauth' && driveStatus.accountEmail ? (
@@ -368,12 +396,16 @@ export default function MiEmpresaPage() {
                 {!driveStatus.oauthReady ? (
                   <p className="mt-3 text-xs font-bold text-rose-300">La conexión por cuenta está preparada en CA46, pero falta activar las credenciales OAuth de Google.</p>
                 ) : null}
+                {driveStatus.archivedAt ? <p className="mt-3 text-xs text-emerald-300">Último archivo: {new Date(driveStatus.archivedAt).toLocaleString('es-ES')}</p> : null}
+                {driveStatus.archiveError ? <p className="mt-3 text-xs text-rose-300">{driveStatus.archiveError}</p> : null}
+                {driveStatus.pendingLabels ? <p className="mt-3 text-xs text-amber-300">{driveStatus.pendingLabels >= 100 ? '100 o más' : driveStatus.pendingLabels} etiquetas pendientes de archivar.</p> : null}
 
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button type="button" onClick={connectDrive} disabled={driveLoading || loading || !driveStatus.oauthReady} className="rounded-xl bg-orange-500 px-4 py-3 text-sm font-black text-[#111416] disabled:opacity-50">
                     {driveLoading ? 'Abriendo Google…' : driveStatus.mode === 'oauth' ? 'Cambiar cuenta de Google' : 'Elegir cuenta de Google'}
                   </button>
                   {(driveStatus.folderUrl || config.driveFolderUrl) ? <a href={driveStatus.folderUrl || config.driveFolderUrl} target="_blank" rel="noreferrer" className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-black">Abrir carpeta ↗</a> : null}
+                  <button type="button" onClick={archiveDrive} disabled={driveLoading || loading || !driveStatus.connected} className="rounded-xl border border-orange-400/30 px-4 py-3 text-sm font-black text-orange-300 disabled:opacity-50">{driveLoading ? 'Procesando Drive…' : 'Guardar y recuperar histórico'}</button>
                 </div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-5">

@@ -1,12 +1,11 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
+import { saveDriveToken, archiveCompanyLabelsSafely } from '@/lib/company-drive-archive';
 import { google } from 'googleapis';
 import { supabaseAdmin } from '@/lib/supabase';
 import { driveOAuthClient, verifyDriveOAuthState } from '@/lib/company-drive-oauth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const GOOGLE_SA_JSON = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
 
 function redirectToMiEmpresa(request: Request, params: Record<string, string>) {
   const url = new URL('/mi-empresa', request.url);
@@ -16,18 +15,6 @@ function redirectToMiEmpresa(request: Request, params: Record<string, string>) {
 
 function escapeDriveQuery(value: string) {
   return value.replace(/'/g, "\\'");
-}
-
-function serviceAccountEmail() {
-  let jsonString = GOOGLE_SA_JSON.trim();
-  if (!jsonString) throw new Error('Falta configurar GOOGLE_SERVICE_ACCOUNT_JSON en CA46.');
-  if ((jsonString.startsWith("'") && jsonString.endsWith("'")) || (jsonString.startsWith('"') && jsonString.endsWith('"'))) {
-    jsonString = jsonString.slice(1, -1);
-  }
-  const parsed = JSON.parse(jsonString);
-  const email = String(parsed?.client_email || '').trim();
-  if (!email) throw new Error('La cuenta de servicio de Google Drive no tiene client_email.');
-  return email;
 }
 
 async function findRootFolder(drive: any, companyId: string) {
@@ -71,28 +58,6 @@ async function findOrCreateSubfolder(drive: any, companyId: string, name: string
     fields: 'id,name,webViewLink',
   });
   return created.data;
-}
-
-async function ensureServiceAccountAccess(drive: any, folderId: string, email: string) {
-  const permissions = await drive.permissions.list({
-    fileId: folderId,
-    fields: 'permissions(id,emailAddress,role,type)',
-    pageSize: 100,
-  });
-  const existing = (permissions.data.permissions || []).find(
-    (permission: any) => String(permission.emailAddress || '').toLowerCase() === email.toLowerCase(),
-  );
-  if (existing?.id) return;
-
-  await drive.permissions.create({
-    fileId: folderId,
-    sendNotificationEmail: false,
-    requestBody: {
-      type: 'user',
-      role: 'writer',
-      emailAddress: email,
-    },
-  });
 }
 
 export async function GET(request: Request) {
@@ -158,7 +123,9 @@ export async function GET(request: Request) {
       await findOrCreateSubfolder(drive, state.companyId, subfolder, root.id);
     }
 
-    await ensureServiceAccountAccess(drive, root.id, serviceAccountEmail());
+    // Store a protected offline token: archival runs as the selected account.
+    // A service account is no longer required to own files in a personal Drive.
+    await saveDriveToken(state.companyId, tokens.refresh_token || '');
 
     const folderUrl = root.webViewLink || `https://drive.google.com/drive/folders/${root.id}`;
     const { error: settingsSaveError } = await supabaseAdmin
@@ -173,9 +140,11 @@ export async function GET(request: Request) {
       .eq('company_id', state.companyId);
     if (settingsSaveError) throw settingsSaveError;
 
+    after(() => archiveCompanyLabelsSafely(state.companyId));
+
     return redirectToMiEmpresa(request, { drive: 'connected', account: accountEmail });
   } catch (error: any) {
-    console.error('company-drive callback error:', error);
+    console.error('company-drive callback: connection failed.');
     return redirectToMiEmpresa(request, {
       drive: 'error',
       reason: error?.message || 'No se pudo completar la conexión con Google Drive.',

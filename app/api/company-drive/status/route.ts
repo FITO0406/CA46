@@ -22,6 +22,11 @@ export async function GET(request: Request) {
 
     const accountEmail = String(settings?.drive_account_email || '').trim();
     const connected = Boolean(settings?.drive_connected && settings?.drive_folder_id);
+    const { data: archiveState } = await supabaseAdmin.from('company_drive_credentials')
+      .select('refresh_token_encrypted,last_archive_at,last_error').eq('company_id', tenant.context.companyId).maybeSingle();
+    const { data: pending } = connected ? await supabaseAdmin.rpc('drive_pending_labels', {
+      p_company_id: tenant.context.companyId, p_root_folder_id: settings!.drive_folder_id, p_limit: 100,
+    }) : { data: [] };
 
     return NextResponse.json(
       {
@@ -31,6 +36,10 @@ export async function GET(request: Request) {
         folderId: settings?.drive_folder_id || '',
         folderUrl: settings?.drive_folder_url || '',
         oauthReady: driveOAuthConfigured(),
+        archiveReady: Boolean(archiveState?.refresh_token_encrypted),
+        archivedAt: archiveState?.last_archive_at || '',
+        archiveError: archiveState?.last_error || '',
+        pendingLabels: pending?.length || 0,
       },
       { headers: { 'Cache-Control': 'no-store' } },
     );

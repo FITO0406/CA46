@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
+import { archiveCompanyLabelsSafely } from '@/lib/company-drive-archive';
 import { supabaseAdmin } from '@/lib/supabase';
 import { tenantContextForRequest } from '@/lib/tenant-auth-server';
 import { encodeTraceability, type TraceabilityData } from '@/lib/traceability';
@@ -300,6 +301,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No se pudieron publicar las etiquetas.' }, { status: 500 });
     }
 
+    // Drive-only side effect; publication and expiry remain unchanged.
+    after(() => archiveCompanyLabelsSafely(tenant.context.companyId));
     return NextResponse.json(
       {
         published: data?.length || records.length,

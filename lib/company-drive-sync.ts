@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import { supabaseAdmin } from '@/lib/supabase';
 import { encodeTraceability, parseTraceabilityText } from '@/lib/traceability';
+import { archiveDriveClient } from '@/lib/company-drive-archive';
 
 const GOOGLE_SA_JSON = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
 const SYNC_THROTTLE_MS = 20_000;
@@ -157,7 +158,10 @@ export async function syncCompanyDrive({ companyId, userId = null, force = false
     };
   }
 
-  const drive = await driveClient();
+  const { data: connection, error: connectionError } = await supabaseAdmin.from('company_drive_credentials')
+    .select('refresh_token_encrypted').eq('company_id', companyId).maybeSingle();
+  if (connectionError) throw connectionError;
+  const drive = connection?.refresh_token_encrypted ? await archiveDriveClient(connection.refresh_token_encrypted) : await driveClient();
   const etiquetasFolderId = await findEtiquetasFolder(drive, settings.drive_folder_id);
   if (!etiquetasFolderId) {
     throw new Error('No se encontró la carpeta Etiquetas dentro del Drive de esta empresa. Pulsa Revisar Drive en Mi empresa.');

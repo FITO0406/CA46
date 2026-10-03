@@ -1,1 +1,1 @@
-{}
+{"crons":[{"path":"/api/company-drive/archive-cron","schedule":"0 4 * * *"}]}
