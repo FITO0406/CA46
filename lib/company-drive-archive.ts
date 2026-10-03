@@ -5,6 +5,7 @@ import { google } from 'googleapis';
 import { supabaseAdmin } from '@/lib/supabase';
 import { driveOAuthClient } from '@/lib/company-drive-oauth';
 import { decodeTraceability } from '@/lib/traceability';
+import { driveHistoryPdf } from '@/lib/company-drive-pdf';
 
 function encryptionKey() {
   const secret = process.env.DRIVE_TOKEN_ENCRYPTION_KEY || process.env.DRIVE_OAUTH_STATE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -27,10 +28,11 @@ export function decryptDriveToken(value: string) {
   return Buffer.concat([decipher.update(Buffer.from(encrypted, 'base64url')), decipher.final()]).toString('utf8');
 }
 
-export async function saveDriveToken(companyId: string, refreshToken: string) {
+export async function saveDriveToken(companyId: string, refreshToken: string, historyFolderId?: string) {
   if (!refreshToken) throw new Error('Google no concedió acceso permanente. Vuelve a conectar y autoriza Drive.');
   const { error } = await supabaseAdmin.from('company_drive_credentials').upsert({
     company_id: companyId, refresh_token_encrypted: encryptDriveToken(refreshToken), last_error: null,
+    ...(historyFolderId ? { history_folder_id: historyFolderId } : {}),
   }, { onConflict: 'company_id' });
   if (error) throw error;
 }
@@ -41,14 +43,7 @@ export async function archiveDriveClient(encryptedToken?: string | null) {
     auth.setCredentials({ refresh_token: decryptDriveToken(encryptedToken) });
     return google.drive({ version: 'v3', auth });
   }
-  // Legacy shared folders remain usable, provided the service account can write.
-  let raw = (process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '').trim();
-  if ((raw.startsWith("'") && raw.endsWith("'")) || (raw.startsWith('"') && raw.endsWith('"'))) raw = raw.slice(1, -1);
-  if (!raw) throw new Error('Conecta una cuenta de Google para guardar el histórico.');
-  const credentials = JSON.parse(raw);
-  credentials.private_key = String(credentials.private_key || '').replace(/\\n/g, '\n');
-  const auth = new google.auth.GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/drive'] });
-  return google.drive({ version: 'v3', auth });
+  throw new Error('Conecta el Drive privado de tu empresa.');
 }
 
 function escapeQuery(value: string) { return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
@@ -61,7 +56,7 @@ async function historyFolder(drive: ReturnType<typeof google.drive>, root: strin
   return created.data.id;
 }
 
-export function driveHistoryDocument(tag: Record<string, unknown>, businessName: string) {
+export function driveHistoryDocument(tag: Record<string, unknown>, businessName: string, transformations: unknown[] = []) {
   const trace = decodeTraceability(String(tag.category || ''));
   const hours = tag.source === 'physical_label' ? 24 : 72;
   const safeTrace = trace ? { ...trace, extraFields: trace.extraFields?.filter((field) => !/(precio|importe|total|iva|coste|€)/i.test(field.label)) } : null;
@@ -72,11 +67,12 @@ export function driveHistoryDocument(tag: Record<string, unknown>, businessName:
     fin_exposicion: tag.expires_at, horas_exposicion: hours,
     anulada: tag.annulled_at || null, motivo_anulacion: tag.annulled_reason || null,
     trazabilidad: safeTrace, procedencia: tag.origin,
+    transformaciones: transformations,
     nota: 'Copia histórica. La caducidad de exposición no elimina este archivo.',
   }, null, 2);
 }
 
-export type DriveArchiveResult = { connected: boolean; archived: number; pending: number; busy?: boolean; error?: string };
+export type DriveArchiveResult = { connected: boolean; archived: number; pending: number; removed?: number; busy?: boolean; error?: string };
 
 export async function archiveCompanyLabels(companyId: string, limit = 30): Promise<DriveArchiveResult> {
   const { data: settings, error: settingsError } = await supabaseAdmin.from('company_settings')
@@ -93,9 +89,14 @@ export async function archiveCompanyLabels(companyId: string, limit = 30): Promi
     .select('refresh_token_encrypted').maybeSingle();
   if (lockError) throw lockError;
   if (!connection) return { connected: true, archived: 0, pending: 0, busy: true };
+  if (!connection.refresh_token_encrypted) {
+    await supabaseAdmin.from('company_drive_credentials').update({ lease_id: null, lease_until: null }).eq('company_id', companyId).eq('lease_id', lease);
+    return { connected: false, archived: 0, pending: 0, error: 'Conecta mi Drive para activar el guardado privado.' };
+  }
   let archived = 0;
   let failure: string | null = null;
   let pending = 0;
+  let removed = 0;
   const started = Date.now();
   try {
     const { data: rows, error } = await supabaseAdmin.rpc('drive_pending_labels', { p_company_id: companyId, p_root_folder_id: root, p_limit: limit });
@@ -104,6 +105,8 @@ export async function archiveCompanyLabels(companyId: string, limit = 30): Promi
     if (pending) {
       const drive = await archiveDriveClient(connection.refresh_token_encrypted);
       const folder = await historyFolder(drive, root);
+      const folderState = await supabaseAdmin.from('company_drive_credentials').update({ history_folder_id: folder }).eq('company_id', companyId);
+      if (folderState.error) throw folderState.error;
       for (const row of rows || []) {
         if (Date.now() - started > 45000) break;
         const tag = row.tag as Record<string, unknown>;
@@ -124,13 +127,23 @@ export async function archiveCompanyLabels(companyId: string, limit = 30): Promi
           const saved = await supabaseAdmin.from('company_drive_archives').upsert({ company_id: companyId, tag_id: tag.id, root_folder_id: root, file_id: fileId }, { onConflict: 'company_id,tag_id,root_folder_id' });
           if (saved.error) throw saved.error;
         }
+        const { data: transformations, error: transformationError } = await supabaseAdmin.from('kitchen_transformations')
+          .select('*').eq('company_id', companyId).or(`parent_tag_id.eq.${tag.id},child_tag_id.eq.${tag.id}`);
+        if (transformationError) throw transformationError;
+        const document = driveHistoryDocument(tag, settings.business_name || 'CA46', transformations || []);
+        const pdf = driveHistoryPdf(document);
+        const media = { mimeType: 'application/pdf', body: Readable.from([pdf]) };
+        const product = String(tag.product_name || 'Etiqueta').replace(/[^\p{L}\p{N} _-]/gu, '').slice(0, 70);
+        const name = `${String(tag.created_at).slice(0, 10)}_${product}_${String(tag.id).slice(0, 8)}.pdf`;
         if (!alreadyUploaded) {
-          const product = String(tag.product_name || 'Etiqueta').replace(/[^\p{L}\p{N} _-]/gu, '').slice(0, 70);
           await drive.files.create({ requestBody: {
-            id: fileId, name: `${String(tag.created_at).slice(0, 10)}_${product}_${tag.id}.json`,
-            parents: [folder], mimeType: 'application/json',
+            id: fileId, name,
+            parents: [folder], mimeType: 'application/pdf',
             appProperties: { ca46CompanyId: companyId, ca46TagId: String(tag.id), ca46Kind: 'history' },
-          }, media: { mimeType: 'application/json', body: Readable.from([driveHistoryDocument(tag, settings.business_name || 'CA46')]) }, fields: 'id' });
+          }, media, fields: 'id' });
+        } else {
+          // Finalise the copy at expiry, including the kitchen lineage, before deletion.
+          await drive.files.update({ fileId: fileId!, requestBody: { name, mimeType: 'application/pdf' }, media, fields: 'id' });
         }
         const saved = await supabaseAdmin.from('company_drive_archives').update({ archived_at: new Date().toISOString() })
           .eq('company_id', companyId).eq('tag_id', tag.id).eq('root_folder_id', root);
@@ -138,6 +151,9 @@ export async function archiveCompanyLabels(companyId: string, limit = 30): Promi
         archived += 1;
       }
     }
+    const cleanup = await supabaseAdmin.rpc('drive_purge_archived_labels', { p_company_id: companyId, p_root_folder_id: root });
+    if (cleanup.error) throw cleanup.error;
+    removed = Number(cleanup.data || 0);
   } catch {
     // Do not expose Google request objects: they may contain access tokens.
     failure = 'No se pudo guardar el histórico en Drive. Revisa la cuenta, sus permisos y espacio disponible; las etiquetas siguen en CA46 para reintentar.';
@@ -146,7 +162,7 @@ export async function archiveCompanyLabels(companyId: string, limit = 30): Promi
       last_archive_at: archived ? new Date().toISOString() : undefined, last_error: failure,
     }).eq('company_id', companyId).eq('lease_id', lease);
   }
-  return { connected: true, archived, pending: Math.max(0, pending - archived), ...(failure ? { error: failure } : {}) };
+  return { connected: true, archived, removed, pending: Math.max(0, pending - archived), ...(failure ? { error: failure } : {}) };
 }
 
 export async function archiveCompanyLabelsSafely(companyId: string) {

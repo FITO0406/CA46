@@ -26,6 +26,7 @@ type DriveStatus = {
   accountEmail: string;
   folderId: string;
   folderUrl: string;
+  historyUrl?: string;
   oauthReady: boolean;
   archiveReady?: boolean;
   archivedAt?: string;
@@ -378,34 +379,32 @@ export default function MiEmpresaPage() {
             <h2 className="text-2xl font-black">5. Accesos</h2>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                <h3 className="text-lg font-black">Google Drive</h3>
+                <h3 className="text-lg font-black">Mi histórico privado</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Conecta la cuenta de Google de esta empresa. Todas las etiquetas de 24 y 72 horas se guardarán en Histórico, incluso cuando dejen de verse en pantalla. Puedes recuperar también las anteriores.
+                  Conecta tu Drive una sola vez. Guardaremos automáticamente tus etiquetas de 24 y 72 horas en PDF. Al terminar su exposición y confirmar la copia, se retirarán de CA46. Tu histórico quedará en tu Drive.
                 </p>
 
-                {driveStatus.mode === 'oauth' && driveStatus.accountEmail ? (
+                {driveStatus.connected && driveStatus.accountEmail ? (
                   <p className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-400/[.06] px-3 py-2 text-sm font-bold text-emerald-200">
-                    ✓ Cuenta conectada: {driveStatus.accountEmail}
+                    ✓ Guardado automático en: {driveStatus.accountEmail}
                   </p>
                 ) : driveStatus.mode === 'legacy' ? (
                   <p className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/[.06] px-3 py-2 text-sm font-bold text-amber-100">
-                    Conexión antigua detectada. Elige una cuenta de Google para que la carpeta quede dentro del Drive correcto.
+                    Conecta tu Drive para activar tu histórico privado.
                   </p>
                 ) : null}
 
                 {!driveStatus.oauthReady ? (
-                  <p className="mt-3 text-xs font-bold text-rose-300">La conexión por cuenta está preparada en CA46, pero falta activar las credenciales OAuth de Google.</p>
+                  <p className="mt-3 text-xs font-bold text-rose-300">La conexión está temporalmente pendiente de activación por CA46. Tus etiquetas siguen protegidas.</p>
                 ) : null}
-                {driveStatus.archivedAt ? <p className="mt-3 text-xs text-emerald-300">Último archivo: {new Date(driveStatus.archivedAt).toLocaleString('es-ES')}</p> : null}
-                {driveStatus.archiveError ? <p className="mt-3 text-xs text-rose-300">{driveStatus.archiveError}</p> : null}
-                {driveStatus.pendingLabels ? <p className="mt-3 text-xs text-amber-300">{driveStatus.pendingLabels >= 100 ? '100 o más' : driveStatus.pendingLabels} etiquetas pendientes de archivar.</p> : null}
+                {driveStatus.archiveError ? <p className="mt-3 text-xs text-amber-300">Hay etiquetas pendientes de guardar. Conservamos la copia temporal hasta completar el envío.</p> : null}
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <button type="button" onClick={connectDrive} disabled={driveLoading || loading || !driveStatus.oauthReady} className="rounded-xl bg-orange-500 px-4 py-3 text-sm font-black text-[#111416] disabled:opacity-50">
-                    {driveLoading ? 'Abriendo Google…' : driveStatus.mode === 'oauth' ? 'Cambiar cuenta de Google' : 'Elegir cuenta de Google'}
-                  </button>
-                  {(driveStatus.folderUrl || config.driveFolderUrl) ? <a href={driveStatus.folderUrl || config.driveFolderUrl} target="_blank" rel="noreferrer" className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-black">Abrir carpeta ↗</a> : null}
-                  <button type="button" onClick={archiveDrive} disabled={driveLoading || loading || !driveStatus.connected} className="rounded-xl border border-orange-400/30 px-4 py-3 text-sm font-black text-orange-300 disabled:opacity-50">{driveLoading ? 'Procesando Drive…' : 'Guardar y recuperar histórico'}</button>
+                  {!driveStatus.connected ? <button type="button" onClick={connectDrive} disabled={driveLoading || loading || !driveStatus.oauthReady} className="rounded-xl bg-orange-500 px-4 py-3 text-sm font-black text-[#111416] disabled:opacity-50">{driveLoading ? 'Abriendo Google…' : 'Conectar mi Drive'}</button> : <>
+                    <a href={driveStatus.historyUrl || driveStatus.folderUrl} target="_blank" rel="noreferrer" className="rounded-xl bg-orange-500 px-4 py-3 text-sm font-black text-[#111416]">Abrir mi histórico ↗</a>
+                    <button type="button" onClick={connectDrive} disabled={driveLoading || !driveStatus.oauthReady} className="px-2 py-3 text-xs font-bold text-slate-400">Cambiar cuenta</button>
+                    {driveStatus.archiveError ? <button type="button" onClick={archiveDrive} disabled={driveLoading} className="px-2 py-3 text-xs font-bold text-orange-300">Reintentar guardado</button> : null}
+                  </>}
                 </div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-5">

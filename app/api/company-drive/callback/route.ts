@@ -119,13 +119,15 @@ export async function GET(request: Request) {
     if (!root?.id) root = await createRootFolder(drive, state.companyId, rootName);
     if (!root?.id) throw new Error('No se pudo crear la carpeta principal de CA46.');
 
+    let historyFolderId = '';
     for (const subfolder of ['Facturas', 'Etiquetas', 'Histórico']) {
-      await findOrCreateSubfolder(drive, state.companyId, subfolder, root.id);
+      const folder = await findOrCreateSubfolder(drive, state.companyId, subfolder, root.id);
+      if (subfolder === 'Histórico') historyFolderId = folder.id || '';
     }
 
     // Store a protected offline token: archival runs as the selected account.
     // A service account is no longer required to own files in a personal Drive.
-    await saveDriveToken(state.companyId, tokens.refresh_token || '');
+    await saveDriveToken(state.companyId, tokens.refresh_token || '', historyFolderId);
 
     const folderUrl = root.webViewLink || `https://drive.google.com/drive/folders/${root.id}`;
     const { error: settingsSaveError } = await supabaseAdmin

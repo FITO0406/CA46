@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
+import { archiveCompanyLabelsSafely } from '@/lib/company-drive-archive';
 import { supabaseAdmin } from '@/lib/supabase';
 import { tenantContextForRequest } from '@/lib/tenant-auth-server';
 import { driveOAuthConfigured } from '@/lib/company-drive-oauth';
@@ -23,18 +24,22 @@ export async function GET(request: Request) {
     const accountEmail = String(settings?.drive_account_email || '').trim();
     const connected = Boolean(settings?.drive_connected && settings?.drive_folder_id);
     const { data: archiveState } = await supabaseAdmin.from('company_drive_credentials')
-      .select('refresh_token_encrypted,last_archive_at,last_error').eq('company_id', tenant.context.companyId).maybeSingle();
+      .select('refresh_token_encrypted,last_archive_at,last_error,history_folder_id').eq('company_id', tenant.context.companyId).maybeSingle();
     const { data: pending } = connected ? await supabaseAdmin.rpc('drive_pending_labels', {
       p_company_id: tenant.context.companyId, p_root_folder_id: settings!.drive_folder_id, p_limit: 100,
     }) : { data: [] };
+    const privateConnected = connected && Boolean(archiveState?.refresh_token_encrypted);
+    if (privateConnected) after(() => archiveCompanyLabelsSafely(tenant.context.companyId));
 
     return NextResponse.json(
       {
-        connected,
+        connected: privateConnected,
         mode: accountEmail ? 'oauth' : connected ? 'legacy' : 'none',
         accountEmail,
         folderId: settings?.drive_folder_id || '',
         folderUrl: settings?.drive_folder_url || '',
+        historyUrl: privateConnected && archiveState?.history_folder_id
+          ? `https://drive.google.com/drive/folders/${archiveState.history_folder_id}` : '',
         oauthReady: driveOAuthConfigured(),
         archiveReady: Boolean(archiveState?.refresh_token_encrypted),
         archivedAt: archiveState?.last_archive_at || '',
