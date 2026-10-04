@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { decodeTraceability } from '@/lib/traceability';
+import { calculateKitchenNutrition, foods, KITCHEN_DISPLAY_DAYS, nutritionFromParent, type NutritionFields } from '@/lib/kitchen-nutrition';
 
 type Tag = {
   id: string;
@@ -31,7 +32,7 @@ type Transformation = {
   storage_instructions: string;
 };
 type Ingredient = { name: string; quantity: string };
-type Nutrition = { energyKcal: string; proteinG: string; carbsG: string; sugarsG: string; fatG: string; saturatedFatG: string; saltG: string };
+type Nutrition = NutritionFields;
 
 const fieldClass = 'w-full rounded-xl border border-white/10 bg-[#11161a] px-4 py-3 font-bold text-white outline-none focus:border-orange-400';
 const emptyNutrition: Nutrition = { energyKcal: '', proteinG: '', carbsG: '', sugarsG: '', fatG: '', saturatedFatG: '', saltG: '' };
@@ -54,7 +55,10 @@ export default function CocinaPage() {
   const [shelfLifeDays, setShelfLifeDays] = useState('3');
   const [storageInstructions, setStorageInstructions] = useState('Conservar refrigerado a ≤ 4 °C');
   const [ingredients, setIngredients] = useState<Ingredient[]>([{ name: '', quantity: '' }]);
-  const [nutrition, setNutrition] = useState<Nutrition>(emptyNutrition);
+  const [manualValues, setManualValues] = useState<Nutrition>(emptyNutrition);
+  const [nutritionMode, setNutritionMode] = useState<'auto' | 'manual'>('auto');
+  const [nutritionReferenceId, setNutritionReferenceId] = useState('');
+  const [incorporatedSaltGrams, setIncorporatedSaltGrams] = useState('');
   const [notes, setNotes] = useState('');
 
   async function token() {
@@ -81,6 +85,16 @@ export default function CocinaPage() {
 
   const parent = useMemo(() => tags.find((tag) => tag.id === parentTagId) || null, [tags, parentTagId]);
   const parentTrace = parent ? decodeTraceability(parent.category) : null;
+  const calculation = calculateKitchenNutrition({
+    productName: `${parent?.product_name || ''} ${parentTrace?.scientificName || ''}`,
+    referenceId: nutritionReferenceId,
+    parentNutrition: parent?.source === 'kitchen' ? nutritionFromParent(parentTrace?.extraFields || []) : null,
+    inputWeightKg, outputWeightKg, processType, ingredients,
+    incorporatedSaltGrams: incorporatedSaltGrams || 0,
+  });
+  const automaticValues = calculation.values ? Object.fromEntries(Object.entries(calculation.values).map(([key, value]) => [key, value === null ? '' : String(value)])) as Nutrition : emptyNutrition;
+  const nutrition = nutritionMode === 'auto' ? automaticValues : manualValues;
+  function setNutrition(value: Nutrition) { setManualValues(value); setNutritionMode('manual'); }
 
   useEffect(() => {
     if (!parent) return;
@@ -126,14 +140,17 @@ export default function CocinaPage() {
           shelfLifeDays: lifeDays,
           storageInstructions,
           ingredients: ingredients.filter((item) => item.name.trim()),
-          nutrition: Object.fromEntries(Object.entries(nutrition).map(([key, value]) => [key, Number(String(value || '0').replace(',', '.')) || 0])),
+          nutritionMode,
+          nutritionReferenceId,
+          incorporatedSaltGrams: incorporatedSaltGrams || 0,
+          nutrition: nutritionMode === 'manual' ? manualValues : undefined,
           notes,
         }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.ok) throw new Error(payload.error || 'No se pudo guardar.');
-      setMessage(`Transformación guardada. Se ha creado la etiqueta hija ${payload.transformation?.output_lot || ''} sin romper la trazabilidad.`);
-      setOutputWeightKg(''); setSaltGrams(''); setIngredients([{ name: '', quantity: '' }]); setNutrition(emptyNutrition); setNotes(''); setOutputProductName(''); setOutputLot('');
+      setMessage(`Transformación guardada. Etiqueta hija ${payload.transformation?.output_lot || ''} · ${KITCHEN_DISPLAY_DAYS} días en visor.${payload.nutrition_status === 'pending' ? ' Nutrición pendiente: no se han publicado valores vacíos como cero.' : ''}`);
+      setOutputWeightKg(''); setSaltGrams(''); setIngredients([{ name: '', quantity: '' }]); setManualValues(emptyNutrition); setNutritionMode('auto'); setNutritionReferenceId(''); setIncorporatedSaltGrams(''); setNotes(''); setOutputProductName(''); setOutputLot('');
       await load();
     } catch (e: any) { setError(e?.message || 'No se pudo guardar la transformación.'); }
     finally { setSaving(false); }
@@ -163,7 +180,7 @@ export default function CocinaPage() {
           <section className="mt-6 rounded-[2rem] border border-white/10 bg-[#0d1215] p-5 sm:p-7">
             <h2 className="text-2xl font-black">1. Producto de origen</h2>
             {tags.length === 0 ? <div className="mt-4 rounded-2xl border border-dashed border-white/10 px-5 py-8 text-center text-sm font-bold text-slate-500">No hay etiquetas activas. Crea o importa una etiqueta antes de entrar en Cocina.</div> : <>
-              <label className="mt-5 block"><Label>Etiqueta / lote</Label><select className={fieldClass} value={parentTagId} onChange={(e) => { setParentTagId(e.target.value); setOutputProductName(''); setOutputLot(''); setInputWeightKg(''); }}>{tags.map((tag) => { const trace = decodeTraceability(tag.category); return <option key={tag.id} value={tag.id}>{tag.product_name} · {trace?.lot || 'sin lote'}{tag.source === 'kitchen' ? ' · cocina' : ''}</option>; })}</select></label>
+              <label className="mt-5 block"><Label>Etiqueta / lote</Label><select className={fieldClass} value={parentTagId} onChange={(e) => { setParentTagId(e.target.value); setOutputProductName(''); setOutputLot(''); setInputWeightKg(''); setNutritionReferenceId(''); setNutritionMode('auto'); setManualValues(emptyNutrition); }}>{tags.map((tag) => { const trace = decodeTraceability(tag.category); return <option key={tag.id} value={tag.id}>{tag.product_name} · {trace?.lot || 'sin lote'}{tag.source === 'kitchen' ? ' · cocina' : ''}</option>; })}</select></label>
               {parent ? <div className="mt-4 grid gap-3 sm:grid-cols-3"><Info label="Producto" value={parent.product_name} /><Info label="Lote padre" value={parentTrace?.lot || '—'} /><Info label="Procedencia" value={parentTrace?.origin || parent.origin || '—'} /></div> : null}
             </>}
           </section>
@@ -172,12 +189,13 @@ export default function CocinaPage() {
             <h2 className="text-2xl font-black">2. Proceso y rendimiento</h2>
             <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <label><Label>Proceso</Label><select className={fieldClass} value={processType} onChange={(e) => setProcessType(e.target.value)}><option>Cocción</option><option>Cocción + salmuera</option><option>Horneado</option><option>Plancha</option><option>Vapor</option><option>Otro proceso</option></select></label>
-              <label><Label>Peso antes de cocinar (kg)</Label><input className={fieldClass} inputMode="decimal" value={inputWeightKg} onChange={(e) => setInputWeightKg(e.target.value)} placeholder="4,000" /></label>
+              <label><Label>Peso comestible antes de cocinar (kg)</Label><input className={fieldClass} inputMode="decimal" value={inputWeightKg} onChange={(e) => setInputWeightKg(e.target.value)} placeholder="4,000" /></label>
               <label><Label>Peso final cocinado (kg)</Label><input className={fieldClass} inputMode="decimal" value={outputWeightKg} onChange={(e) => setOutputWeightKg(e.target.value)} placeholder="3,250" /></label>
               <label><Label>Producto final</Label><input className={fieldClass} value={outputProductName} onChange={(e) => setOutputProductName(e.target.value)} placeholder="Langostino cocido" /></label>
               <label><Label>Lote hijo</Label><input className={fieldClass} value={outputLot} onChange={(e) => setOutputLot(e.target.value)} placeholder="Se genera si lo dejas vacío" /></label>
               <label><Label>Sal usada / salmuera (g)</Label><input className={fieldClass} inputMode="decimal" value={saltGrams} onChange={(e) => setSaltGrams(e.target.value)} placeholder="0" /></label>
             </div>
+            <p className="mt-3 text-sm text-slate-400">Usa el peso limpio, sin hielo, envase, conchas ni partes descartadas. Pesa el producto después de cocinar; CA46 no supone una merma fija.</p>
           </section>
 
           <section className="mt-6 rounded-[2rem] border border-cyan-400/20 bg-cyan-400/[.04] p-5 sm:p-7">
@@ -189,15 +207,26 @@ export default function CocinaPage() {
               <label><Label>Indicación de conservación</Label><input className={fieldClass} value={storageInstructions} onChange={(e) => setStorageInstructions(e.target.value)} placeholder="Conservar refrigerado a ≤ 4 °C" /></label>
             </div>
             <div className="mt-4 rounded-xl border border-cyan-300/15 bg-black/20 px-4 py-3 text-sm font-bold text-cyan-100">Vista previa: {storageInstructions || `Conservar a ≤ ${storageMaxTempC || '—'} °C`} · Consumir preferentemente antes de {shelfLifeDays || '—'} días.</div>
+            <p className="mt-3 text-sm font-bold text-cyan-200">La etiqueta hija permanece {KITCHEN_DISPLAY_DAYS} días en el visor. Ese plazo no amplía los días indicados para consumir el alimento.</p>
           </section>
 
           <section className="mt-6 rounded-[2rem] border border-sky-400/20 bg-sky-400/[.04] p-5 sm:p-7">
             <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.16em] text-sky-300">Ingredientes y aditivos</p><h2 className="mt-1 text-2xl font-black">4. Qué has añadido</h2></div><button type="button" onClick={() => setIngredients((current) => [...current, { name: '', quantity: '' }])} className="rounded-xl border border-sky-300/20 bg-sky-300/10 px-4 py-2 text-sm font-black text-sky-200">+ Añadir</button></div>
             <div className="mt-5 space-y-3">{ingredients.map((item, index) => <div key={index} className="grid gap-3 sm:grid-cols-[1fr_.55fr_auto]"><input className={fieldClass} value={item.name} onChange={(e) => ingredient(index, 'name', e.target.value)} placeholder="Ej.: sal, limón, conservante…" /><input className={fieldClass} value={item.quantity} onChange={(e) => ingredient(index, 'quantity', e.target.value)} placeholder="Ej.: 25 g" /><button type="button" onClick={() => setIngredients((current) => current.filter((_, i) => i !== index))} className="rounded-xl border border-white/10 px-4 font-black text-slate-400">×</button></div>)}</div>
+            <p className="mt-3 text-sm text-slate-400">El producto de origen ya se incluye en el cálculo. Si no añades nada, deja esta lista vacía. Indica las cantidades añadidas en g o kg, sin duplicar la sal del siguiente campo.</p>
+            <label className="mt-4 block"><Label>Sal incorporada al producto (g)</Label><input className={fieldClass} inputMode="decimal" value={incorporatedSaltGrams} onChange={(e) => setIncorporatedSaltGrams(e.target.value)} placeholder="0" /><span className="mt-2 block text-sm text-slate-400">Solo la sal retenida en el alimento. La sal del baño de salmuera se registra aparte y no se suma automáticamente.</span></label>
           </section>
 
           <section className="mt-6 rounded-[2rem] border border-emerald-400/20 bg-emerald-400/[.04] p-5 sm:p-7">
             <p className="text-xs font-black uppercase tracking-[.16em] text-emerald-300">Por 100 gramos</p><h2 className="mt-1 text-2xl font-black">5. Valor nutricional del producto terminado</h2>
+            <div className="mt-4 flex flex-wrap gap-3"><button type="button" onClick={() => setNutritionMode('auto')} className={`rounded-xl border px-4 py-3 font-bold ${nutritionMode === 'auto' ? 'border-emerald-300 text-emerald-200' : 'border-white/10 text-slate-400'}`}>Cálculo automático</button><button type="button" onClick={() => { setManualValues(nutrition); setNutritionMode('manual'); }} className={`rounded-xl border px-4 py-3 font-bold ${nutritionMode === 'manual' ? 'border-emerald-300 text-emerald-200' : 'border-white/10 text-slate-400'}`}>Introducir valores contrastados</button></div>
+            {nutritionMode === 'auto' ? <>
+              {parent?.source !== 'kitchen' ? <label className="mt-4 block"><Label>Referencia nutricional del producto de origen</Label><select className={fieldClass} value={nutritionReferenceId} onChange={(e) => setNutritionReferenceId(e.target.value)}><option value="">Reconocer por nombre / especie</option>{foods.slice(0, 18).map((food) => <option key={food.id} value={food.id}>{food.name}</option>)}</select></label> : null}
+              <p className="mt-3 font-bold text-emerald-200">{calculation.method}</p>
+              {calculation.sources.map((source) => <p key={source} className="mt-2 text-sm text-slate-400">{source}</p>)}
+              {calculation.warnings.map((warning) => <p key={warning} className="mt-2 text-sm text-amber-200">{warning}</p>)}
+              <p className="mt-2 text-sm text-slate-400">Se actualiza al cambiar el peso final o los ingredientes. Revisa la referencia antes de guardar.</p>
+            </> : <p className="mt-3 text-sm text-amber-200">Valores del alimento terminado por 100 g. Completa los siete campos; este modo no recalcula al modificar la receta.</p>}
             <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><NutritionInput label="Energía kcal" value={nutrition.energyKcal} onChange={(value) => setNutrition({ ...nutrition, energyKcal: value })} /><NutritionInput label="Proteínas g" value={nutrition.proteinG} onChange={(value) => setNutrition({ ...nutrition, proteinG: value })} /><NutritionInput label="Hidratos g" value={nutrition.carbsG} onChange={(value) => setNutrition({ ...nutrition, carbsG: value })} /><NutritionInput label="Azúcares g" value={nutrition.sugarsG} onChange={(value) => setNutrition({ ...nutrition, sugarsG: value })} /><NutritionInput label="Grasas g" value={nutrition.fatG} onChange={(value) => setNutrition({ ...nutrition, fatG: value })} /><NutritionInput label="Saturadas g" value={nutrition.saturatedFatG} onChange={(value) => setNutrition({ ...nutrition, saturatedFatG: value })} /><NutritionInput label="Sal g" value={nutrition.saltG} onChange={(value) => setNutrition({ ...nutrition, saltG: value })} /></div>
             <label className="mt-4 block"><Label>Observaciones</Label><textarea className={`${fieldClass} min-h-24`} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opcional" /></label>
             <button type="button" disabled={saving || tags.length === 0} onClick={() => void save()} className="mt-5 w-full rounded-xl bg-orange-500 px-5 py-4 text-lg font-black text-black disabled:opacity-40">{saving ? 'Guardando transformación…' : 'Guardar y crear etiqueta hija'}</button>
@@ -215,4 +244,4 @@ export default function CocinaPage() {
 
 function Label({ children }: { children: React.ReactNode }) { return <span className="mb-2 block text-[11px] font-black uppercase tracking-[.14em] text-slate-500">{children}</span>; }
 function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-black uppercase tracking-[.14em] text-slate-600">{label}</p><p className="mt-1 font-black text-slate-200">{value}</p></div>; }
-function NutritionInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label><Label>{label}</Label><input className={fieldClass} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} placeholder="0" /></label>; }
+function NutritionInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label><Label>{label}</Label><input className={fieldClass} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} placeholder="Sin dato" /></label>; }

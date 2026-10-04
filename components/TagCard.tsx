@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { decodeTraceability } from '@/lib/traceability';
 
 interface Tag {
@@ -42,6 +43,12 @@ function Field({ label, value, important = false }: { label: string; value?: str
 }
 
 export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentIndex?: number }) {
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+  useEffect(() => {
+    if (tag.source !== 'kitchen') return;
+    const timer = window.setInterval(() => setCurrentTime(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, [tag.source]);
   const trace = decodeTraceability(tag.category);
   const accent = accentStyles[accentIndex % accentStyles.length];
   const productName = trace?.description || tag.product_name;
@@ -51,6 +58,9 @@ export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentInde
   const isDefrosted = /descongelad/i.test(trace?.freshness || '');
   const isTemporaryChild = tag.status === 'provisional' && tag.source === 'kitchen';
   const isProvisional = tag.status === 'provisional' || tag.source === 'physical_label';
+  const isKitchen = tag.source === 'kitchen';
+  const consumptionDate = trace?.extraFields.find((field) => field.label === 'Fecha límite de consumo')?.value;
+  const consumptionElapsed = consumptionDate ? new Date(consumptionDate).getTime() <= currentTime : false;
   const consumerNotice = trace?.consumerNotice || (isDefrosted ? 'Consumir preferentemente en 3 días' : '');
   const expiresLabel = tag.expires_at
     ? new Date(tag.expires_at).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -91,14 +101,15 @@ export default function TagCard({ tag, accentIndex = 0 }: { tag: Tag; accentInde
       <div className={`pointer-events-none absolute inset-x-0 top-0 -z-10 h-44 bg-gradient-to-b ${isProvisional ? 'from-amber-500/15' : accent.glow} to-transparent`} />
       <div className={`absolute left-0 top-0 h-full w-1 ${isProvisional ? 'bg-amber-400' : 'bg-orange-400'}`} />
 
-      {isProvisional ? (
+      {isProvisional || isKitchen ? (
         <div className="flex flex-col gap-1 border-b border-amber-300/20 bg-amber-400/[.10] px-5 py-3 text-amber-100 sm:flex-row sm:items-center sm:justify-between sm:px-7 lg:px-8">
           <strong className="text-xs font-black uppercase tracking-[.16em]">
-            {isTemporaryChild ? 'TEMPORAL HIJA · 72 HORAS · TRAZABILIDAD HEREDADA' : 'TEMPORAL · 24 HORAS · FACTURA PENDIENTE'}
+            {isKitchen ? (isTemporaryChild ? 'ELABORACIÓN PROPIA · 10 DÍAS EN VISOR · ORIGEN PROVISIONAL' : 'ELABORACIÓN PROPIA · 10 DÍAS EN VISOR') : 'TEMPORAL · 24 HORAS · FACTURA PENDIENTE'}
           </strong>
-          {expiresLabel ? <span className="text-xs font-bold text-amber-200">Caduca {expiresLabel}</span> : null}
+          {expiresLabel ? <span className="text-xs font-bold text-amber-200">{isKitchen ? 'Fin de exposición' : 'Caduca'} {expiresLabel}</span> : null}
         </div>
       ) : null}
+      {isKitchen && consumptionElapsed ? <p className="border-b border-rose-400/30 bg-rose-500/10 px-5 py-3 font-bold text-rose-200">Plazo de consumo indicado superado. La exposición en el visor conserva la información de trazabilidad.</p> : null}
 
       <div className="p-5 sm:p-7 lg:p-8">
         <header className="border-b border-white/[.09] pb-5">

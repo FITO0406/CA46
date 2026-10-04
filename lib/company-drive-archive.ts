@@ -58,7 +58,7 @@ async function historyFolder(drive: ReturnType<typeof google.drive>, root: strin
 
 export function driveHistoryDocument(tag: Record<string, unknown>, businessName: string, transformations: unknown[] = []) {
   const trace = decodeTraceability(String(tag.category || ''));
-  const hours = tag.source === 'physical_label' ? 24 : 72;
+  const hours = tag.source === 'kitchen' ? 240 : tag.source === 'physical_label' ? 24 : 72;
   const safeTrace = trace ? { ...trace, extraFields: trace.extraFields?.filter((field) => !/(precio|importe|total|iva|coste|€)/i.test(field.label)) } : null;
   return JSON.stringify({
     formato: 'CA46 histórico de etiqueta v1', empresa: businessName,

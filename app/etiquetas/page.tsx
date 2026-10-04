@@ -44,13 +44,13 @@ function searchableText(tag: Tag) {
 }
 
 function tagValidityLabel(tag: Tag) {
-  if (tag.status === 'provisional' && tag.source === 'kitchen') return 'TEMPORAL HIJA · 72 H';
+  if (tag.source === 'kitchen') return tag.status === 'provisional' ? 'HIJA · 10 DÍAS · ORIGEN PROVISIONAL' : 'ELABORACIÓN PROPIA · 10 DÍAS';
   if (tag.status === 'provisional') return 'PROVISIONAL · 24 H';
   return 'ACTIVA · 72 H';
 }
 
 function shortValidityLabel(tag: Tag) {
-  if (tag.status === 'provisional' && tag.source === 'kitchen') return 'HIJA · 72 H';
+  if (tag.source === 'kitchen') return 'HIJA · 10 DÍAS';
   if (tag.status === 'provisional') return '24 H';
   return '';
 }

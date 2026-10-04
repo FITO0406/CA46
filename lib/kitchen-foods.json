@@ -1,0 +1,578 @@
+[
+  {
+    "id": "15163",
+    "name": "Choco / sepia, crudo",
+    "description": "Mollusks, cuttlefish, mixed species, raw",
+    "aliases": [
+      "choco",
+      "chocos",
+      "sepia",
+      "sepias",
+      "jibia",
+      "jibias",
+      "sepiidae",
+      "sepia officinalis"
+    ],
+    "per100g": {
+      "energyKcal": 79.0,
+      "proteinG": 16.24,
+      "carbsG": 0.82,
+      "sugarsG": null,
+      "fatG": 0.7,
+      "saturatedFatG": 0.118,
+      "saltG": 0.93
+    }
+  },
+  {
+    "id": "15175",
+    "name": "Calamar, crudo",
+    "description": "Mollusks, squid, mixed species, raw",
+    "aliases": [
+      "calamar",
+      "calamares",
+      "chipiron",
+      "chipirones",
+      "loligo"
+    ],
+    "per100g": {
+      "energyKcal": 92.0,
+      "proteinG": 15.58,
+      "carbsG": 3.08,
+      "sugarsG": 0.0,
+      "fatG": 1.38,
+      "saturatedFatG": 0.358,
+      "saltG": 0.11
+    }
+  },
+  {
+    "id": "15166",
+    "name": "Pulpo común, crudo",
+    "description": "Mollusks, octopus, common, raw",
+    "aliases": [
+      "pulpo",
+      "pulpos",
+      "octopus vulgaris"
+    ],
+    "per100g": {
+      "energyKcal": 82.0,
+      "proteinG": 14.91,
+      "carbsG": 2.2,
+      "sugarsG": 0.0,
+      "fatG": 1.04,
+      "saturatedFatG": 0.227,
+      "saltG": 0.575
+    }
+  },
+  {
+    "id": "15149",
+    "name": "Gamba / langostino, referencia genérica cruda",
+    "description": "Crustaceans, shrimp, mixed species, raw (may have been previously frozen)",
+    "aliases": [
+      "gamba",
+      "gambas",
+      "langostino",
+      "langostinos",
+      "camaron",
+      "camarones"
+    ],
+    "per100g": {
+      "energyKcal": 71.0,
+      "proteinG": 13.61,
+      "carbsG": 0.91,
+      "sugarsG": 0.0,
+      "fatG": 1.01,
+      "saturatedFatG": 0.261,
+      "saltG": 1.415
+    }
+  },
+  {
+    "id": "15164",
+    "name": "Mejillón azul, crudo",
+    "description": "Mollusks, mussel, blue, raw",
+    "aliases": [
+      "mejillon",
+      "mejillones",
+      "mytilus edulis"
+    ],
+    "per100g": {
+      "energyKcal": 86.0,
+      "proteinG": 11.9,
+      "carbsG": 3.69,
+      "sugarsG": 0.0,
+      "fatG": 2.24,
+      "saturatedFatG": 0.425,
+      "saltG": 0.715
+    }
+  },
+  {
+    "id": "15157",
+    "name": "Almeja, referencia genérica cruda",
+    "description": "Mollusks, clam, mixed species, raw",
+    "aliases": [
+      "almeja",
+      "almejas"
+    ],
+    "per100g": {
+      "energyKcal": 86.0,
+      "proteinG": 14.67,
+      "carbsG": 3.57,
+      "sugarsG": 0.0,
+      "fatG": 0.96,
+      "saturatedFatG": 0.187,
+      "saltG": 1.5025
+    }
+  },
+  {
+    "id": "15172",
+    "name": "Vieira, referencia genérica cruda",
+    "description": "Mollusks, scallop, mixed species, raw",
+    "aliases": [
+      "vieira",
+      "vieiras"
+    ],
+    "per100g": {
+      "energyKcal": 69.0,
+      "proteinG": 12.06,
+      "carbsG": 3.18,
+      "sugarsG": 0.0,
+      "fatG": 0.49,
+      "saturatedFatG": 0.128,
+      "saltG": 0.98
+    }
+  },
+  {
+    "id": "15001",
+    "name": "Boquerón europeo, crudo",
+    "description": "Fish, anchovy, european, raw",
+    "aliases": [
+      "boqueron",
+      "boquerones",
+      "anchoa",
+      "engraulis encrasicolus"
+    ],
+    "per100g": {
+      "energyKcal": 131.0,
+      "proteinG": 20.35,
+      "carbsG": 0.0,
+      "sugarsG": 0.0,
+      "fatG": 4.84,
+      "saturatedFatG": 1.282,
+      "saltG": 0.26
+    }
+  },
+  {
+    "id": "15015",
+    "name": "Bacalao atlántico fresco, crudo",
+    "description": "Fish, cod, Atlantic, raw",
+    "aliases": [
+      "gadus morhua"
+    ],
+    "per100g": {
+      "energyKcal": 82.0,
+      "proteinG": 17.81,
+      "carbsG": 0.0,
+      "sugarsG": 0.0,
+      "fatG": 0.67,
+      "saturatedFatG": 0.131,
+      "saltG": 0.135
+    }
+  },
+  {
+    "id": "15046",
+    "name": "Caballa atlántica, cruda",
+    "description": "Fish, mackerel, Atlantic, raw",
+    "aliases": [
+      "caballa",
+      "caballas",
+      "scomber scombrus"
+    ],
+    "per100g": {
+      "energyKcal": 205.0,
+      "proteinG": 18.6,
+      "carbsG": 0.0,
+      "sugarsG": 0.0,
+      "fatG": 13.89,
+      "saturatedFatG": 3.257,
+      "saltG": 0.225
+    }
+  },
+  {
+    "id": "15054",
+    "name": "Rape, crudo",
+    "description": "Fish, monkfish, raw",
+    "aliases": [
+      "rape",
+      "rapes",
+      "lophius"
+    ],
+    "per100g": {
+      "energyKcal": 76.0,
+      "proteinG": 14.48,
+      "carbsG": 0.0,
+      "sugarsG": null,
+      "fatG": 1.52,
+      "saturatedFatG": 0.34,
+      "saltG": 0.045
+    }
+  },
+  {
+    "id": "15117",
+    "name": "Atún rojo, crudo",
+    "description": "Fish, tuna, fresh, bluefin, raw",
+    "aliases": [
+      "atun rojo",
+      "thunnus thynnus"
+    ],
+    "per100g": {
+      "energyKcal": 144.0,
+      "proteinG": 23.33,
+      "carbsG": 0.0,
+      "sugarsG": 0.0,
+      "fatG": 4.9,
+      "saturatedFatG": 1.257,
+      "saltG": 0.0975
+    }
+  },
+  {
+    "id": "15127",
+    "name": "Atún rabil, crudo",
+    "description": "Fish, tuna, fresh, yellowfin, raw",
+    "aliases": [
+      "rabil",
+      "thunnus albacares"
+    ],
+    "per100g": {
+      "energyKcal": 109.0,
+      "proteinG": 24.4,
+      "carbsG": 0.0,
+      "sugarsG": 0.0,
+      "fatG": 0.49,
+      "saturatedFatG": 0.172,
+      "saltG": 0.1125
+    }
+  },
+  {
+    "id": "15110",
+    "name": "Pez espada, crudo",
+    "description": "Fish, swordfish, raw",
+    "aliases": [
+      "pez espada",
+      "xiphias gladius"
+    ],
+    "per100g": {
+      "energyKcal": 144.0,
+      "proteinG": 19.66,
+      "carbsG": 0.0,
+      "sugarsG": 0.0,
+      "fatG": 6.65,
+      "saturatedFatG": 1.602,
+      "saltG": 0.2025
+    }
+  },
+  {
+    "id": "15129",
+    "name": "Rodaballo europeo, crudo",
+    "description": "Fish, turbot, european, raw",
+    "aliases": [
+      "rodaballo",
+      "scophthalmus maximus"
+    ],
+    "per100g": {
+      "energyKcal": 95.0,
+      "proteinG": 16.05,
+      "carbsG": 0.0,
+      "sugarsG": null,
+      "fatG": 2.95,
+      "saturatedFatG": 0.75,
+      "saltG": 0.375
+    }
+  },
+  {
+    "id": "15236",
+    "name": "Salmón atlántico de cultivo, crudo",
+    "description": "Fish, salmon, Atlantic, farmed, raw",
+    "aliases": [
+      "salmon",
+      "salmones",
+      "salmo salar"
+    ],
+    "per100g": {
+      "energyKcal": 208.0,
+      "proteinG": 20.42,
+      "carbsG": 0.0,
+      "sugarsG": 0.0,
+      "fatG": 13.42,
+      "saturatedFatG": 3.05,
+      "saltG": 0.1475
+    }
+  },
+  {
+    "id": "15240",
+    "name": "Trucha arcoíris de cultivo, cruda",
+    "description": "Fish, trout, rainbow, farmed, raw",
+    "aliases": [
+      "trucha arcoiris",
+      "oncorhynchus mykiss"
+    ],
+    "per100g": {
+      "energyKcal": 141.0,
+      "proteinG": 19.94,
+      "carbsG": 0.0,
+      "sugarsG": 0.0,
+      "fatG": 6.18,
+      "saturatedFatG": 1.383,
+      "saltG": 0.1275
+    }
+  },
+  {
+    "id": "15261",
+    "name": "Tilapia, cruda",
+    "description": "Fish, tilapia, raw",
+    "aliases": [
+      "tilapia",
+      "tilapias"
+    ],
+    "per100g": {
+      "energyKcal": 96.0,
+      "proteinG": 20.08,
+      "carbsG": 0.0,
+      "sugarsG": 0.0,
+      "fatG": 1.7,
+      "saturatedFatG": 0.585,
+      "saltG": 0.13
+    }
+  },
+  {
+    "id": "04053",
+    "name": "Aceite de oliva",
+    "description": "Oil, olive, salad or cooking",
+    "aliases": [
+      "aceite de oliva",
+      "aceite oliva",
+      "aove"
+    ],
+    "per100g": {
+      "energyKcal": 884.0,
+      "proteinG": 0.0,
+      "carbsG": 0.0,
+      "sugarsG": 0.0,
+      "fatG": 100.0,
+      "saturatedFatG": 13.808,
+      "saltG": 0.005
+    }
+  },
+  {
+    "id": "02047",
+    "name": "Sal de mesa",
+    "description": "Salt, table",
+    "aliases": [
+      "sal",
+      "sal fina",
+      "sal gruesa"
+    ],
+    "per100g": {
+      "energyKcal": 0.0,
+      "proteinG": 0.0,
+      "carbsG": 0.0,
+      "sugarsG": 0.0,
+      "fatG": 0.0,
+      "saturatedFatG": 0.0,
+      "saltG": 96.895
+    }
+  },
+  {
+    "id": "19335",
+    "name": "Azúcar",
+    "description": "Sugars, granulated",
+    "aliases": [
+      "azucar"
+    ],
+    "per100g": {
+      "energyKcal": 387.0,
+      "proteinG": 0.0,
+      "carbsG": 99.98,
+      "sugarsG": 99.8,
+      "fatG": 0.0,
+      "saturatedFatG": 0.0,
+      "saltG": 0.0025
+    }
+  },
+  {
+    "id": "09152",
+    "name": "Zumo de limón",
+    "description": "Lemon juice, raw",
+    "aliases": [
+      "zumo de limon",
+      "jugo de limon"
+    ],
+    "per100g": {
+      "energyKcal": 22.0,
+      "proteinG": 0.35,
+      "carbsG": 6.9,
+      "sugarsG": 2.52,
+      "fatG": 0.24,
+      "saturatedFatG": 0.04,
+      "saltG": 0.0025
+    }
+  },
+  {
+    "id": "09150",
+    "name": "Limón sin piel",
+    "description": "Lemons, raw, without peel",
+    "aliases": [
+      "limon",
+      "limones"
+    ],
+    "per100g": {
+      "energyKcal": 29.0,
+      "proteinG": 1.1,
+      "carbsG": 9.32,
+      "sugarsG": 2.5,
+      "fatG": 0.3,
+      "saturatedFatG": 0.039,
+      "saltG": 0.005
+    }
+  },
+  {
+    "id": "11215",
+    "name": "Ajo",
+    "description": "Garlic, raw",
+    "aliases": [
+      "ajo",
+      "ajos"
+    ],
+    "per100g": {
+      "energyKcal": 149.0,
+      "proteinG": 6.36,
+      "carbsG": 33.06,
+      "sugarsG": 1.0,
+      "fatG": 0.5,
+      "saturatedFatG": 0.089,
+      "saltG": 0.0425
+    }
+  },
+  {
+    "id": "11282",
+    "name": "Cebolla",
+    "description": "Onions, raw",
+    "aliases": [
+      "cebolla",
+      "cebollas"
+    ],
+    "per100g": {
+      "energyKcal": 40.0,
+      "proteinG": 1.1,
+      "carbsG": 9.34,
+      "sugarsG": 4.24,
+      "fatG": 0.1,
+      "saturatedFatG": 0.042,
+      "saltG": 0.01
+    }
+  },
+  {
+    "id": "11297",
+    "name": "Perejil",
+    "description": "Parsley, fresh",
+    "aliases": [
+      "perejil"
+    ],
+    "per100g": {
+      "energyKcal": 36.0,
+      "proteinG": 2.97,
+      "carbsG": 6.33,
+      "sugarsG": 0.85,
+      "fatG": 0.79,
+      "saturatedFatG": 0.132,
+      "saltG": 0.14
+    }
+  },
+  {
+    "id": "11352",
+    "name": "Patata con piel",
+    "description": "Potatoes, flesh and skin, raw",
+    "aliases": [
+      "patata",
+      "patatas"
+    ],
+    "per100g": {
+      "energyKcal": 77.0,
+      "proteinG": 2.05,
+      "carbsG": 17.49,
+      "sugarsG": 0.82,
+      "fatG": 0.09,
+      "saturatedFatG": 0.025,
+      "saltG": 0.015
+    }
+  },
+  {
+    "id": "11529",
+    "name": "Tomate",
+    "description": "Tomatoes, red, ripe, raw, year round average",
+    "aliases": [
+      "tomate",
+      "tomates"
+    ],
+    "per100g": {
+      "energyKcal": 18.0,
+      "proteinG": 0.88,
+      "carbsG": 3.89,
+      "sugarsG": 2.63,
+      "fatG": 0.2,
+      "saturatedFatG": 0.028,
+      "saltG": 0.0125
+    }
+  },
+  {
+    "id": "20481",
+    "name": "Harina de trigo",
+    "description": "Wheat flour, white, all-purpose, unenriched",
+    "aliases": [
+      "harina",
+      "harina de trigo"
+    ],
+    "per100g": {
+      "energyKcal": 364.0,
+      "proteinG": 10.33,
+      "carbsG": 76.31,
+      "sugarsG": 0.27,
+      "fatG": 0.98,
+      "saturatedFatG": 0.155,
+      "saltG": 0.005
+    }
+  },
+  {
+    "id": "20444",
+    "name": "Arroz blanco crudo",
+    "description": "Rice, white, long-grain, regular, raw, unenriched",
+    "aliases": [
+      "arroz",
+      "arroz blanco"
+    ],
+    "per100g": {
+      "energyKcal": 365.0,
+      "proteinG": 7.13,
+      "carbsG": 79.95,
+      "sugarsG": 0.12,
+      "fatG": 0.66,
+      "saturatedFatG": 0.18,
+      "saltG": 0.0125
+    }
+  },
+  {
+    "id": "01145",
+    "name": "Mantequilla sin sal",
+    "description": "Butter, without salt",
+    "aliases": [
+      "mantequilla sin sal"
+    ],
+    "per100g": {
+      "energyKcal": 717.0,
+      "proteinG": 0.85,
+      "carbsG": 0.06,
+      "sugarsG": 0.06,
+      "fatG": 81.11,
+      "saturatedFatG": 50.489,
+      "saltG": 0.0275
+    }
+  }
+]

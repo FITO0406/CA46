@@ -92,7 +92,7 @@ export default function CrearEtiquetasInicioPage() {
         </section>
 
         <section className="mt-6 rounded-2xl border border-white/10 bg-white/[.035] px-5 py-4 text-center text-sm font-bold text-slate-400">
-          Factura = 72 h · Etiqueta física = 24 h · Drive = 72 h · Cocina = vida útil configurable · Las etiquetas anuladas salen del visor pero permanecen auditadas por empresa.
+          Factura = 72 h · Etiqueta física = 24 h · Drive = 72 h · Cocina = 10 días en visor, con plazo de consumo independiente · Las etiquetas anuladas salen del visor pero permanecen auditadas por empresa.
         </section>
       </main>
     </div>

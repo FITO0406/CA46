@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { tenantContextForRequest } from '@/lib/tenant-auth-server';
 import { decodeTraceability, encodeTraceability, type TraceabilityData } from '@/lib/traceability';
+import { calculateKitchenNutrition, inheritedKitchenFields, KITCHEN_DISPLAY_DAYS, manualNutrition, numberValue, nutritionExtraFields, nutritionFromParent } from '@/lib/kitchen-nutrition';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -81,6 +82,8 @@ export async function POST(request: Request) {
     const inputWeightKg = Number(body?.inputWeightKg);
     const outputWeightKg = Number(body?.outputWeightKg);
     const saltGrams = numberOrZero(body?.saltGrams);
+    const incorporatedSaltGrams = numberValue(body?.incorporatedSaltGrams ?? 0);
+    if (incorporatedSaltGrams === null) return NextResponse.json({ ok: false, error: 'Indica una cantidad válida de sal incorporada en gramos.' }, { status: 422 });
     const storageMaxTempC = Number(body?.storageMaxTempC);
     const shelfLifeDays = Number(body?.shelfLifeDays);
     const storageInstructions = clean(body?.storageInstructions, 240);
@@ -112,17 +115,26 @@ export async function POST(request: Request) {
       .map((item: any) => ({ name: clean(item?.name, 120), quantity: clean(item?.quantity, 80) }))
       .filter((item: any) => item.name);
 
-    const nutrition = {
-      energyKcal: numberOrZero(body?.nutrition?.energyKcal),
-      proteinG: numberOrZero(body?.nutrition?.proteinG),
-      carbsG: numberOrZero(body?.nutrition?.carbsG),
-      sugarsG: numberOrZero(body?.nutrition?.sugarsG),
-      fatG: numberOrZero(body?.nutrition?.fatG),
-      saturatedFatG: numberOrZero(body?.nutrition?.saturatedFatG),
-      saltG: numberOrZero(body?.nutrition?.saltG),
-    };
-
     const parentTrace = decodeTraceability(parent.category) || fallbackTrace(parent);
+    const parentConsumptionDate = parentTrace.extraFields.find((field) => field.label === 'Fecha límite de consumo')?.value;
+    if (parentConsumptionDate && new Date(parentConsumptionDate).getTime() <= processedAt.getTime()) {
+      return NextResponse.json({ ok: false, error: 'El lote de origen ha superado su plazo de consumo. Su presencia en el visor no amplía ese plazo.' }, { status: 409 });
+    }
+    const calculation = calculateKitchenNutrition({
+      productName: `${parent.product_name} ${parentTrace.scientificName || ''}`,
+      referenceId: clean(body?.nutritionReferenceId, 20),
+      parentNutrition: parent.source === 'kitchen' ? nutritionFromParent(parentTrace.extraFields) : null,
+      inputWeightKg, outputWeightKg, processType, ingredients,
+      incorporatedSaltGrams,
+    });
+    const manual = body?.nutritionMode === 'manual';
+    const nutrition = manual ? manualNutrition(body?.nutrition || {}) : calculation.values;
+    if (manual && !nutrition) {
+      return NextResponse.json({ ok: false, error: 'Completa los siete valores nutricionales manuales con cantidades válidas por 100 g. Los campos vacíos no equivalen a cero.' }, { status: 422 });
+    }
+    const nutritionMethod = manual ? 'Valores manuales del producto terminado · revisar fuente' : calculation.method;
+    const nutritionSources = manual ? ['Datos introducidos por la empresa'] : calculation.sources;
+    const nutritionWarnings = manual ? [] : calculation.warnings;
     const dateCode = processedAt.toISOString().replace(/[-:TZ.]/g, '').slice(0, 12);
     const outputLot = outputLotInput || `${parentTrace.lot || 'LOTE'}-C${dateCode}`;
     const ingredientLabel = ingredients.map((item: any) => `${item.name}${item.quantity ? ` (${item.quantity})` : ''}`).join(', ');
@@ -133,34 +145,30 @@ export async function POST(request: Request) {
       lot: outputLot,
       netWeight: String(outputWeightKg),
       presentation: processType,
+      consumerNotice: `Consumir preferentemente antes de ${shelfLifeDays} días desde la elaboración. ${storageInstructions || `Conservar a ≤ ${storageMaxTempC} °C`}`,
       extraFields: [
-        ...(parentTrace.extraFields || []),
+        ...inheritedKitchenFields(parentTrace.extraFields || []),
         { label: 'Transformación', value: processType },
         { label: 'Lote de origen', value: parentTrace.lot || parent.id },
         ...(temporaryChain ? [
-          { label: 'Cadena CA46', value: 'Hija de etiqueta temporal · 72 h' },
+          { label: 'Cadena CA46', value: 'Hija de etiqueta temporal · 10 días en visor' },
           { label: 'Origen provisional', value: 'Etiqueta física de caja · factura pendiente' },
         ] : []),
         { label: 'Peso antes de cocinar', value: `${inputWeightKg} kg` },
         { label: 'Peso final cocinado', value: `${outputWeightKg} kg` },
         { label: 'Conservación', value: storageInstructions || `Conservar a ≤ ${storageMaxTempC} °C` },
         { label: 'Consumo preferente', value: `Antes de ${shelfLifeDays} día${shelfLifeDays === 1 ? '' : 's'} desde la elaboración` },
+        { label: 'Fecha límite de consumo', value: new Date(processedAt.getTime() + shelfLifeDays * 86400000).toISOString() },
+        { label: 'Exposición en visor', value: `${KITCHEN_DISPLAY_DAYS} días desde la elaboración; independiente del plazo de consumo` },
         ...(saltGrams > 0 ? [{ label: 'Sal / salmuera', value: `${saltGrams} g de sal` }] : []),
         ...(ingredientLabel ? [{ label: 'Ingredientes / aditivos', value: ingredientLabel }] : []),
-        { label: 'Valor energético', value: `${nutrition.energyKcal} kcal / 100 g` },
-        { label: 'Proteínas', value: `${nutrition.proteinG} g / 100 g` },
-        { label: 'Hidratos de carbono', value: `${nutrition.carbsG} g / 100 g` },
-        { label: 'Azúcares', value: `${nutrition.sugarsG} g / 100 g` },
-        { label: 'Grasas', value: `${nutrition.fatG} g / 100 g` },
-        { label: 'Grasas saturadas', value: `${nutrition.saturatedFatG} g / 100 g` },
-        { label: 'Sal nutricional', value: `${nutrition.saltG} g / 100 g` },
+        ...(incorporatedSaltGrams > 0 ? [{ label: 'Sal incorporada', value: `${incorporatedSaltGrams} g` }] : []),
+        ...nutritionExtraFields(nutrition, nutritionMethod, nutritionSources, nutritionWarnings),
       ],
     };
 
     const now = new Date();
-    const expiresAt = temporaryChain
-      ? new Date(processedAt.getTime() + 72 * 60 * 60 * 1000)
-      : new Date(processedAt.getTime() + shelfLifeDays * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(processedAt.getTime() + KITCHEN_DISPLAY_DAYS * 86400000);
     const { data: child, error: childError } = await supabaseAdmin
       .from('digital_tags')
       .insert({
@@ -195,7 +203,7 @@ export async function POST(request: Request) {
         output_weight_kg: outputWeightKg,
         salt_grams: saltGrams,
         ingredients,
-        nutrition_per_100g: nutrition,
+        nutrition_per_100g: { ...(nutrition || {}), status: nutrition ? 'calculated' : 'pending', method: nutritionMethod, sources: nutritionSources, warnings: nutritionWarnings },
         output_product_name: outputProductName,
         output_lot: outputLot,
         storage_max_temp_c: storageMaxTempC,
@@ -217,7 +225,8 @@ export async function POST(request: Request) {
       child,
       transformation,
       temporary_chain: temporaryChain,
-      valid_hours: temporaryChain ? 72 : shelfLifeDays * 24,
+      valid_hours: KITCHEN_DISPLAY_DAYS * 24,
+      nutrition_status: nutrition ? 'calculated' : 'pending',
     }, { status: 201, headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error('kitchen POST error:', error);
