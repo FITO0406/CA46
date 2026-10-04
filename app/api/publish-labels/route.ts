@@ -150,7 +150,7 @@ export async function POST(request: Request) {
       if (!authorizedBuyerNumber) {
         return NextResponse.json(
           {
-            error: 'Configura en Mi empresa el N.º minorista / comprador GESICO antes de publicar etiquetas de 72 horas.',
+            error: 'Configura en Mi empresa el N.º de comprador / cliente de tu Merca antes de publicar etiquetas de 72 horas.',
             code: 'GESICO_BUYER_NUMBER_REQUIRED',
           },
           { status: 422, headers: { 'Cache-Control': 'no-store' } },
@@ -165,7 +165,7 @@ export async function POST(request: Request) {
         if (!detectedBuyerNumber) {
           return NextResponse.json(
             {
-              error: 'Una de las facturas no conserva el N.º minorista GESICO validado. Vuelve a analizarla antes de publicar.',
+              error: 'Una de las facturas de compra no conserva el N.º de comprador / cliente validado. Vuelve a analizarla antes de publicar.',
               code: 'GESICO_BUYER_NUMBER_NOT_READ',
             },
             { status: 422, headers: { 'Cache-Control': 'no-store' } },
@@ -175,7 +175,7 @@ export async function POST(request: Request) {
         if (detectedBuyerNumber !== authorizedBuyerNumber) {
           return NextResponse.json(
             {
-              error: `Factura rechazada: el N.º comprador GESICO ${rawBuyerNumber || detectedBuyerNumber} no pertenece a esta empresa.`,
+              error: `Factura de compra rechazada: el N.º de comprador / cliente ${rawBuyerNumber || detectedBuyerNumber} no pertenece a esta empresa.`,
               code: 'INVOICE_NOT_OWNED',
             },
             { status: 409, headers: { 'Cache-Control': 'no-store' } },

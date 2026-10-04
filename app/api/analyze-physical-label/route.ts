@@ -221,7 +221,7 @@ OBJETIVO PARA physical_label:
 - Revisa la etiqueta completa dos veces antes de responder para no omitir campos.
 - No inventes ningún dato ni completes información por conocimiento general.
 - No extraigas precios, importes, IVA, totales ni costes.
-- NO busques ni exijas número de comprador GESICO en esta ruta.
+- NO busques ni exijas número de comprador / cliente del mercado mayorista en esta ruta.
 - Si un dato parece existir pero no se lee con seguridad, déjalo vacío y añádelo a review_fields.
 - Si un campo no aparece, puede quedar vacío.
 - Especie, lote y procedencia son críticos y deben revisarse antes de publicar.

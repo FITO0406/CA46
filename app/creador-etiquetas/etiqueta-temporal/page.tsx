@@ -284,7 +284,7 @@ export default function EtiquetaTemporalPage() {
               <div className="flex flex-col justify-center">
                 <p className="text-xs font-black uppercase tracking-[.2em] text-amber-300">Paso 1</p>
                 <h2 className="mt-2 text-3xl font-black">Leer trazabilidad</h2>
-                <p className="mt-3 leading-7 text-slate-400">Se leerán todos los datos visibles. No se aplica la validación del N.º comprador GESICO porque esta vía parte de la etiqueta física de la caja.</p>
+                <p className="mt-3 leading-7 text-slate-400">Se leerán todos los datos visibles de la etiqueta de la caja. En esta vía no se exige el N.º de comprador / cliente de tu Merca.</p>
                 <button onClick={analyze} disabled={analyzing || publishing} className="mt-6 rounded-2xl bg-amber-400 px-5 py-4 text-lg font-black text-[#111416] disabled:opacity-50">{analyzing ? 'Leyendo etiqueta…' : 'Analizar etiqueta física'}</button>
               </div>
             </div>
