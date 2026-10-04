@@ -315,6 +315,11 @@ export default function Home() {
 
       <footer className="relative border-t border-white/10 bg-black/25 px-5 py-7 text-center text-xs font-semibold tracking-[.16em] text-slate-600">
         CA46 · Tecnología, control y confianza para el comercio alimentario
+        <p className="mt-3 tracking-normal">
+          <Link href="/privacidad" className="text-slate-400 underline underline-offset-4 hover:text-orange-300">
+            Política de privacidad
+          </Link>
+        </p>
       </footer>
     </div>
   );
