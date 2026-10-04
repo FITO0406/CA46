@@ -251,6 +251,10 @@ export default function EtiquetaTemporalPage() {
       </header>
 
       <main className="relative mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-14">
+        <nav aria-label="Tipo de documento" className="mx-auto mb-8 grid max-w-3xl grid-cols-2 gap-3">
+          <Link href="/creador-etiquetas" className="rounded-2xl border border-white/20 bg-white/5 px-4 py-4 text-center font-black text-slate-200 hover:border-orange-400/50">Factura · 72 h</Link>
+          <Link href="/creador-etiquetas/etiqueta-temporal" aria-current="page" className="rounded-2xl border border-amber-400/50 bg-amber-400/15 px-4 py-4 text-center font-black text-amber-300">Etiqueta de caja · 24 h</Link>
+        </nav>
         <section className="mx-auto max-w-3xl text-center">
           <span className="inline-flex rounded-full border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-[11px] font-black uppercase tracking-[.2em] text-amber-300">Temporal · 24 horas · factura pendiente</span>
           <h1 className="mt-5 text-4xl font-black sm:text-6xl">Fotografía la etiqueta de la caja</h1>

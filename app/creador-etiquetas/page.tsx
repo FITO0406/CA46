@@ -314,10 +314,15 @@ export default function CreadorEtiquetasPage() {
       </header>
 
       <main className="relative mx-auto max-w-7xl px-5 py-10 sm:px-8 sm:py-14">
+        <nav aria-label="Tipo de documento" className="mx-auto mb-8 grid max-w-3xl grid-cols-2 gap-3">
+          <Link href="/creador-etiquetas" aria-current="page" className="rounded-2xl border border-orange-400/50 bg-orange-500/15 px-4 py-4 text-center font-black text-orange-300">Factura · 72 h</Link>
+          <Link href="/creador-etiquetas/etiqueta-temporal" className="rounded-2xl border border-white/20 bg-white/5 px-4 py-4 text-center font-black text-slate-200 hover:border-amber-400/50">Etiqueta de caja · 24 h</Link>
+        </nav>
         <section className="mx-auto max-w-3xl text-center">
           <span className="inline-flex rounded-full border border-orange-400/20 bg-orange-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[.22em] text-orange-300">Factura · definitiva · 72 horas</span>
           <h1 className="mt-5 text-4xl font-black sm:text-6xl">De la factura a las etiquetas</h1>
           <p className="mx-auto mt-4 max-w-2xl leading-7 text-slate-400">Selecciona una o varias facturas. CA46 separa cada partida, te deja revisarla y la publica únicamente en tu empresa.</p>
+          <p className="mt-3 text-sm text-slate-400">¿Tienes la etiqueta de una caja y todavía no la factura? <Link href="/creador-etiquetas/etiqueta-temporal" className="font-bold text-amber-300 underline underline-offset-4">Crear etiqueta de 24 horas</Link></p>
         </section>
 
         <section className="mx-auto mt-9 grid max-w-5xl gap-5 md:grid-cols-2">

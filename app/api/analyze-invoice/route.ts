@@ -177,7 +177,7 @@ const INVOICE_KNOWN_KEYS = [
   'registro_sanitario_expedidor', 'rgs', 'registro_sanitario',
   'buyer', 'comprador', 'buyer_nif', 'nif',
   'buyer_number', 'numero_comprador', 'n_comprador', 'n_minorista', 'numero_minorista',
-  'invoice_extra_fields', 'warnings', 'labels',
+  'invoice_extra_fields', 'warnings', 'labels', 'document_type',
 ];
 
 const LABEL_KNOWN_KEYS = [
@@ -290,15 +290,6 @@ export async function POST(request: Request) {
     if (settingsError) throw settingsError;
 
     const authorizedBuyerNumber = normalizeIdentifier(companySettings?.gesico_buyer_number);
-    if (!authorizedBuyerNumber) {
-      return NextResponse.json(
-        {
-          error: 'Antes de crear etiquetas de 72 horas, configura en Mi empresa el N.º de comprador / cliente de tu Merca.',
-          code: 'BUYER_NUMBER_REQUIRED',
-        },
-        { status: 422, headers: { 'Cache-Control': 'no-store' } },
-      );
-    }
 
     const formData = await request.formData();
     const file = formData.get('image');
@@ -313,6 +304,13 @@ export async function POST(request: Request) {
     const imageBase64 = Buffer.from(await file.arrayBuffer()).toString('base64');
     const prompt = `
 Actúas como el lector de trazabilidad alimentaria de CA46. Analiza ESTA fotografía de una factura, albarán o documento de trazabilidad de pescado o marisco emitido por un mercado mayorista, lonja o proveedor.
+
+PRIMERO CLASIFICA LA IMAGEN:
+- document_type = "invoice" únicamente para una factura, albarán o documento de compra con partidas y datos del comprador/proveedor.
+- document_type = "physical_label" para etiquetas adheridas a cajas o productos, aunque aparezcan varias cajas juntas. No son facturas.
+- document_type = "unknown" para fotos ajenas a estos documentos o cuando no puedas determinar el tipo con seguridad.
+- Para physical_label o unknown devuelve labels:[] y no inventes datos de comprador. Esa imagen no se procesa como factura.
+- Lee el documento en su orientación correcta si está girado.
 
 OBJETIVO OBLIGATORIO:
 - Recupera la ficha de trazabilidad COMPLETA que sea legible en el documento, no solo los campos principales.
@@ -376,6 +374,7 @@ Descripción, nombre científico, lote, marca, kg neto, método, presentación, 
 
 Devuelve EXCLUSIVAMENTE JSON válido, sin markdown ni comentarios, con esta estructura:
 {
+  "document_type":"invoice",
   "invoice_number":"",
   "invoice_date":"",
   "expedidor":"",
@@ -441,7 +440,31 @@ Si no identificas ninguna partida, devuelve "labels":[] y explica brevemente el 
       );
     }
 
-    const analysis = normalizeAnalysis(parseModelJson(result.text));
+    const parsed = parseModelJson(result.text);
+    const documentType = cleanString(parsed?.document_type).toLowerCase();
+    if (documentType === 'physical_label') {
+      return NextResponse.json({
+        error: 'La imagen contiene etiquetas de cajas, no una factura. Usa «Etiqueta de caja · 24 h» y fotografía una etiqueta de cerca.',
+        code: 'WRONG_DOCUMENT_TYPE',
+        document_type: documentType,
+      }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
+    }
+    if (documentType !== 'invoice') {
+      return NextResponse.json({
+        error: 'No se reconoce una factura o albarán en esta imagen. Fotografía el documento completo y con buena luz; no se crearán etiquetas.',
+        code: 'UNSUPPORTED_DOCUMENT',
+        document_type: 'unknown',
+      }, { status: 422, headers: { 'Cache-Control': 'no-store' } });
+    }
+
+    if (!authorizedBuyerNumber) {
+      return NextResponse.json({
+        error: 'Antes de crear etiquetas de 72 horas, configura en Mi empresa el N.º de comprador / cliente de tu Merca.',
+        code: 'BUYER_NUMBER_REQUIRED',
+      }, { status: 422, headers: { 'Cache-Control': 'no-store' } });
+    }
+
+    const analysis = normalizeAnalysis(parsed);
     const detectedBuyerNumber = normalizeIdentifier(analysis.buyer_number);
 
     if (!detectedBuyerNumber) {

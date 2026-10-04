@@ -212,6 +212,8 @@ PRIMERO CLASIFICA EL DOCUMENTO:
 - document_type = "physical_label" si es una etiqueta física de caja/producto.
 - document_type = "invoice" si es una factura, albarán o documento de compra con partidas y datos fiscales.
 - document_type = "unknown" solo si realmente no puede determinarse.
+- Las fotos sin etiquetas de trazabilidad alimentaria (habitaciones, televisores, objetos o cajas sin etiqueta legible) son unknown. No inventes una especie, lote o procedencia.
+- Para invoice o unknown devuelve label vacío y no extraigas datos como si fuera una etiqueta física.
 - Si la imagen está girada o inclinada, interprétala en la orientación correcta antes de leerla.
 
 OBJETIVO PARA physical_label:
@@ -285,13 +287,20 @@ Devuelve EXCLUSIVAMENTE JSON válido:
       );
     }
 
+    if (documentType !== 'physical_label') {
+      return NextResponse.json({
+        error: 'No se reconoce una etiqueta de trazabilidad en esta imagen. Fotografía una sola etiqueta de la caja, completa y de cerca.',
+        code: 'UNSUPPORTED_DOCUMENT',
+        document_type: 'unknown',
+      }, { status: 422, headers: { 'Cache-Control': 'no-store' } });
+    }
+
     const label = normalizeLabel(parsed?.label || parsed);
     if (!label.description && !label.lote && !label.procedencia) {
       return NextResponse.json({ error: 'No se han podido identificar datos suficientes de trazabilidad en esta etiqueta.', warnings: parsed?.warnings || [], document_type: documentType }, { status: 422 });
     }
 
     const warnings = Array.isArray(parsed?.warnings) ? parsed.warnings.map(cleanString).filter(Boolean) : [];
-    if (documentType === 'unknown') warnings.unshift('CA46 no ha podido confirmar al 100 % el tipo de documento. Revisa los datos antes de publicar.');
 
     return NextResponse.json({
       analysis: {
