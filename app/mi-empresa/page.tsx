@@ -252,6 +252,7 @@ export default function MiEmpresaPage() {
           </p>
         </section>
 
+        <Link href="/mi-empresa/usuarios" className="inline-block rounded-xl border border-white/20 px-5 py-3 font-bold">Usuarios · acceso de empleados</Link>
         {!loading ? <TenantCompanyCard companyName={config.businessName || legacyDraft?.businessName || ''} /> : null}
 
         {loading ? (

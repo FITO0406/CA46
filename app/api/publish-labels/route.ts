@@ -285,7 +285,7 @@ export async function POST(request: Request) {
             ? 'CA46 ha detectado que esta etiqueta provisional ya está publicada y activa en tu empresa.'
             : 'CA46 ha detectado etiquetas activas de esta misma factura que ya fueron publicadas por tu empresa.',
           code: 'DUPLICATE_LABELS',
-          duplicates: existing,
+          ...(tenant.context.role === 'empleado' ? {} : { duplicates: existing }),
         },
         { status: 409 },
       );

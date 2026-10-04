@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { syncCompanyDrive } from '@/lib/company-drive-sync';
+import { tenantContextForRequest } from '@/lib/tenant-auth-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,6 +30,11 @@ async function publicCompanyFromScreenToken(screenToken: string) {
 
 export async function GET(request: Request) {
   try {
+    // Anonymous display links remain public; signed-in creation-only staff cannot use this API.
+    if (request.headers.get('authorization')) {
+      const access = await tenantContextForRequest(request);
+      if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status, headers: { 'Cache-Control': 'no-store' } });
+    }
     const screenToken = new URL(request.url).searchParams.get('screen')?.trim() || '';
 
     // La pantalla pública siempre necesita el token propio de una empresa.

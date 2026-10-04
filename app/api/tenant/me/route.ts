@@ -52,7 +52,12 @@ async function readTenant(userId: string) {
     .maybeSingle();
 
   if (membershipError) return { tenant: null, error: membershipError };
-  if (!membership) return { tenant: null, error: null };
+  if (!membership) {
+    const { data: disabled, error } = await supabaseAdmin.from('company_members').select('company_id, role, is_active').eq('user_id', userId).eq('role', 'empleado').limit(1).maybeSingle();
+    if (error) return { tenant: null, error };
+    if (disabled) return { tenant: { company: { id: disabled.company_id, name: '', status: 'inactive' }, membership: { role: 'empleado', isActive: false } }, error: null };
+    return { tenant: null, error: null };
+  }
 
   const { data: company, error: companyError } = await supabaseAdmin
     .from('companies')
@@ -61,6 +66,9 @@ async function readTenant(userId: string) {
     .single();
 
   if (companyError) return { tenant: null, error: companyError };
+  if (membership.role === 'empleado') {
+    return { tenant: { company: { id: company.id, name: company.name, status: company.status }, membership: { role: 'empleado', isActive: membership.is_active } }, error: null };
+  }
 
   try {
     const access = await resolveCompanyEffectiveAccess(company.id, company.plan as PlanId);
@@ -109,6 +117,11 @@ export async function POST(request: Request) {
   if (!auth.user) {
     return NextResponse.json({ error: 'No autorizado.' }, { status: 401, headers: { 'Cache-Control': 'no-store' } });
   }
+  // A disabled employee must not turn their account into a company administrator.
+  const { data: employeeMembership, error: employeeError } = await supabaseAdmin.from('company_members')
+    .select('user_id').eq('user_id', auth.user.id).eq('role', 'empleado').limit(1).maybeSingle();
+  if (employeeError) return NextResponse.json({ error: 'No se pudo validar el acceso.' }, { status: 503 });
+  if (employeeMembership) return NextResponse.json({ error: 'Las cuentas de empleado no pueden crear empresas.' }, { status: 403 });
 
   const existing = await readTenant(auth.user.id);
   if (existing.error) {

@@ -9,6 +9,7 @@ type Props = {
   children: ReactNode;
   areaName?: string;
   requireTenant?: boolean;
+  employeeArea?: boolean;
 };
 
 type TenantPayload = {
@@ -55,7 +56,7 @@ function cachedTenantFor(userId: string) {
   return tenantCache.tenant;
 }
 
-export default function PrivateAreaGate({ children, areaName = 'Zona privada', requireTenant = true }: Props) {
+export default function PrivateAreaGate({ children, areaName = 'Zona privada', requireTenant = true, employeeArea = false }: Props) {
   const [loading, setLoading] = useState(true);
   const [hasSession, setHasSession] = useState(false);
   const [allowed, setAllowed] = useState(false);
@@ -102,6 +103,11 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
         validatedUserId.current = null;
         setAllowed(false);
         setAccessError('Tu acceso a esta empresa está desactivado.');
+        return;
+      }
+      if (nextTenant.membership.role === 'empleado' && !employeeArea) {
+        setAllowed(false);
+        window.location.replace('/empleado/etiquetas');
         return;
       }
 
@@ -259,7 +265,7 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
       validationSequence.current += 1;
       subscription.subscription.unsubscribe();
     };
-  }, [requireTenant]);
+  }, [requireTenant, employeeArea]);
 
   async function handleLogin(event: FormEvent) {
     event.preventDefault();
@@ -319,9 +325,7 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
 
           <div className="mt-5 flex flex-col gap-3 text-center text-sm font-black">
             <a href="/recuperar-clave" className="text-slate-400">¿Has olvidado tu contraseña?</a>
-            <a href="/registro?plan=gratis" className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white">Crear una cuenta gratis</a>
-            <a href="/planes" className="text-orange-300">Ver planes CA46</a>
-            <Link href="/" className="text-slate-500">← Volver al inicio</Link>
+            {!employeeArea ? <><a href="/registro?plan=gratis" className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white">Crear una cuenta gratis</a><a href="/planes" className="text-orange-300">Ver planes CA46</a><Link href="/" className="text-slate-500">← Volver al inicio</Link></> : null}
           </div>
         </section>
       </div>
@@ -337,7 +341,7 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
           <h1 className="mt-2 text-3xl font-black">Acceso pendiente</h1>
           <p className="mt-4 text-sm leading-6 text-slate-400">{accessError || 'No se pudo validar la empresa asociada a este usuario.'}</p>
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <a href="/mi-empresa" className="rounded-xl bg-orange-500 px-5 py-3 font-black text-[#111416]">Ir a Mi empresa</a>
+            {!employeeArea ? <a href="/mi-empresa" className="rounded-xl bg-orange-500 px-5 py-3 font-black text-[#111416]">Ir a Mi empresa</a> : null}
             <button type="button" onClick={handleLogout} className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-black text-slate-300">Cerrar sesión</button>
           </div>
         </section>

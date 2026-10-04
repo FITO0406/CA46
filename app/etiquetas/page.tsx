@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { supabase } from '@/lib/supabaseClient';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import TagCard from '@/components/TagCard';
 import { decodeTraceability } from '@/lib/traceability';
@@ -73,6 +74,16 @@ export default function EtiquetasPage() {
     let active = true;
 
     async function prepareScreen() {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        const response = await fetch('/api/tenant/me', { cache: 'no-store', headers: { Authorization: `Bearer ${data.session.access_token}` } });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) return;
+        if (payload.tenant?.membership?.role === 'empleado') {
+          window.location.replace('/empleado/etiquetas');
+          return;
+        }
+      }
       const url = new URL(window.location.href);
       const tokenFromUrl = url.searchParams.get('screen')?.trim() || '';
 

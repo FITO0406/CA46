@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { employeeOperationAllowed } from '@/lib/employee-access';
 
 export type TenantRequestContext = {
   userId: string;
@@ -34,6 +35,9 @@ export async function tenantContextForRequest(request: Request): Promise<
 
   if (membershipError) throw membershipError;
   if (!membership) return { ok: false, status: 409, error: 'Primero debes activar tu empresa.' };
+  if (membership.role === 'empleado' && (!authData.user.email_confirmed_at || !employeeOperationAllowed(request))) {
+    return { ok: false, status: 403, error: 'El acceso de empleado solo permite crear etiquetas. Confirma tu cuenta y utiliza tu acceso de empleado.' };
+  }
 
   const { data: company, error: companyError } = await supabaseAdmin
     .from('companies')
