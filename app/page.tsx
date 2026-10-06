@@ -146,10 +146,10 @@ export default function Home() {
       <div className="pointer-events-none fixed inset-0 opacity-[.08] [background-image:linear-gradient(rgba(255,255,255,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.08)_1px,transparent_1px)] [background-size:44px_44px]" />
 
       <header className="relative border-b border-white/10 bg-[#0c1013]/85 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-5 py-4 sm:px-8">
-          <div className="flex items-center gap-4">
-            <div className="relative h-14 w-14 overflow-hidden rounded-2xl border border-orange-400/20 bg-black shadow-lg shadow-orange-950/40 sm:h-16 sm:w-16">
-              <Image src="/ca46-logo.svg?v=20261006" alt="CA46" fill priority sizes="64px" className="object-cover" />
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-5 sm:px-8">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <div className="relative h-20 w-20 shrink-0">
+              <Image src="/ca46-logo.svg?v=20261006" alt="CA46" fill priority sizes="80px" className="object-contain mix-blend-lighten [mask-image:radial-gradient(ellipse_at_center,#000_68%,transparent_80%)]" />
             </div>
             <div>
               <p className="text-xl font-black tracking-[-.03em] sm:text-2xl">CA46</p>
@@ -157,7 +157,7 @@ export default function Home() {
             </div>
           </div>
 
-          <nav className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+          <nav className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end sm:gap-3">
             <Link href="https://ca46-demo.fesaro0406.chatgpt.site/?utm_source=ca46&utm_medium=web&utm_campaign=demo" prefetch={false} className="rounded-full border border-orange-400/30 bg-orange-500/10 px-4 py-2 text-sm font-black text-orange-300 transition hover:bg-orange-500/20">
               Solicitar demo
             </Link>
@@ -196,10 +196,10 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="relative mx-auto w-full max-w-sm lg:max-w-md">
-            <div className="absolute inset-8 rounded-full bg-orange-500/15 blur-3xl" />
-            <div className="relative aspect-square overflow-hidden rounded-[2.4rem] border border-orange-400/20 bg-black shadow-2xl shadow-orange-950/40">
-              <Image src="/ca46-logo.svg?v=20261006" alt="Logotipo corporativo CA46" fill priority sizes="(max-width: 1024px) 360px, 430px" className="object-cover" />
+          <div className="relative isolate mx-auto w-full max-w-[300px] sm:max-w-sm lg:max-w-md">
+            <div className="pointer-events-none absolute inset-8 -z-10 rounded-full bg-orange-500/10 blur-3xl" />
+            <div className="relative aspect-square">
+              <Image src="/ca46-logo.svg?v=20261006" alt="Logotipo corporativo CA46" fill priority sizes="(max-width: 640px) 300px, (max-width: 1024px) 384px, 430px" className="object-contain mix-blend-lighten [mask-image:radial-gradient(ellipse_at_center,#000_68%,transparent_80%)]" />
             </div>
           </div>
         </section>

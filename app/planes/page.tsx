@@ -54,7 +54,7 @@ export default function PlanesPage() {
       <header className="relative border-b border-white/10 bg-[#0c1013]/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
           <Link href="/" className="flex items-center gap-4">
-            <div className="relative h-14 w-14 overflow-hidden rounded-2xl border border-orange-400/20 bg-black shadow-lg shadow-orange-950/30"><Image src="/ca46-logo.svg?v=20261006" alt="CA46" fill priority sizes="56px" className="object-cover" /></div>
+            <div className="relative h-14 w-14 shrink-0"><Image src="/ca46-logo.svg?v=20261006" alt="CA46" fill priority sizes="56px" className="object-contain mix-blend-lighten [mask-image:radial-gradient(ellipse_at_center,#000_68%,transparent_80%)]" /></div>
             <div><p className="text-xl font-black tracking-tight">CA46</p><p className="text-xs font-semibold text-slate-500">Planes y precios</p></div>
           </Link>
           <div className="flex items-center gap-2">

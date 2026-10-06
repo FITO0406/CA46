@@ -103,8 +103,8 @@ export default function SuperAdminPage() {
       <header className="border-b border-white/10 bg-[#0c1013]/92 px-5 py-4">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-orange-400/20 bg-black">
-              <Image src="/ca46-logo.svg?v=20261006" alt="CA46" fill priority sizes="48px" className="object-cover" />
+            <div className="relative h-12 w-12 shrink-0">
+              <Image src="/ca46-logo.svg?v=20261006" alt="CA46" fill priority sizes="48px" className="object-contain mix-blend-lighten [mask-image:radial-gradient(ellipse_at_center,#000_68%,transparent_80%)]" />
             </div>
             <div>
               <p className="text-xl font-black">CA46</p>

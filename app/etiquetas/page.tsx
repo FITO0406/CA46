@@ -220,8 +220,8 @@ export default function EtiquetasPage() {
 
         <header className="relative flex items-center justify-between gap-4 border-b border-white/10 bg-[#0c1013]/90 px-5 py-3 sm:px-8">
           <div className="flex items-center gap-3">
-            <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-orange-400/20 bg-black">
-              <Image src="/ca46-logo.svg?v=20261006" alt="CA46" fill priority sizes="48px" className="object-cover" />
+            <div className="relative h-12 w-12 shrink-0">
+              <Image src="/ca46-logo.svg?v=20261006" alt="CA46" fill priority sizes="48px" className="object-contain mix-blend-lighten [mask-image:radial-gradient(ellipse_at_center,#000_68%,transparent_80%)]" />
             </div>
             <div>
               <p className="text-lg font-black sm:text-xl">{establishmentName}</p>

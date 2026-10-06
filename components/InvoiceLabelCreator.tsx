@@ -344,7 +344,7 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_10%_5%,rgba(249,115,22,.16),transparent_26%),radial-gradient(circle_at_86%_18%,rgba(148,163,184,.08),transparent_24%)]" />
       <header className="relative border-b border-white/10 bg-[#0c1013]/88 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
-          <Link href={employeeMode ? invoiceRoute : '/'} className="flex items-center gap-4"><div className="relative h-14 w-14 overflow-hidden rounded-2xl border border-orange-400/20 bg-black"><Image src="/ca46-logo.svg?v=20261006" alt="CA46" fill priority sizes="56px" className="object-cover" /></div><div><p className="text-xl font-black">CA46</p><p className="text-xs font-semibold text-slate-500">Creador de etiquetas</p></div></Link>
+          <Link href={employeeMode ? invoiceRoute : '/'} className="flex items-center gap-4"><div className="relative h-14 w-14 shrink-0"><Image src="/ca46-logo.svg?v=20261006" alt="CA46" fill priority sizes="56px" className="object-contain mix-blend-lighten [mask-image:radial-gradient(ellipse_at_center,#000_68%,transparent_80%)]" /></div><div><p className="text-xl font-black">CA46</p><p className="text-xs font-semibold text-slate-500">Creador de etiquetas</p></div></Link>
           <Link href={employeeMode ? invoiceRoute : '/'} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-black text-slate-300">{employeeMode ? 'Crear etiquetas' : '← Inicio'}</Link>
         </div>
       </header>

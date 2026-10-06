@@ -46,7 +46,7 @@ export default function AccesoPage() {
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(249,115,22,.18),transparent_28%),radial-gradient(circle_at_85%_15%,rgba(148,163,184,.08),transparent_25%)]" />
       <section className="relative w-full max-w-md rounded-[2rem] border border-white/10 bg-[#0c1013]/95 p-7 shadow-2xl shadow-black/50 sm:p-9">
         <Link href="/" className="mx-auto block w-fit">
-          <div className="relative h-20 w-20 overflow-hidden rounded-2xl border border-orange-400/20 bg-black"><Image src="/ca46-logo.svg?v=20261006" alt="CA46" fill priority sizes="80px" className="object-cover" /></div>
+          <div className="relative h-20 w-20 shrink-0"><Image src="/ca46-logo.svg?v=20261006" alt="CA46" fill priority sizes="80px" className="object-contain mix-blend-lighten [mask-image:radial-gradient(ellipse_at_center,#000_68%,transparent_80%)]" /></div>
         </Link>
         <p className="mt-6 text-center text-xs font-black uppercase tracking-[.22em] text-orange-400">CA46 · Área privada</p>
         <h1 className="mt-2 text-center text-3xl font-black">Entrar en CA46</h1>
