@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { logoutAndRedirect } from '@/lib/logout';
 
 export default function AccesoPage() {
   const [email, setEmail] = useState('');
@@ -14,9 +15,15 @@ export default function AccesoPage() {
 
   useEffect(() => {
     setVerified(new URLSearchParams(window.location.search).get('verificado') === '1');
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) window.location.href = '/mi-empresa';
-    });
+    let active = true;
+    supabase.auth.getSession().then(async ({ data, error }) => {
+      if (error) throw error;
+      if (!data.session || !active) return;
+      const { data: identity, error: identityError } = await supabase.auth.getUser();
+      if (identityError || !identity.user) { if (active) await logoutAndRedirect(); return; }
+      if (active) window.location.replace('/mi-empresa');
+    }).catch(() => { if (active) setError('No se pudo recuperar la sesión. Introduce tu email y contraseña para entrar.'); });
+    return () => { active = false; };
   }, []);
 
   async function handleLogin(event: FormEvent) {

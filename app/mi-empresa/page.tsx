@@ -63,6 +63,7 @@ export default function MiEmpresaPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [driveLoading, setDriveLoading] = useState(false);
   const [driveStatus, setDriveStatus] = useState<DriveStatus>(EMPTY_DRIVE_STATUS);
 
@@ -103,7 +104,7 @@ export default function MiEmpresaPage() {
         setDriveStatus({ ...EMPTY_DRIVE_STATUS, ...status });
       })
       .catch((error: Error) => {
-        if (active) setMessage(error.message || 'No se pudo cargar Mi empresa.');
+        if (active) setLoadError(error.message || 'No se pudo cargar Mi empresa.');
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -221,6 +222,15 @@ export default function MiEmpresaPage() {
       setDriveLoading(false);
     }
   }
+
+  if (loadError) return (
+    <main className="min-h-screen bg-[#080b0d] px-5 py-10 text-white">
+      <h1 className="text-3xl font-black">No se pudo cargar Mi empresa</h1>
+      <p role="alert" className="mt-4 text-amber-300">{loadError}</p>
+      <p className="mt-3 text-slate-400">Tus datos guardados no se han modificado. Reintenta la carga antes de editar.</p>
+      <button type="button" onClick={() => window.location.reload()} className="mt-5 rounded-xl bg-orange-500 px-5 py-3 font-bold text-black">Reintentar</button>
+    </main>
+  );
 
   return (
     <div className="min-h-screen bg-[#080b0d] text-white selection:bg-orange-500/30">

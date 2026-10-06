@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabaseClient';
+import { logoutAndRedirect } from '@/lib/logout';
 
 type Props = { children: ReactNode };
 
@@ -85,7 +86,7 @@ export default function SuperAdminGate({ children }: Props) {
         });
 
         if (response.status === 401) {
-          await supabase.auth.signOut();
+          await logoutAndRedirect('/superadmin');
           return;
         }
 
@@ -150,7 +151,7 @@ export default function SuperAdminGate({ children }: Props) {
         return;
       }
 
-      void validate(nextSession);
+      window.setTimeout(() => { if (mounted) void validate(nextSession); }, 0);
     });
 
     return () => {
@@ -217,7 +218,9 @@ export default function SuperAdminGate({ children }: Props) {
   async function logout() {
     validatedUserId.current = null;
     validationSequence.current += 1;
-    await supabase.auth.signOut();
+    setSession(null);
+    setAllowed(false);
+    await logoutAndRedirect('/superadmin');
   }
 
   if (loading) {

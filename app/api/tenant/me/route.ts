@@ -106,8 +106,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'No se pudo consultar la empresa.', code }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
   }
 
+  let accountKind = 'company';
+  if (!result.tenant) {
+    const { data: admin, error } = await supabaseAdmin.from('super_admins')
+      .select('is_active').eq('user_id', auth.user.id).maybeSingle();
+    if (error) return NextResponse.json({ error: 'No se pudo consultar el tipo de cuenta.' }, { status: 503 });
+    accountKind = admin?.is_active ? 'superadmin' : 'unlinked';
+  }
   return NextResponse.json(
-    { ok: true, userId: auth.user.id, tenant: result.tenant },
+    { ok: true, userId: auth.user.id, email: auth.user.email, accountKind, tenant: result.tenant },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

@@ -44,8 +44,7 @@ export default function TenantCompanyCard({ companyName }: { companyName: string
     if (sessionError) throw sessionError;
     const token = data.session?.access_token;
     if (!token) {
-      setLoading(false);
-      return null;
+      throw new Error('Tu sesión ha caducado. Vuelve a iniciar sesión.');
     }
 
     const plan = typeof window !== 'undefined' ? window.localStorage.getItem('ca46:selected-plan') || 'gratis' : 'gratis';
@@ -114,6 +113,13 @@ export default function TenantCompanyCard({ companyName }: { companyName: string
   }
 
   if (!tenant) {
+    if (error) return (
+      <section className="mb-6 rounded-2xl border border-rose-400/20 p-6">
+        <h2 className="text-xl font-black">No se pudo cargar tu empresa</h2>
+        <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>
+        <button type="button" onClick={() => window.location.reload()} className="mt-4 rounded-xl bg-orange-500 px-4 py-3 font-bold text-black">Reintentar</button>
+      </section>
+    );
     return (
       <section className="mb-6 rounded-[2rem] border border-amber-400/20 bg-amber-400/[.05] p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">

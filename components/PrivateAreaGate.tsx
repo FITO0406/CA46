@@ -4,6 +4,7 @@ import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabaseClient';
+import { logoutAndRedirect } from '@/lib/logout';
 
 type Props = {
   children: ReactNode;
@@ -67,6 +68,8 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
   const [accessError, setAccessError] = useState('');
   const [signingIn, setSigningIn] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const [superAdminAccount, setSuperAdminAccount] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const validatedUserId = useRef<string | null>(null);
   const validationSequence = useRef(0);
 
@@ -81,6 +84,7 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
       setAllowed(false);
       setTenant(null);
       setUserEmail('');
+      setSuperAdminAccount(false);
       setAccessError('');
       setLoading(false);
     }
@@ -170,7 +174,7 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
             validatedUserId.current = null;
             tenantCache = null;
           }
-          await supabase.auth.signOut();
+          await logoutAndRedirect();
           return;
         }
 
@@ -179,6 +183,15 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
         }
 
         let nextTenant = (payload?.tenant || null) as TenantPayload | null;
+
+        if (!nextTenant && payload.accountKind === 'superadmin') {
+          if (!mounted || currentValidation !== validationSequence.current) return;
+          setSuperAdminAccount(true);
+          setAllowed(false);
+          setAccessError('Esta sesión corresponde a la administración global de CA46. Para entrar en tu pescadería, cambia a su cuenta de administrador. Las empresas y sus datos siguen guardados.');
+          return;
+        }
+        setSuperAdminAccount(false);
 
         // Compatibilidad con altas antiguas: solo crea el vínculo si el registro
         // guardó explícitamente el nombre de la empresa en los metadatos del usuario.
@@ -257,7 +270,8 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
         return;
       }
 
-      void validateSession(session, true);
+      // Defer Auth calls until Supabase has finished notifying its subscribers.
+      window.setTimeout(() => { if (mounted) void validateSession(session, true); }, 0);
     });
 
     return () => {
@@ -289,11 +303,18 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
   }
 
   async function handleLogout() {
+    if (signingOut) return;
+    setSigningOut(true);
     validatedUserId.current = null;
     validationSequence.current += 1;
     tenantCache = null;
-    await supabase.auth.signOut();
+    setAllowed(false);
+    setHasSession(false);
+    setTenant(null);
+    await logoutAndRedirect();
   }
+
+  if (signingOut) return <div role="status" className="grid min-h-screen place-items-center bg-[#080b0d] text-white">Cerrando sesión…</div>;
 
   if (loading) {
     return (
@@ -338,11 +359,12 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
         <section className="w-full max-w-lg rounded-[2rem] border border-amber-400/20 bg-[#0c1013] p-7 text-center shadow-2xl sm:p-9">
           <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-amber-400/10 text-3xl">🏢</div>
           <p className="mt-6 text-xs font-black uppercase tracking-[.22em] text-amber-300">CA46 · Validación de empresa</p>
-          <h1 className="mt-2 text-3xl font-black">Acceso pendiente</h1>
+          <h1 className="mt-2 text-3xl font-black">{superAdminAccount ? 'Estás usando SuperAdmin' : 'Acceso pendiente'}</h1>
+          <p className="mt-3 break-all text-sm font-bold text-orange-300">Cuenta: {userEmail}</p>
           <p className="mt-4 text-sm leading-6 text-slate-400">{accessError || 'No se pudo validar la empresa asociada a este usuario.'}</p>
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            {!employeeArea ? <a href="/mi-empresa" className="rounded-xl bg-orange-500 px-5 py-3 font-black text-[#111416]">Ir a Mi empresa</a> : null}
-            <button type="button" onClick={handleLogout} className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-black text-slate-300">Cerrar sesión</button>
+            {superAdminAccount ? <a href="/superadmin" className="rounded-xl bg-orange-500 px-5 py-3 font-black text-[#111416]">Abrir SuperAdmin</a> : !employeeArea ? <a href="/mi-empresa" className="rounded-xl bg-orange-500 px-5 py-3 font-black text-[#111416]">Ir a Mi empresa</a> : null}
+            <button type="button" onClick={handleLogout} disabled={signingOut} className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-black text-slate-300">{signingOut ? 'Cerrando sesión…' : 'Cambiar de cuenta'}</button>
           </div>
         </section>
       </div>
@@ -354,8 +376,8 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
       {children}
       <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full border border-white/10 bg-[#0c1013]/95 p-2 pl-4 shadow-xl backdrop-blur-xl">
         {tenant?.company?.name ? <span className="hidden max-w-40 truncate text-xs font-black text-orange-300 md:block">{tenant.company.name}</span> : null}
-        <span className="hidden max-w-48 truncate text-xs font-bold text-slate-500 sm:block">{userEmail}</span>
-        <button type="button" onClick={handleLogout} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-black text-slate-300">Cerrar sesión</button>
+        <span className="max-w-32 truncate text-xs font-bold text-slate-400 sm:max-w-48" title={userEmail}>{userEmail}</span>
+        <button type="button" onClick={handleLogout} disabled={signingOut} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-black text-slate-300">{signingOut ? 'Cerrando…' : 'Cerrar sesión'}</button>
       </div>
     </>
   );
