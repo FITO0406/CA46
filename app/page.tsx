@@ -149,7 +149,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-5 py-4 sm:px-8">
           <div className="flex items-center gap-4">
             <div className="relative h-14 w-14 overflow-hidden rounded-2xl border border-orange-400/20 bg-black shadow-lg shadow-orange-950/40 sm:h-16 sm:w-16">
-              <Image src="/ca46-logo.svg" alt="CA46" fill priority sizes="64px" className="object-cover" />
+              <Image src="/ca46-logo.svg?v=20261006" alt="CA46" fill priority sizes="64px" className="object-cover" />
             </div>
             <div>
               <p className="text-xl font-black tracking-[-.03em] sm:text-2xl">CA46</p>
@@ -199,7 +199,7 @@ export default function Home() {
           <div className="relative mx-auto w-full max-w-sm lg:max-w-md">
             <div className="absolute inset-8 rounded-full bg-orange-500/15 blur-3xl" />
             <div className="relative aspect-square overflow-hidden rounded-[2.4rem] border border-orange-400/20 bg-black shadow-2xl shadow-orange-950/40">
-              <Image src="/ca46-logo.svg" alt="Logotipo corporativo CA46" fill priority sizes="(max-width: 1024px) 360px, 430px" className="object-cover" />
+              <Image src="/ca46-logo.svg?v=20261006" alt="Logotipo corporativo CA46" fill priority sizes="(max-width: 1024px) 360px, 430px" className="object-cover" />
             </div>
           </div>
         </section>
