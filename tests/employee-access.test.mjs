@@ -30,6 +30,14 @@ for (const path of ['/api/analyze-invoice','/api/analyze-physical-label','/api/p
 for (const path of ['/api/tenant/settings','/api/tenant/members','/api/kitchen','/api/manage-labels','/api/company-drive/status','/api/company-drive/connect','/api/sync-drive','/api/temperatures']) {
   test(`employee blocked from ${path}`, async () => { for (const method of ['GET','POST','PUT','PATCH','DELETE']) assert.equal((await access(path, method)).status, 403); });
 }
+for (const method of ['GET','POST','DELETE']) {
+  test(`employee can ${method} only their own analysis jobs`, async () => {
+    assert.equal((await access('/api/label-jobs',method)).ok,true);
+    assert.equal((await access('/api/label-jobs',method,'empleado',false)).ok,false);
+    assert.equal((await access('/api/label-jobs',method,'empleado',true,false)).status,403);
+  });
+}
+test('employee cannot invoke arbitrary analysis-job subroutes', async () => assert.equal((await access('/api/label-jobs/admin','GET')).status,403));
 test('deactivated employee cannot publish', async () => assert.equal((await access('/api/publish-labels','POST','empleado',false)).ok, false));
 test('unconfirmed employee cannot publish', async () => assert.equal((await access('/api/publish-labels','POST','empleado',true,false)).status, 403));
 test('inactive company cannot publish', async () => assert.equal((await access('/api/publish-labels','POST','empleado',true,true,'suspended')).status, 403));

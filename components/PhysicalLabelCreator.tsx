@@ -2,8 +2,10 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { tenantAuthorizationHeader } from '@/lib/tenant-company-config';
+import { useCreatorDraft } from '@/lib/use-creator-draft';
+import { analyzeSavedPhoto, discardAnalysisJobs } from '@/lib/label-analysis-client';
 
 type ExtraField = { label: string; value: string };
 type LabelDraft = {
@@ -30,6 +32,8 @@ type LabelDraft = {
   needs_review: boolean;
   review_fields: string[];
 };
+
+type PhysicalWork = { file: File | null; jobId: string; label: LabelDraft; warnings: string[]; analyzing: boolean; error: string; publishedExpiresAt: string };
 
 const EMPTY_LABEL: LabelDraft = {
   description: '', scientific_name: '', lote: '', marca: '', kg_neto: '', metodo: '', presentacion: '',
@@ -107,6 +111,27 @@ export default function PhysicalLabelCreator({ employeeMode = false }: { employe
   const [error, setError] = useState('');
   const [captureMessage, setCaptureMessage] = useState('');
   const [publishedExpiresAt, setPublishedExpiresAt] = useState('');
+  const [jobId, setJobId] = useState('');
+  const [resumeRequested, setResumeRequested] = useState(false);
+  const snapshot = useMemo<PhysicalWork>(() => ({ file, jobId, label, warnings, analyzing, error, publishedExpiresAt }),
+    [file, jobId, label, warnings, analyzing, error, publishedExpiresAt]);
+  const draft = useCreatorDraft('physical_label', snapshot, (saved) => {
+    setFile(saved.file);
+    setJobId(saved.jobId);
+    setPreview(saved.file ? URL.createObjectURL(saved.file) : '');
+    setLabel(saved.label);
+    setWarnings(saved.warnings);
+    setError(saved.error);
+    setPublishedExpiresAt(saved.publishedExpiresAt);
+    setResumeRequested(saved.analyzing || Boolean(saved.error && saved.file && !saved.label.description));
+  });
+
+  useEffect(() => {
+    if (!draft.ready || !resumeRequested) return;
+    setResumeRequested(false);
+    void analyze(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.ready, resumeRequested]);
 
   const criticalPending = useMemo(() => {
     const pendingReview = label.review_fields.some((field) => CRITICAL.has(field));
@@ -122,6 +147,8 @@ export default function PhysicalLabelCreator({ employeeMode = false }: { employe
     }
 
     if (preview) URL.revokeObjectURL(preview);
+    if (jobId) void discardAnalysisJobs([jobId], draft.scope).catch(() => {});
+    setJobId(crypto.randomUUID());
     setFile(selected);
     setPreview(URL.createObjectURL(selected));
     setLabel(EMPTY_LABEL);
@@ -141,22 +168,15 @@ export default function PhysicalLabelCreator({ employeeMode = false }: { employe
     });
   }
 
-  async function analyze() {
-    if (!file || analyzing) return;
+  async function analyze(resuming = false) {
+    if (!file || analyzing || !draft.ready) return;
     setAnalyzing(true);
     setError('');
     setWarnings([]);
     try {
+      await draft.flush({ ...snapshot, analyzing: true });
       const optimized = await compressForUpload(file);
-      const formData = new FormData();
-      formData.append('image', optimized);
-      const response = await fetch('/api/analyze-physical-label', {
-        method: 'POST',
-        headers: await tenantAuthorizationHeader(),
-        body: formData,
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload?.error || 'No se pudo leer la etiqueta física.');
+      const payload = await analyzeSavedPhoto(jobId, 'physical_label', optimized, !resuming, draft.scope);
       const next = payload?.analysis?.labels?.[0];
       if (!next) throw new Error('No se ha encontrado una etiqueta válida en la fotografía.');
       setLabel({
@@ -199,6 +219,7 @@ export default function PhysicalLabelCreator({ employeeMode = false }: { employe
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload?.error || 'No se pudo publicar la etiqueta temporal.');
       setPublishedExpiresAt(payload?.expires_at || '');
+      void discardAnalysisJobs([jobId], draft.scope).catch(() => {});
     } catch (requestError: any) {
       setError(requestError?.message || 'No se pudo publicar la etiqueta temporal.');
     } finally {
@@ -207,6 +228,9 @@ export default function PhysicalLabelCreator({ employeeMode = false }: { employe
   }
 
   function reset() {
+    if (analyzing || publishing) return;
+    if (jobId) void discardAnalysisJobs([jobId], draft.scope).catch(() => {});
+    setJobId('');
     if (preview) URL.revokeObjectURL(preview);
     setFile(null);
     setPreview('');
@@ -253,6 +277,7 @@ export default function PhysicalLabelCreator({ employeeMode = false }: { employe
       </header>
 
       <main className="relative mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-14">
+        <p role="status" className="mx-auto mb-5 max-w-4xl text-center text-sm text-slate-400">{draft.message}</p>
         <nav aria-label="Tipo de documento" className="mx-auto mb-8 grid max-w-3xl grid-cols-2 gap-3">
           <Link href={invoiceRoute} className="rounded-2xl border border-white/20 bg-white/5 px-4 py-4 text-center font-black text-slate-200 hover:border-orange-400/50">Factura · 72 h</Link>
           <Link href={boxRoute} aria-current="page" className="rounded-2xl border border-amber-400/50 bg-amber-400/15 px-4 py-4 text-center font-black text-amber-300">Etiqueta de caja · 24 h</Link>
@@ -264,10 +289,10 @@ export default function PhysicalLabelCreator({ employeeMode = false }: { employe
         </section>
 
         <section className="mx-auto mt-9 grid max-w-4xl gap-4 sm:grid-cols-2">
-          <button type="button" onClick={() => cameraInput.current?.click()} disabled={analyzing || publishing} className="rounded-[2rem] border border-amber-400/30 bg-amber-400/[.07] p-7 text-left disabled:opacity-50">
+          <button type="button" onClick={() => cameraInput.current?.click()} disabled={!draft.ready || analyzing || publishing} className="rounded-[2rem] border border-amber-400/30 bg-amber-400/[.07] p-7 text-left disabled:opacity-50">
             <div className="text-4xl">📷</div><p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-amber-300">Desde el móvil</p><h2 className="mt-2 text-2xl font-black">Hacer foto</h2><p className="mt-2 text-sm text-slate-400">Encuadra la etiqueta completa, recta y con buena luz.</p>
           </button>
-          <button type="button" onClick={() => galleryInput.current?.click()} disabled={analyzing || publishing} className="rounded-[2rem] border border-white/10 bg-white/[.035] p-7 text-left disabled:opacity-50">
+          <button type="button" onClick={() => galleryInput.current?.click()} disabled={!draft.ready || analyzing || publishing} className="rounded-[2rem] border border-white/10 bg-white/[.035] p-7 text-left disabled:opacity-50">
             <div className="text-4xl">🖼️</div><p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-slate-500">Desde el dispositivo</p><h2 className="mt-2 text-2xl font-black">Elegir imagen</h2><p className="mt-2 text-sm text-slate-400">Utiliza una fotografía que ya tengas guardada.</p>
           </button>
           <input ref={cameraInput} type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif" capture="environment" className="hidden" onChange={(event) => { chooseFile(event.target.files?.[0] || null, 'camera'); event.currentTarget.value = ''; }} />
@@ -281,13 +306,13 @@ export default function PhysicalLabelCreator({ employeeMode = false }: { employe
             <div className="grid gap-6 md:grid-cols-[.75fr_1.25fr]">
               <div>
                 <div className="overflow-hidden rounded-2xl border border-white/10 bg-black"><img src={preview} alt="Etiqueta física" className="aspect-[4/3] h-full w-full object-contain" /></div>
-                <button onClick={reset} className="mt-3 w-full rounded-xl border border-white/10 px-4 py-3 text-sm font-black text-slate-500">Quitar foto</button>
+                <button onClick={reset} disabled={analyzing || publishing} className="mt-3 w-full rounded-xl border border-white/10 px-4 py-3 text-sm font-black text-slate-500">Quitar foto</button>
               </div>
               <div className="flex flex-col justify-center">
                 <p className="text-xs font-black uppercase tracking-[.2em] text-amber-300">Paso 1</p>
                 <h2 className="mt-2 text-3xl font-black">Leer trazabilidad</h2>
                 <p className="mt-3 leading-7 text-slate-400">Se leerán todos los datos visibles de la etiqueta de la caja. En esta vía no se exige el N.º de comprador / cliente de tu Merca.</p>
-                <button onClick={analyze} disabled={analyzing || publishing} className="mt-6 rounded-2xl bg-amber-400 px-5 py-4 text-lg font-black text-[#111416] disabled:opacity-50">{analyzing ? 'Leyendo etiqueta…' : 'Analizar etiqueta física'}</button>
+                <button onClick={() => void analyze()} disabled={!draft.ready || analyzing || publishing} className="mt-6 rounded-2xl bg-amber-400 px-5 py-4 text-lg font-black text-[#111416] disabled:opacity-50">{analyzing ? 'Leyendo etiqueta…' : 'Analizar etiqueta física'}</button>
               </div>
             </div>
           </section>

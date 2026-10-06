@@ -1,4 +1,7 @@
 const employeeOperations = new Set([
+  'GET /api/label-jobs',
+  'POST /api/label-jobs',
+  'DELETE /api/label-jobs',
   'POST /api/analyze-invoice',
   'POST /api/analyze-physical-label',
   'POST /api/publish-labels',

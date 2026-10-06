@@ -2,8 +2,10 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { tenantAuthorizationHeader } from '@/lib/tenant-company-config';
+import { useCreatorDraft } from '@/lib/use-creator-draft';
+import { analyzeSavedPhoto, discardAnalysisJobs } from '@/lib/label-analysis-client';
 
 type ExtraField = { label: string; value: string };
 type SelectedPhoto = { id: string; file: File; url: string };
@@ -48,6 +50,16 @@ type InvoiceResult = {
   invoice_extra_fields: ExtraField[];
   warnings: string[];
   labels: LabelDraft[];
+};
+
+type InvoiceWork = {
+  photos: Array<Omit<SelectedPhoto, 'url'>>;
+  photoStates: Record<string, PhotoState>;
+  results: InvoiceResult[];
+  analysisErrors: string[];
+  analyzing: boolean;
+  publishedCount: number | null;
+  publishedExpiresAt: string;
 };
 
 type LabelStringKey = Exclude<keyof LabelDraft, 'extra_fields' | 'confidence' | 'needs_review' | 'review_fields'>;
@@ -155,6 +167,29 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
   const [publishedCount, setPublishedCount] = useState<number | null>(null);
   const [publishedExpiresAt, setPublishedExpiresAt] = useState('');
   const [captureMessage, setCaptureMessage] = useState('');
+  const [resumeRequested, setResumeRequested] = useState(false);
+  const snapshot = useMemo<InvoiceWork>(() => ({
+    photos: photos.map(({ id, file }) => ({ id, file })), photoStates, results, analysisErrors,
+    analyzing, publishedCount, publishedExpiresAt,
+  }), [photos, photoStates, results, analysisErrors, analyzing, publishedCount, publishedExpiresAt]);
+  const draft = useCreatorDraft('invoice', snapshot, (saved) => {
+    setPhotos(saved.photos.map((photo) => ({ ...photo, url: URL.createObjectURL(photo.file) })));
+    setPhotoStates(saved.photoStates);
+    setResults(saved.results);
+    setAnalysisErrors(saved.analysisErrors);
+    setPublishedCount(saved.publishedCount);
+    setPublishedExpiresAt(saved.publishedExpiresAt);
+    setResumeRequested(saved.analyzing || saved.photos.some((photo) => saved.photoStates[photo.id]
+      && saved.photoStates[photo.id].state !== 'done' && !saved.results.some((result) => result.photoId === photo.id)));
+  });
+
+  useEffect(() => {
+    if (!draft.ready || !resumeRequested) return;
+    setResumeRequested(false);
+    void analyzePhotos(true);
+    // Resume once after restoring a draft, never after an ordinary field edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.ready, resumeRequested]);
 
   const totalSize = useMemo(() => photos.reduce((sum, photo) => sum + photo.file.size, 0), [photos]);
   const totalLabels = useMemo(() => results.reduce((sum, invoice) => sum + invoice.labels.length, 0), [results]);
@@ -173,7 +208,7 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
     const incoming = files
       .filter((file) => file.size > 0)
       .map((file) => ({
-        id: `${file.name || 'foto'}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
+        id: crypto.randomUUID(),
         file,
         url: URL.createObjectURL(file),
       }));
@@ -194,49 +229,47 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
   }
 
   function clearAll() {
+    if (analyzing || publishing) return;
+    void discardAnalysisJobs(photos.map((photo) => photo.id), draft.scope).catch(() => {});
     photos.forEach((photo) => URL.revokeObjectURL(photo.url));
     setPhotos([]);
     setCaptureMessage('');
     resetAnalysis();
   }
 
-  async function analyzePhotos() {
-    if (!photos.length || analyzing) return;
+  async function analyzePhotos(resuming = false) {
+    if (!photos.length || analyzing || !draft.ready) return;
+    // Keep completed results and manual corrections. Only unfinished/failed photos
+    // are submitted, using the same id to recover a response lost on navigation.
+    const pending = photos.filter((photo) => !results.some((invoice) => invoice.photoId === photo.id));
+    if (!pending.length) return;
     setAnalyzing(true);
-    setResults([]);
     setAnalysisErrors([]);
     setPublishError('');
-    setPhotoStates(Object.fromEntries(photos.map((photo) => [photo.id, { state: 'pending' as const }])));
-
-    const nextResults: InvoiceResult[] = [];
-    const nextErrors: string[] = [];
-
-    for (let index = 0; index < photos.length; index += 1) {
-      const photo = photos[index];
-      setPhotoStates((current) => ({ ...current, [photo.id]: { state: 'analyzing' } }));
-      try {
-        const optimized = await compressForUpload(photo.file);
-        const formData = new FormData();
-        formData.append('image', optimized);
-        const response = await fetch('/api/analyze-invoice', {
-          method: 'POST',
-          headers: await tenantAuthorizationHeader(),
-          body: formData,
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload?.error || 'No se pudo leer la factura.');
-        const invoice = normalizeInvoice(photo, payload?.analysis || {});
-        nextResults.push(invoice);
-        setResults([...nextResults]);
-        setPhotoStates((current) => ({ ...current, [photo.id]: { state: 'done', message: `${invoice.labels.length} ${invoice.labels.length === 1 ? 'etiqueta' : 'etiquetas'}` } }));
-      } catch (error: any) {
-        const message = `Factura ${index + 1}: ${error?.message || 'error de lectura'}`;
-        nextErrors.push(message);
-        setAnalysisErrors([...nextErrors]);
-        setPhotoStates((current) => ({ ...current, [photo.id]: { state: 'error', message } }));
-      }
-    }
-    setAnalyzing(false);
+    const states = { ...photoStates, ...Object.fromEntries(pending.map((photo) => [photo.id, { state: 'pending' as const }])) };
+    setPhotoStates(states);
+    try {
+      await draft.flush({ ...snapshot, analyzing: true, photoStates: states });
+      // Upload all selected photos independently; OCR continues on the server
+      // after each upload is acknowledged, even when the browser is suspended.
+      await Promise.all(pending.map(async (photo) => {
+        setPhotoStates((current) => ({ ...current, [photo.id]: { state: 'analyzing' } }));
+        try {
+          const optimized = await compressForUpload(photo.file);
+          const payload = await analyzeSavedPhoto(photo.id, 'invoice', optimized, !resuming, draft.scope);
+          const invoice = normalizeInvoice(photo, payload?.analysis || {});
+          setResults((current) => [...current.filter((item) => item.photoId !== photo.id), invoice]
+            .sort((a, b) => photos.findIndex((item) => item.id === a.photoId) - photos.findIndex((item) => item.id === b.photoId)));
+          setPhotoStates((current) => ({ ...current, [photo.id]: { state: 'done', message: `${invoice.labels.length} ${invoice.labels.length === 1 ? 'etiqueta' : 'etiquetas'}` } }));
+        } catch (error: any) {
+          const message = `Factura ${photos.findIndex((item) => item.id === photo.id) + 1}: ${error?.message || 'error de lectura'}`;
+          setAnalysisErrors((current) => [...current, message]);
+          setPhotoStates((current) => ({ ...current, [photo.id]: { state: 'error', message } }));
+        }
+      }));
+    } catch (error: any) {
+      setAnalysisErrors([error?.message || 'No se pudo guardar el trabajo antes de analizarlo.']);
+    } finally { setAnalyzing(false); }
   }
 
   function updateLabelField(invoiceIndex: number, labelIndex: number, field: LabelStringKey, value: string) {
@@ -275,6 +308,7 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload?.error || 'No se pudieron publicar las etiquetas.');
+      void discardAnalysisJobs(photos.map((photo) => photo.id), draft.scope).catch(() => {});
       photos.forEach((photo) => URL.revokeObjectURL(photo.url));
       setPublishedCount(payload?.published || totalLabels);
       setPublishedExpiresAt(payload?.expires_at || '');
@@ -316,6 +350,7 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
       </header>
 
       <main className="relative mx-auto max-w-7xl px-5 py-10 sm:px-8 sm:py-14">
+        <p role="status" className="mx-auto mb-5 max-w-5xl text-center text-sm text-slate-400">{draft.message}</p>
         <nav aria-label="Tipo de documento" className="mx-auto mb-8 grid max-w-3xl grid-cols-2 gap-3">
           <Link href={invoiceRoute} aria-current="page" className="rounded-2xl border border-orange-400/50 bg-orange-500/15 px-4 py-4 text-center font-black text-orange-300">Factura · 72 h</Link>
           <Link href={boxRoute} className="rounded-2xl border border-white/20 bg-white/5 px-4 py-4 text-center font-black text-slate-200 hover:border-amber-400/50">Etiqueta de caja · 24 h</Link>
@@ -328,8 +363,8 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
         </section>
 
         <section className="mx-auto mt-9 grid max-w-5xl gap-5 md:grid-cols-2">
-          <button onClick={() => cameraInput.current?.click()} disabled={analyzing || publishing} className="rounded-[2rem] border border-orange-400/25 bg-orange-500/[.08] p-8 text-left disabled:opacity-50"><div className="text-4xl">📷</div><p className="mt-6 text-xs font-black uppercase tracking-[.2em] text-orange-400">Desde el móvil</p><h2 className="mt-2 text-3xl font-black">Hacer foto</h2><p className="mt-3 text-slate-400">Factura completa, recta y con buena luz.</p></button>
-          <button onClick={() => galleryInput.current?.click()} disabled={analyzing || publishing} className="rounded-[2rem] border border-white/10 bg-white/[.04] p-8 text-left disabled:opacity-50"><div className="text-4xl">🖼️</div><p className="mt-6 text-xs font-black uppercase tracking-[.2em] text-slate-500">Selección múltiple</p><h2 className="mt-2 text-3xl font-black">Elegir facturas</h2><p className="mt-3 text-slate-400">Procesa varias imágenes seguidas.</p></button>
+          <button onClick={() => cameraInput.current?.click()} disabled={!draft.ready || analyzing || publishing} className="rounded-[2rem] border border-orange-400/25 bg-orange-500/[.08] p-8 text-left disabled:opacity-50"><div className="text-4xl">📷</div><p className="mt-6 text-xs font-black uppercase tracking-[.2em] text-orange-400">Desde el móvil</p><h2 className="mt-2 text-3xl font-black">Hacer foto</h2><p className="mt-3 text-slate-400">Factura completa, recta y con buena luz.</p></button>
+          <button onClick={() => galleryInput.current?.click()} disabled={!draft.ready || analyzing || publishing} className="rounded-[2rem] border border-white/10 bg-white/[.04] p-8 text-left disabled:opacity-50"><div className="text-4xl">🖼️</div><p className="mt-6 text-xs font-black uppercase tracking-[.2em] text-slate-500">Selección múltiple</p><h2 className="mt-2 text-3xl font-black">Elegir facturas</h2><p className="mt-3 text-slate-400">Procesa varias imágenes seguidas.</p></button>
           <input ref={cameraInput} type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif" capture="environment" className="hidden" onChange={(e) => { addFiles(e.target.files, 'camera'); e.currentTarget.value = ''; }} />
           <input ref={galleryInput} type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif" multiple className="hidden" onChange={(e) => { addFiles(e.target.files, 'gallery'); e.currentTarget.value = ''; }} />
         </section>
@@ -339,7 +374,7 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
         <section className="mx-auto mt-8 max-w-5xl rounded-[2rem] border border-white/10 bg-white/[.035] p-6">
           <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.2em] text-orange-400">Paso 1</p><h2 className="mt-2 text-2xl font-black">{photos.length ? `${photos.length} ${photos.length === 1 ? 'factura' : 'facturas'} seleccionadas` : 'Añade facturas para empezar'}</h2>{photos.length ? <p className="mt-2 text-sm text-slate-500">{(totalSize / 1024 / 1024).toFixed(1)} MB originales</p> : null}</div>{photos.length && !analyzing ? <button onClick={clearAll} className="rounded-full border border-white/10 px-4 py-2 text-sm font-black text-slate-400">Quitar todas</button> : null}</div>
           {photos.length ? <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{photos.map((photo, index) => <div key={photo.id} className="overflow-hidden rounded-2xl border border-white/10 bg-black/20"><img src={photo.url} alt={`Factura ${index + 1}`} className="aspect-[4/3] w-full object-cover"/><div className="p-3"><p className="truncate text-sm font-bold">Factura {index + 1} · {photo.file.name || 'foto'}</p>{photoStates[photo.id] ? <p className="mt-1 text-xs font-black text-orange-300">{photoStates[photo.id].state === 'analyzing' ? 'Analizando…' : photoStates[photo.id].message || 'En cola'}</p> : null}</div></div>)}</div> : null}
-          <button onClick={analyzePhotos} disabled={!photos.length || analyzing || publishing} className="mt-6 w-full rounded-2xl bg-orange-500 px-6 py-4 text-lg font-black text-[#111416] disabled:bg-slate-800 disabled:text-slate-600">{analyzing ? 'Interpretando facturas de compra…' : `Analizar y separar etiquetas (${photos.length})`}</button>
+          <button onClick={() => void analyzePhotos()} disabled={!draft.ready || !photos.length || analyzing || publishing} className="mt-6 w-full rounded-2xl bg-orange-500 px-6 py-4 text-lg font-black text-[#111416] disabled:bg-slate-800 disabled:text-slate-600">{analyzing ? 'Interpretando facturas de compra…' : `Analizar y separar etiquetas (${photos.length})`}</button>
           {analysisErrors.length ? <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-500/[.07] p-4 text-sm text-rose-200">{analysisErrors.map((item) => <p key={item}>• {item}</p>)}</div> : null}
         </section>
 
