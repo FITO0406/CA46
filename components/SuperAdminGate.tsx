@@ -41,6 +41,7 @@ export default function SuperAdminGate({ children }: Props) {
   const [message, setMessage] = useState('');
   const [signingIn, setSigningIn] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const validatedUserId = useRef<string | null>(null);
   const validationSequence = useRef(0);
 
@@ -216,12 +217,16 @@ export default function SuperAdminGate({ children }: Props) {
   }
 
   async function logout() {
+    if (signingOut) return;
+    setSigningOut(true);
     validatedUserId.current = null;
     validationSequence.current += 1;
     setSession(null);
     setAllowed(false);
     await logoutAndRedirect('/superadmin');
   }
+
+  if (signingOut) return <div role="status" className="grid min-h-screen place-items-center bg-[#080b0d] text-white">Cerrando sesión…</div>;
 
   if (loading) {
     return (

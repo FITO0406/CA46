@@ -95,3 +95,24 @@ test('company card lookup errors never offer to activate another company', async
   assert.doesNotMatch(content, /Activar empresa CA46/);
   await act(async () => renderer.unmount());
 });
+
+test('SuperAdmin logout blocks new login until old account cleanup completes', async () => {
+  let finishLogout;
+  const Gate = componentAt('../components/SuperAdminGate.tsx', {
+    jsx,
+    '@/lib/supabaseClient': { supabase: { auth: {
+      getSession: async () => ({ data: { session } }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+    } } },
+    '@/lib/logout': { logoutAndRedirect: () => new Promise(resolve => { finishLogout = resolve; }) },
+  }, { fetch: async () => Response.json({ superAdmin: { userId: session.user.id, email: session.user.email } }) });
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(Gate, null, React.createElement('p', null, 'GLOBAL_DASHBOARD'))); });
+  const logout = renderer.root.findAllByType('button').find(b => b.children.includes('Cerrar sesión'));
+  assert.ok(logout);
+  await act(async () => { void logout.props.onClick(); });
+  assert.match(JSON.stringify(renderer.toJSON()), /Cerrando sesión/);
+  assert.equal(renderer.root.findAllByType('input').length, 0);
+  await act(async () => { finishLogout(); });
+  await act(async () => renderer.unmount());
+});
