@@ -13,6 +13,7 @@ function harness() {
   const calls = [];
   let actor = { companyId: 'company-A', userId: 'user-A', role: 'empleado' };
   let failure = false;
+  let temporaryFailures = 0;
   let release;
   let barrier = Promise.resolve();
   const database = { from(table) {
@@ -51,6 +52,7 @@ function harness() {
   const ocr = mode => async request => {
     calls.push({ mode, token: request.headers.get('authorization'), photo: (await request.formData()).get('image').name });
     await barrier;
+    if (temporaryFailures > 0) { temporaryFailures--; return Response.json({ error: 'Servicio saturado', code: 'AI_TEMPORARILY_BUSY' }, { status: 503 }); }
     return failure ? Response.json({ error: 'comprador incorrecto' }, { status: 409 }) : Response.json({ analysis: { labels: [{ description: 'Merluza', lote: 'A', procedencia: 'Atlántico' }] }, mode });
   };
   const imports = {
@@ -61,7 +63,7 @@ function harness() {
     '@/app/api/analyze-invoice/route': { POST: ocr('invoice') },
     '@/app/api/analyze-physical-label/route': { POST: ocr('physical_label') },
   };
-  runInNewContext(source, { module, exports: module.exports, require: name => { assert.ok(imports[name],name); return imports[name]; }, Buffer, File, FormData, Request, URL, Date, console });
+  runInNewContext(source, { module, exports: module.exports, require: name => { assert.ok(imports[name],name); return imports[name]; }, Buffer, File, FormData, Request, URL, Date, console, setTimeout: cb => setImmediate(cb) });
   async function request(method, id, mode = 'invoice', retry = false, authorized = true, expected = {}) {
     let body;
     if (method === 'POST') {
@@ -72,7 +74,7 @@ function harness() {
     const response = await module.exports[method](new Request(`https://ca46.test/api/label-jobs${method === 'GET' && id ? `?id=${id}` : ''}`, { method, headers: authorized ? { Authorization:'Bearer test-user-token', ...expected } : {}, body }));
     return { status:response.status, body:await response.json() };
   }
-  return { rows, callbacks, calls, request, actor(value) { actor=value; }, fail(value) { failure=value; }, pause() { barrier=new Promise(r => { release=r; }); }, release() { release(); } };
+  return { rows, callbacks, calls, request, actor(value) { actor=value; }, fail(value) { failure=value; }, transient(value) { temporaryFailures=value; }, pause() { barrier=new Promise(r => { release=r; }); }, release() { release(); } };
 }
 
 test('uploaded job finishes without an open client and is recovered on return', async () => {
@@ -150,4 +152,21 @@ test('a request from the previous account cannot submit or delete after account 
   const h=harness(),id=randomUUID();
   for (const method of ['GET','POST','DELETE']) assert.equal((await h.request(method,id,'invoice',false,true,{ 'X-CA46-Company':'old-company', 'X-CA46-User':'old-user' })).status,409);
   assert.equal(h.rows.length,0);
+});
+
+
+test('transient OCR saturation retries in the worker without another client request', async () => {
+  const h=harness(), id=randomUUID(); h.transient(1);
+  await h.request('POST',id); await h.callbacks.shift()();
+  assert.equal(h.calls.length,2);
+  assert.equal(h.rows[0].status,'done');
+  assert.equal(h.rows[0].image_base64,null);
+});
+
+test('worker transient retries are bounded and retain a clear failure', async () => {
+  const h=harness(), id=randomUUID(); h.transient(10);
+  await h.request('POST',id); await h.callbacks.shift()();
+  assert.equal(h.calls.length,2);
+  assert.equal(h.rows[0].status,'error');
+  assert.equal(h.rows[0].error,'Servicio saturado');
 });

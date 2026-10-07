@@ -33,14 +33,24 @@ async function runJob(id: string, context: TenantRequestContext, authorization: 
     .select('mode,image_base64,file_name,mime_type').maybeSingle();
   if (claimError || !job) return;
   try {
-    const form = new FormData();
-    form.append('image', new File([Buffer.from(job.image_base64, 'base64')], job.file_name, { type: job.mime_type }));
     const path = job.mode === 'invoice' ? '/api/analyze-invoice' : '/api/analyze-physical-label';
     // Reuse the existing authenticated OCR handlers unchanged: buyer and document
     // validation remain identical. The user's token is never stored in the job.
-    const request = new Request(`https://ca46.internal${path}`, { method: 'POST', headers: { Authorization: authorization }, body: form });
-    const response = await (job.mode === 'invoice' ? analyzeInvoice(request) : analyzePhysicalLabel(request));
-    const payload = await response.json();
+    const started = Date.now();
+    let response: Response;
+    let payload: any;
+    for (let attempt = 0; ; attempt++) {
+      const form = new FormData();
+      form.append('image', new File([Buffer.from(job.image_base64, 'base64')], job.file_name, { type: job.mime_type }));
+      const request = new Request(`https://ca46.internal${path}`, { method: 'POST', headers: { Authorization: authorization }, body: form });
+      response = await (job.mode === 'invoice' ? analyzeInvoice(request) : analyzePhysicalLabel(request));
+      payload = await response.json();
+      // Retry transient reader failures within the existing worker lifetime.
+      // Buyer/document/auth rejection and missing configuration remain final.
+      const transient = response.status === 429 || response.status >= 500;
+      if (!transient || payload.code === 'AI_NOT_CONFIGURED' || attempt >= 1 || Date.now() - started > 85000) break;
+      await new Promise<void>((resolve) => setTimeout(resolve, 1500));
+    }
     const { error } = await supabaseAdmin.from(TABLE).update({
       status: response.ok ? 'done' : 'error', result: response.ok ? payload : null,
       error: response.ok ? null : payload.error || 'No se pudo analizar la fotografía.', image_base64: null,

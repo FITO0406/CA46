@@ -12,7 +12,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 function compiledModule(path, imports, globals = {}) {
   const module={ exports:{} };
   const compiled=ts.transpileModule(readFileSync(new URL(path,import.meta.url),'utf8'),{ compilerOptions:{ module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true } }).outputText;
-  runInNewContext(compiled,{ module,exports:module.exports,console,crypto:{ randomUUID },File,
+  runInNewContext(compiled,{ module,exports:module.exports,console,crypto:{ randomUUID },File,AbortController,
     URL:{ createObjectURL:()=>`blob:${randomUUID()}`,revokeObjectURL(){} },
     window:{ scrollTo(){} },...globals,
     require:name=>{ if(name==='react')return React; if(name==='react/jsx-runtime')return jsx; assert.ok(imports[name],name); return imports[name]; },
@@ -41,14 +41,15 @@ function harness(mode, saved) {
     '@/lib/tenant-company-config':auth,
     '@/lib/use-creator-draft':{ useCreatorDraft:hook },
     '@/lib/label-analysis-client':{
-      analyzeSavedPhoto:async(id,kind,file,retry)=>{invocations.push({id,kind,file,retry});return deferred;},
+      ANALYSIS_MESSAGES: { preparing:'Preparando foto. Espera antes de salir…', uploading:'Enviando foto. Espera antes de salir…', server:'Foto recibida. CA46 sigue trabajando aunque salgas.', reconnecting:'Recuperando conexión. Tu trabajo sigue guardado.', recovering:'Comprobando trabajo guardado…' },
+      analyzeSavedPhoto:async(id,kind,file,retry,scope,progress)=>{invocations.push({id,kind,file,retry,progress});return deferred;},
       discardAnalysisJobs:async()=>{},
     },
   }).default;
   const key=`company-A:user-A:${mode}`;
   if(saved)storage.set(key,saved);
   let renderer;
-  return { storage,key,invocations,scope(value){scope=value;},complete(value){complete(value);},
+  return { storage,key,invocations,progress(stage){ invocations.at(-1).progress(stage); },scope(value){scope=value;},complete(value){complete(value);},
     async mount(){await act(async()=>{renderer=create(React.createElement(Component));});return renderer;},
     async unmount(){await act(async()=>renderer.unmount());},
     text(){return JSON.stringify(renderer.toJSON());},get renderer(){return renderer;},
@@ -120,4 +121,25 @@ test('a transport error after upload recovers the cached result automatically on
   const h=harness('invoice',{photos:[{id,file}],photoStates:{[id]:{state:'error',message:'Failed to fetch'}},results:[],analysisErrors:['Failed to fetch'],analyzing:false,publishedCount:null,publishedExpiresAt:''});
   await h.mount();assert.equal(h.invocations.length,1);assert.equal(h.invocations[0].retry,false);
   await act(async()=>h.complete({analysis:invoice(id)}));assert.match(h.text(),/Merluza/);await h.unmount();
+});
+
+
+test('invoice distinguishes pending upload from server acceptance in the visible UI',async()=>{
+  const id=randomUUID();
+  const h=harness('invoice',{photos:[{id,file}],photoStates:{[id]:{state:'pending'}},results:[],analysisErrors:[],analyzing:true,publishedCount:null,publishedExpiresAt:''});
+  await h.mount();
+  await act(async()=>h.progress('uploading'));assert.match(h.text(),/Enviando foto. Espera antes de salir/);
+  await act(async()=>h.progress('server'));assert.match(h.text(),/Foto recibida. CA46 sigue trabajando aunque salgas/);
+  await act(async()=>h.complete({analysis:invoice(id)}));
+  assert.match(h.text(),/Merluza/);assert.doesNotMatch(h.text(),/Enviando foto/);await h.unmount();
+});
+
+test('physical label displays upload and background-processing status',async()=>{
+  const id=randomUUID();
+  const h=harness('physical_label',{file,jobId:id,label:label({description:'',lote:'',procedencia:''}),warnings:[],analyzing:true,error:'',publishedExpiresAt:''});
+  await h.mount();
+  await act(async()=>h.progress('preparing'));assert.match(h.text(),/Preparando foto. Espera antes de salir/);
+  await act(async()=>h.progress('server'));assert.match(h.text(),/Foto recibida. CA46 sigue trabajando aunque salgas/);
+  await act(async()=>h.complete({analysis:{labels:[label()],warnings:[]}}));
+  assert.match(h.text(),/Merluza/);assert.doesNotMatch(h.text(),/Foto recibida. CA46 sigue trabajando/);await h.unmount();
 });

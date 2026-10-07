@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { tenantAuthorizationHeader } from '@/lib/tenant-company-config';
 import { useCreatorDraft } from '@/lib/use-creator-draft';
-import { analyzeSavedPhoto, discardAnalysisJobs } from '@/lib/label-analysis-client';
+import { ANALYSIS_MESSAGES, analyzeSavedPhoto, discardAnalysisJobs } from '@/lib/label-analysis-client';
 
 type ExtraField = { label: string; value: string };
 type LabelDraft = {
@@ -107,12 +107,15 @@ export default function PhysicalLabelCreator({ employeeMode = false }: { employe
   const [label, setLabel] = useState<LabelDraft>(EMPTY_LABEL);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
+  const [analysisMessage, setAnalysisMessage] = useState('');
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState('');
   const [captureMessage, setCaptureMessage] = useState('');
   const [publishedExpiresAt, setPublishedExpiresAt] = useState('');
   const [jobId, setJobId] = useState('');
   const [resumeRequested, setResumeRequested] = useState(false);
+  const analysisController = useRef<AbortController | null>(null);
+  useEffect(() => () => { analysisController.current?.abort(); }, []);
   const snapshot = useMemo<PhysicalWork>(() => ({ file, jobId, label, warnings, analyzing, error, publishedExpiresAt }),
     [file, jobId, label, warnings, analyzing, error, publishedExpiresAt]);
   const draft = useCreatorDraft('physical_label', snapshot, (saved) => {
@@ -170,13 +173,16 @@ export default function PhysicalLabelCreator({ employeeMode = false }: { employe
 
   async function analyze(resuming = false) {
     if (!file || analyzing || !draft.ready) return;
+    const controller = new AbortController();
+    analysisController.current = controller;
     setAnalyzing(true);
+    setAnalysisMessage('Guardando foto…');
     setError('');
     setWarnings([]);
     try {
       await draft.flush({ ...snapshot, analyzing: true });
-      const optimized = await compressForUpload(file);
-      const payload = await analyzeSavedPhoto(jobId, 'physical_label', optimized, !resuming, draft.scope);
+      const payload = await analyzeSavedPhoto(jobId, 'physical_label', () => compressForUpload(file), !resuming, draft.scope,
+        (progress) => setAnalysisMessage(ANALYSIS_MESSAGES[progress]), controller.signal);
       const next = payload?.analysis?.labels?.[0];
       if (!next) throw new Error('No se ha encontrado una etiqueta válida en la fotografía.');
       setLabel({
@@ -313,6 +319,7 @@ export default function PhysicalLabelCreator({ employeeMode = false }: { employe
                 <h2 className="mt-2 text-3xl font-black">Leer trazabilidad</h2>
                 <p className="mt-3 leading-7 text-slate-400">Se leerán todos los datos visibles de la etiqueta de la caja. En esta vía no se exige el N.º de comprador / cliente de tu Merca.</p>
                 <button onClick={() => void analyze()} disabled={!draft.ready || analyzing || publishing} className="mt-6 rounded-2xl bg-amber-400 px-5 py-4 text-lg font-black text-[#111416] disabled:opacity-50">{analyzing ? 'Leyendo etiqueta…' : 'Analizar etiqueta física'}</button>
+                {analyzing ? <p role="status" className="mt-3 text-sm text-amber-200">{analysisMessage}</p> : null}
               </div>
             </div>
           </section>

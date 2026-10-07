@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { tenantAuthorizationHeader } from '@/lib/tenant-company-config';
 import { useCreatorDraft } from '@/lib/use-creator-draft';
-import { analyzeSavedPhoto, discardAnalysisJobs } from '@/lib/label-analysis-client';
+import { ANALYSIS_MESSAGES, analyzeSavedPhoto, discardAnalysisJobs } from '@/lib/label-analysis-client';
 
 type ExtraField = { label: string; value: string };
 type SelectedPhoto = { id: string; file: File; url: string };
@@ -168,6 +168,8 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
   const [publishedExpiresAt, setPublishedExpiresAt] = useState('');
   const [captureMessage, setCaptureMessage] = useState('');
   const [resumeRequested, setResumeRequested] = useState(false);
+  const analysisController = useRef<AbortController | null>(null);
+  useEffect(() => () => { analysisController.current?.abort(); }, []);
   const snapshot = useMemo<InvoiceWork>(() => ({
     photos: photos.map(({ id, file }) => ({ id, file })), photoStates, results, analysisErrors,
     analyzing, publishedCount, publishedExpiresAt,
@@ -243,6 +245,8 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
     // are submitted, using the same id to recover a response lost on navigation.
     const pending = photos.filter((photo) => !results.some((invoice) => invoice.photoId === photo.id));
     if (!pending.length) return;
+    const controller = new AbortController();
+    analysisController.current = controller;
     setAnalyzing(true);
     setAnalysisErrors([]);
     setPublishError('');
@@ -255,8 +259,8 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
       await Promise.all(pending.map(async (photo) => {
         setPhotoStates((current) => ({ ...current, [photo.id]: { state: 'analyzing' } }));
         try {
-          const optimized = await compressForUpload(photo.file);
-          const payload = await analyzeSavedPhoto(photo.id, 'invoice', optimized, !resuming, draft.scope);
+          const payload = await analyzeSavedPhoto(photo.id, 'invoice', () => compressForUpload(photo.file), !resuming, draft.scope,
+            (progress) => setPhotoStates((current) => ({ ...current, [photo.id]: { state: 'analyzing', message: ANALYSIS_MESSAGES[progress] } })), controller.signal);
           const invoice = normalizeInvoice(photo, payload?.analysis || {});
           setResults((current) => [...current.filter((item) => item.photoId !== photo.id), invoice]
             .sort((a, b) => photos.findIndex((item) => item.id === a.photoId) - photos.findIndex((item) => item.id === b.photoId)));
@@ -373,8 +377,9 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
 
         <section className="mx-auto mt-8 max-w-5xl rounded-[2rem] border border-white/10 bg-white/[.035] p-6">
           <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.2em] text-orange-400">Paso 1</p><h2 className="mt-2 text-2xl font-black">{photos.length ? `${photos.length} ${photos.length === 1 ? 'factura' : 'facturas'} seleccionadas` : 'Añade facturas para empezar'}</h2>{photos.length ? <p className="mt-2 text-sm text-slate-500">{(totalSize / 1024 / 1024).toFixed(1)} MB originales</p> : null}</div>{photos.length && !analyzing ? <button onClick={clearAll} className="rounded-full border border-white/10 px-4 py-2 text-sm font-black text-slate-400">Quitar todas</button> : null}</div>
-          {photos.length ? <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{photos.map((photo, index) => <div key={photo.id} className="overflow-hidden rounded-2xl border border-white/10 bg-black/20"><img src={photo.url} alt={`Factura ${index + 1}`} className="aspect-[4/3] w-full object-cover"/><div className="p-3"><p className="truncate text-sm font-bold">Factura {index + 1} · {photo.file.name || 'foto'}</p>{photoStates[photo.id] ? <p className="mt-1 text-xs font-black text-orange-300">{photoStates[photo.id].state === 'analyzing' ? 'Analizando…' : photoStates[photo.id].message || 'En cola'}</p> : null}</div></div>)}</div> : null}
-          <button onClick={() => void analyzePhotos()} disabled={!draft.ready || !photos.length || analyzing || publishing} className="mt-6 w-full rounded-2xl bg-orange-500 px-6 py-4 text-lg font-black text-[#111416] disabled:bg-slate-800 disabled:text-slate-600">{analyzing ? 'Interpretando facturas de compra…' : `Analizar y separar etiquetas (${photos.length})`}</button>
+          {photos.length ? <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{photos.map((photo, index) => <div key={photo.id} className="overflow-hidden rounded-2xl border border-white/10 bg-black/20"><img src={photo.url} alt={`Factura ${index + 1}`} className="aspect-[4/3] w-full object-cover"/><div className="p-3"><p className="truncate text-sm font-bold">Factura {index + 1} · {photo.file.name || 'foto'}</p>{photoStates[photo.id] ? <p className="mt-1 text-xs font-black text-orange-300">{photoStates[photo.id].message || (photoStates[photo.id].state === 'analyzing' ? 'Guardando foto…' : 'En cola')}</p> : null}</div></div>)}</div> : null}
+          <button onClick={() => void analyzePhotos()} disabled={!draft.ready || !photos.length || analyzing || publishing} className="mt-6 w-full rounded-2xl bg-orange-500 px-6 py-4 text-lg font-black text-[#111416] disabled:bg-slate-800 disabled:text-slate-600">{analyzing ? 'Procesando fotos…' : `Analizar y separar etiquetas (${photos.length})`}</button>
+          {analyzing ? <p role="status" className="mt-3 text-sm text-slate-400">Puedes salir cuando todas las fotos indiquen «Foto recibida». Si sales durante el envío, se retomará al volver.</p> : null}
           {analysisErrors.length ? <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-500/[.07] p-4 text-sm text-rose-200">{analysisErrors.map((item) => <p key={item}>• {item}</p>)}</div> : null}
         </section>
 
