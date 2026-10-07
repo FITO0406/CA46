@@ -33,23 +33,24 @@ function harness(mode, saved) {
     },
   },{ fetch:api }).useCreatorDraft;
   const invocations=[];
-  let complete;
-  let deferred=new Promise(r=>{complete=r;});
-  const Component=compiledModule(mode==='invoice'?'../components/InvoiceLabelCreator.tsx':'../components/PhysicalLabelCreator.tsx',{
+  const waiters = new Map();
+  const publications = [];
+  const Shared=compiledModule('../components/InvoiceLabelCreator.tsx',{
     'next/image':{ __esModule:true,default:props=>React.createElement('img',{ alt:props.alt }) },
     'next/link':{ __esModule:true,default:props=>React.createElement('a',props) },
     '@/lib/tenant-company-config':auth,
     '@/lib/use-creator-draft':{ useCreatorDraft:hook },
     '@/lib/label-analysis-client':{
       ANALYSIS_MESSAGES: { preparing:'Preparando foto. Espera antes de salir…', uploading:'Enviando foto. Espera antes de salir…', server:'Foto recibida. CA46 sigue trabajando aunque salgas.', reconnecting:'Recuperando conexión. Tu trabajo sigue guardado.', recovering:'Comprobando trabajo guardado…' },
-      analyzeSavedPhoto:async(id,kind,file,retry,scope,progress)=>{invocations.push({id,kind,file,retry,progress});return deferred;},
+      analyzeSavedPhoto:async(id,kind,file,retry,scope,progress)=>{invocations.push({id,kind,file,retry,progress});return new Promise((resolve, reject) => waiters.set(id, { resolve, reject }));},
       discardAnalysisJobs:async()=>{},
     },
-  }).default;
+  }, { fetch: async (url, init) => { assert.equal(url, '/api/publish-labels'); publications.push(JSON.parse(init.body)); return Response.json({ published: publications.at(-1).invoices.reduce((n, i) => n + i.labels.length, 0), expires_at: '2026-10-08T18:00:00Z' }); } }).default;
+  const Component = mode === 'invoice' ? Shared : props => React.createElement(Shared, { ...props, sourceMode: 'physical_label' });
   const key=`company-A:user-A:${mode}`;
   if(saved)storage.set(key,saved);
   let renderer;
-  return { storage,key,invocations,progress(stage){ invocations.at(-1).progress(stage); },scope(value){scope=value;},complete(value){complete(value);},
+  return { storage,key,invocations,publications,finish(id, value){waiters.get(id).resolve(value);},fail(id){waiters.get(id).reject(new Error('Foto ilegible'));},progress(stage){ invocations.at(-1).progress(stage); },scope(value){scope=value;},complete(value){for (const waiter of waiters.values()) waiter.resolve(value);},
     async mount(){await act(async()=>{renderer=create(React.createElement(Component));});return renderer;},
     async unmount(){await act(async()=>renderer.unmount());},
     text(){return JSON.stringify(renderer.toJSON());},get renderer(){return renderer;},
@@ -142,4 +143,55 @@ test('physical label displays upload and background-processing status',async()=>
   await act(async()=>h.progress('server'));assert.match(h.text(),/Foto recibida. CA46 sigue trabajando aunque salgas/);
   await act(async()=>h.complete({analysis:{labels:[label()],warnings:[]}}));
   assert.match(h.text(),/Merluza/);assert.doesNotMatch(h.text(),/Foto recibida. CA46 sigue trabajando/);await h.unmount();
+});
+
+
+test('24-hour gallery appends several photos, preserves edits and publishes all in physical mode', async () => {
+  const h = harness('physical_label'); await h.mount();
+  const picker = () => h.renderer.root.findAllByType('input').find(i => i.props.multiple);
+  const second = new File(['second'], 'caja2.jpg', { type: 'image/jpeg' });
+  await act(async () => picker().props.onChange({ target: { files: [file, second] }, currentTarget: { value: 'selected' } }));
+  assert.match(h.text(), /2 fotos seleccionadas/);
+  const analyze = () => h.renderer.root.findAllByType('button').find(b => b.children.join('').startsWith('Analizar y separar'));
+  await act(async () => { void analyze().props.onClick(); });
+  assert.equal(h.invocations.length, 2);
+  assert.ok(h.invocations.every(call => call.kind === 'physical_label'));
+  await act(async () => h.finish(h.invocations[0].id, { analysis: { labels: [label({ lote: 'LOTE-1' })] } }));
+  await act(async () => h.fail(h.invocations[1].id));
+  let publish = h.renderer.root.findAllByType('button').find(b => b.children.join('').startsWith('Publicar '));
+  assert.equal(publish.props.disabled, true);
+  const input = h.renderer.root.findAllByType('input').find(i => i.props.value === 'LOTE-1');
+  await act(async () => input.props.onChange({ target: { value: 'LOTE-MANUAL' } }));
+  await act(async () => { void analyze().props.onClick(); });
+  assert.equal(h.invocations.length, 3); // Only retry the failed photo.
+  await act(async () => h.finish(h.invocations[2].id, { analysis: { labels: [label({ lote: 'LOTE-2' })] } }));
+  const third = new File(['third'], 'caja3.jpg', { type: 'image/jpeg' });
+  await act(async () => picker().props.onChange({ target: { files: [third] }, currentTarget: { value: 'selected' } }));
+  assert.match(h.text(), /LOTE-MANUAL/);
+  await h.unmount(); await h.mount();
+  assert.match(h.text(), /3 fotos seleccionadas/); assert.match(h.text(), /LOTE-MANUAL/);
+  assert.equal(h.invocations.length, 3); // New photo has not been submitted yet.
+  await act(async () => { void analyze().props.onClick(); });
+  await act(async () => h.finish(h.invocations[3].id, { analysis: { labels: [label({ lote: 'LOTE-3' })] } }));
+  publish = h.renderer.root.findAllByType('button').find(b => b.children.join('').startsWith('Publicar '));
+  assert.equal(publish.props.disabled, false);
+  await act(async () => publish.props.onClick());
+  assert.equal(h.publications.length, 1);
+  assert.equal(h.publications[0].sourceMode, 'physical_label');
+  assert.deepEqual(h.publications[0].invoices.map(i => i.labels[0].lote), ['LOTE-MANUAL', 'LOTE-2', 'LOTE-3']);
+  assert.match(h.text(), /3.*etiquetas publicadas/);
+  assert.match(h.text(), /Vigencia de.*24/);
+  assert.doesNotMatch(h.text(), /factura pendiente/i);
+  await h.unmount();
+});
+
+test('24-hour batch resumes only unfinished jobs without overwriting completed manual review', async () => {
+  const a = randomUUID(), b = randomUUID();
+  const h = harness('physical_label', { photos: [{ id: a, file }, { id: b, file }], photoStates: { [a]: { state: 'done' }, [b]: { state: 'analyzing' } }, results: [invoice(a, { labels: [label({ lote: 'MANUAL-CAJA' })] })], analysisErrors: [], analyzing: true, publishedCount: null, publishedExpiresAt: '' });
+  await h.mount();
+  assert.equal(h.invocations.length, 1); assert.equal(h.invocations[0].id, b); assert.equal(h.invocations[0].retry, false);
+  await act(async () => h.complete({ analysis: { labels: [label()] } }));
+  assert.match(h.text(), /MANUAL-CAJA/);
+  await h.unmount(); await h.mount(); assert.equal(h.invocations.length, 1);
+  await h.unmount();
 });

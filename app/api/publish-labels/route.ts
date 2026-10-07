@@ -212,7 +212,6 @@ export async function POST(request: Request) {
       const buyerNumber = clean(label.nif || invoice.buyer_nif);
       const freshness = clean(label.frescura);
       const notices: string[] = [];
-      if (sourceMode === 'physical_label') notices.push('Etiqueta provisional · factura pendiente');
       if (/descongelad/i.test(freshness)) notices.push('Consumir preferentemente en 3 días');
 
       const traceability: TraceabilityData = {

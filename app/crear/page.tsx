@@ -29,7 +29,7 @@ export default function CrearEtiquetasInicioPage() {
           <p className="mt-5 text-xs font-black uppercase tracking-[.2em] text-orange-400">Circuito completo</p>
           <h1 className="mt-2 text-4xl font-black sm:text-5xl">Crear, transformar y ver etiquetas</h1>
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-            Foto de factura, etiqueta provisional, Drive o transformación en cocina. Toda la trazabilidad queda dentro de la misma empresa.
+            Foto de factura, etiqueta de caja, Drive o transformación en cocina. Toda la trazabilidad queda dentro de la misma empresa.
           </p>
         </section>
 
@@ -42,12 +42,12 @@ export default function CrearEtiquetasInicioPage() {
             <span className="mt-6 inline-flex rounded-xl bg-orange-500 px-4 py-3 text-sm font-black text-black">Cargar factura →</span>
           </Link>
 
-          <Link href="/creador-etiquetas/etiqueta-temporal" className="rounded-[2rem] border border-amber-400/25 bg-amber-400/[.06] p-7 transition active:scale-[.99]">
+          <Link href="/creador-etiquetas/etiqueta-temporal" className="rounded-[2rem] border border-orange-400/30 bg-orange-500/[.08] p-7 transition active:scale-[.99]">
             <div className="text-5xl">🏷️</div>
-            <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-amber-300">Carga + OCR</p>
-            <h2 className="mt-2 text-3xl font-black">Provisional</h2>
-            <p className="mt-3 text-sm leading-6 text-slate-400">Fotografía una etiqueta física. CA46 copia los datos visibles y la publica durante 24 horas.</p>
-            <span className="mt-6 inline-flex rounded-xl border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm font-black text-amber-200">Cargar etiqueta →</span>
+            <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-orange-400">Carga + OCR</p>
+            <h2 className="mt-2 text-3xl font-black">Etiqueta de caja</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-400">Haz una foto o elige varias etiquetas de caja. CA46 copia los datos visibles y la publica durante 24 horas.</p>
+            <span className="mt-6 inline-flex rounded-xl border border-orange-400/30 bg-orange-500/10 px-4 py-3 text-sm font-black text-orange-300">Cargar etiqueta →</span>
           </Link>
 
           <div className="rounded-[2rem] border border-sky-400/25 bg-sky-400/[.05] p-7">

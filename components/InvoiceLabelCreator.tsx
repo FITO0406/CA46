@@ -152,7 +152,17 @@ function normalizeInvoice(photo: SelectedPhoto, analysis: any): InvoiceResult {
   };
 }
 
-export default function InvoiceLabelCreator({ employeeMode = false }: { employeeMode?: boolean }) {
+type LegacyPhysicalWork = {
+  file: File | null; jobId: string; label: LabelDraft; warnings: string[];
+  analyzing: boolean; error: string; publishedExpiresAt: string;
+};
+
+export default function InvoiceLabelCreator({ employeeMode = false, sourceMode = 'invoice' }: {
+  employeeMode?: boolean; sourceMode?: 'invoice' | 'physical_label';
+}) {
+  const physical = sourceMode === 'physical_label';
+  const validHours = physical ? 24 : 72;
+  const documentName = physical ? 'Etiqueta de caja' : 'Factura';
   const invoiceRoute = employeeMode ? '/empleado/etiquetas' : '/creador-etiquetas';
   const boxRoute = employeeMode ? '/empleado/etiqueta-caja' : '/creador-etiquetas/etiqueta-temporal';
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -174,7 +184,22 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
     photos: photos.map(({ id, file }) => ({ id, file })), photoStates, results, analysisErrors,
     analyzing, publishedCount, publishedExpiresAt,
   }), [photos, photoStates, results, analysisErrors, analyzing, publishedCount, publishedExpiresAt]);
-  const draft = useCreatorDraft('invoice', snapshot, (saved) => {
+  const draft = useCreatorDraft<InvoiceWork | LegacyPhysicalWork>(sourceMode, snapshot, (stored) => {
+    // Migrate existing single-photo drafts in place without losing job IDs or edits.
+    let saved: InvoiceWork;
+    if ('photos' in stored) saved = stored;
+    else {
+      const photo = stored.file && !stored.publishedExpiresAt ? { id: stored.jobId || crypto.randomUUID(), file: stored.file, url: '' } : null;
+      const completed = !stored.analyzing && Boolean(stored.label.description || stored.label.lote || stored.label.procedencia || stored.label.review_fields.length);
+      saved = {
+        photos: photo ? [{ id: photo.id, file: photo.file }] : [],
+        photoStates: photo && (stored.analyzing || stored.error || completed)
+          ? { [photo.id]: { state: completed ? 'done' : stored.error ? 'error' : 'analyzing' } } : {},
+        results: photo && completed ? [normalizeInvoice(photo, { labels: [stored.label], warnings: stored.warnings })] : [],
+        analysisErrors: stored.error ? [stored.error] : [], analyzing: stored.analyzing,
+        publishedCount: stored.publishedExpiresAt ? 1 : null, publishedExpiresAt: stored.publishedExpiresAt,
+      };
+    }
     setPhotos(saved.photos.map((photo) => ({ ...photo, url: URL.createObjectURL(photo.file) })));
     setPhotoStates(saved.photoStates);
     setResults(saved.results);
@@ -196,7 +221,8 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
   const totalSize = useMemo(() => photos.reduce((sum, photo) => sum + photo.file.size, 0), [photos]);
   const totalLabels = useMemo(() => results.reduce((sum, invoice) => sum + invoice.labels.length, 0), [results]);
   const blockingLabels = useMemo(() => results.reduce((sum, invoice) => sum + invoice.labels.filter((label) => !labelReadyToPublish(label)).length, 0), [results]);
-  const allReviewed = totalLabels > 0 && !analyzing && blockingLabels === 0;
+  const unfinishedPhotos = photos.filter((photo) => !results.some((result) => result.photoId === photo.id)).length;
+  const allReviewed = totalLabels > 0 && !analyzing && blockingLabels === 0 && unfinishedPhotos === 0;
 
   function resetAnalysis() {
     setResults([]);
@@ -208,7 +234,7 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
   function addFiles(fileList: FileList | null, source: 'camera' | 'gallery') {
     const files = fileList ? Array.from(fileList) : [];
     const incoming = files
-      .filter((file) => file.size > 0)
+      .filter((file) => file.size > 0 && (file.type.toLowerCase().startsWith('image/') || /\.(jpe?g|png|webp|gif|heic|heif|avif)$/i.test(file.name)))
       .map((file) => ({
         id: crypto.randomUUID(),
         file,
@@ -226,12 +252,15 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
       ? '✓ Foto recibida. Ya puedes pulsar “Analizar y separar etiquetas”.'
       : `✓ ${incoming.length} ${incoming.length === 1 ? 'imagen recibida' : 'imágenes recibidas'}.`);
     setPublishedCount(null);
-    resetAnalysis();
+    setAnalysisErrors([]);
+    setPublishError('');
     setPhotos((current) => [...current, ...incoming]);
   }
 
   function clearAll() {
     if (analyzing || publishing) return;
+    setPublishedCount(null);
+    setPublishedExpiresAt('');
     void discardAnalysisJobs(photos.map((photo) => photo.id), draft.scope).catch(() => {});
     photos.forEach((photo) => URL.revokeObjectURL(photo.url));
     setPhotos([]);
@@ -259,14 +288,15 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
       await Promise.all(pending.map(async (photo) => {
         setPhotoStates((current) => ({ ...current, [photo.id]: { state: 'analyzing' } }));
         try {
-          const payload = await analyzeSavedPhoto(photo.id, 'invoice', () => compressForUpload(photo.file), !resuming, draft.scope,
+          const payload = await analyzeSavedPhoto(photo.id, sourceMode, () => compressForUpload(photo.file), !resuming, draft.scope,
             (progress) => setPhotoStates((current) => ({ ...current, [photo.id]: { state: 'analyzing', message: ANALYSIS_MESSAGES[progress] } })), controller.signal);
           const invoice = normalizeInvoice(photo, payload?.analysis || {});
+          if (!invoice.labels.length) throw new Error('No se han encontrado etiquetas válidas en la fotografía.');
           setResults((current) => [...current.filter((item) => item.photoId !== photo.id), invoice]
             .sort((a, b) => photos.findIndex((item) => item.id === a.photoId) - photos.findIndex((item) => item.id === b.photoId)));
           setPhotoStates((current) => ({ ...current, [photo.id]: { state: 'done', message: `${invoice.labels.length} ${invoice.labels.length === 1 ? 'etiqueta' : 'etiquetas'}` } }));
         } catch (error: any) {
-          const message = `Factura ${photos.findIndex((item) => item.id === photo.id) + 1}: ${error?.message || 'error de lectura'}`;
+          const message = `${documentName} ${photos.findIndex((item) => item.id === photo.id) + 1}: ${error?.message || 'error de lectura'}`;
           setAnalysisErrors((current) => [...current, message]);
           setPhotoStates((current) => ({ ...current, [photo.id]: { state: 'error', message } }));
         }
@@ -308,7 +338,7 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
       const response = await fetch('/api/publish-labels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(await tenantAuthorizationHeader()) },
-        body: JSON.stringify({ sourceMode: 'invoice', invoices: results }),
+        body: JSON.stringify({ sourceMode, invoices: results }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload?.error || 'No se pudieron publicar las etiquetas.');
@@ -334,10 +364,10 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
         <section className="mx-auto max-w-4xl rounded-[2rem] border border-emerald-400/25 bg-emerald-400/[.07] p-8 text-center sm:p-12">
           <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-400/10 text-3xl">✓</div>
           <p className="mt-5 text-xs font-black uppercase tracking-[.22em] text-emerald-300">Publicación completada</p>
-          <h1 className="mt-2 text-4xl font-black">{publishedCount} {publishedCount === 1 ? 'etiqueta definitiva' : 'etiquetas definitivas'}</h1>
-          <p className="mt-4 text-slate-400">Vigencia de 72 horas desde la publicación.</p>
+          <h1 className="mt-2 text-4xl font-black">{publishedCount} {publishedCount === 1 ? 'etiqueta publicada' : 'etiquetas publicadas'}</h1>
+          <p className="mt-4 text-slate-400">Vigencia de {validHours} horas desde la publicación.</p>
           {publishedExpiresAt ? <p className="mt-2 text-sm font-bold text-slate-500">Hasta {new Date(publishedExpiresAt).toLocaleString('es-ES')}</p> : null}
-          <button onClick={() => setPublishedCount(null)} className="mt-7 rounded-2xl bg-orange-500 px-6 py-4 font-black text-[#111416]">📷 Analizar otra factura</button>
+          <button onClick={() => setPublishedCount(null)} className="mt-7 rounded-2xl bg-orange-500 px-6 py-4 font-black text-[#111416]">{physical ? '📷 Analizar otras etiquetas' : '📷 Analizar otra factura'}</button>
         </section>
       </div>
     );
@@ -356,19 +386,19 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
       <main className="relative mx-auto max-w-7xl px-5 py-10 sm:px-8 sm:py-14">
         <p role="status" className="mx-auto mb-5 max-w-5xl text-center text-sm text-slate-400">{draft.message}</p>
         <nav aria-label="Tipo de documento" className="mx-auto mb-8 grid max-w-3xl grid-cols-2 gap-3">
-          <Link href={invoiceRoute} aria-current="page" className="rounded-2xl border border-orange-400/50 bg-orange-500/15 px-4 py-4 text-center font-black text-orange-300">Factura · 72 h</Link>
-          <Link href={boxRoute} className="rounded-2xl border border-white/20 bg-white/5 px-4 py-4 text-center font-black text-slate-200 hover:border-amber-400/50">Etiqueta de caja · 24 h</Link>
+          <Link href={invoiceRoute} aria-current={!physical ? "page" : undefined} className={`rounded-2xl border px-4 py-4 text-center font-black ${!physical ? 'border-orange-400/50 bg-orange-500/15 text-orange-300' : 'border-white/20 bg-white/5 text-slate-200 hover:border-orange-400/50'}`}>Factura · 72 h</Link>
+          <Link href={boxRoute} aria-current={physical ? "page" : undefined} className={`rounded-2xl border px-4 py-4 text-center font-black ${physical ? 'border-orange-400/50 bg-orange-500/15 text-orange-300' : 'border-white/20 bg-white/5 text-slate-200 hover:border-orange-400/50'}`}>Etiqueta de caja · 24 h</Link>
         </nav>
         <section className="mx-auto max-w-3xl text-center">
-          <span className="inline-flex rounded-full border border-orange-400/20 bg-orange-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[.22em] text-orange-300">Factura · definitiva · 72 horas</span>
-          <h1 className="mt-5 text-4xl font-black sm:text-6xl">De la factura a las etiquetas</h1>
-          <p className="mx-auto mt-4 max-w-2xl leading-7 text-slate-400">Selecciona una o varias facturas. CA46 separa cada partida, te deja revisarla y la publica únicamente en tu empresa.</p>
-          <p className="mt-3 text-sm text-slate-400">¿Tienes la etiqueta de una caja y todavía no la factura? <Link href={boxRoute} className="font-bold text-amber-300 underline underline-offset-4">Crear etiqueta de 24 horas</Link></p>
+          <span className="inline-flex rounded-full border border-orange-400/20 bg-orange-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[.22em] text-orange-300">{documentName} · {validHours} horas</span>
+          <h1 className="mt-5 text-4xl font-black sm:text-6xl">{physical ? 'De la caja a las etiquetas' : 'De la factura a las etiquetas'}</h1>
+          <p className="mx-auto mt-4 max-w-2xl leading-7 text-slate-400">{physical ? 'Selecciona una o varias fotos de etiquetas de caja. CA46 lee sus datos y te permite revisarlos antes de publicar en tu empresa.' : 'Selecciona una o varias facturas. CA46 separa cada partida, te deja revisarla y la publica únicamente en tu empresa.'}</p>
+
         </section>
 
         <section className="mx-auto mt-9 grid max-w-5xl gap-5 md:grid-cols-2">
-          <button onClick={() => cameraInput.current?.click()} disabled={!draft.ready || analyzing || publishing} className="rounded-[2rem] border border-orange-400/25 bg-orange-500/[.08] p-8 text-left disabled:opacity-50"><div className="text-4xl">📷</div><p className="mt-6 text-xs font-black uppercase tracking-[.2em] text-orange-400">Desde el móvil</p><h2 className="mt-2 text-3xl font-black">Hacer foto</h2><p className="mt-3 text-slate-400">Factura completa, recta y con buena luz.</p></button>
-          <button onClick={() => galleryInput.current?.click()} disabled={!draft.ready || analyzing || publishing} className="rounded-[2rem] border border-white/10 bg-white/[.04] p-8 text-left disabled:opacity-50"><div className="text-4xl">🖼️</div><p className="mt-6 text-xs font-black uppercase tracking-[.2em] text-slate-500">Selección múltiple</p><h2 className="mt-2 text-3xl font-black">Elegir facturas</h2><p className="mt-3 text-slate-400">Procesa varias imágenes seguidas.</p></button>
+          <button onClick={() => cameraInput.current?.click()} disabled={!draft.ready || analyzing || publishing} className="rounded-[2rem] border border-orange-400/25 bg-orange-500/[.08] p-8 text-left disabled:opacity-50"><div className="text-4xl">📷</div><p className="mt-6 text-xs font-black uppercase tracking-[.2em] text-orange-400">Desde el móvil</p><h2 className="mt-2 text-3xl font-black">Hacer foto</h2><p className="mt-3 text-slate-400">{physical ? 'Etiqueta completa, recta y con buena luz. Puedes añadir varias fotos.' : 'Factura completa, recta y con buena luz.'}</p></button>
+          <button onClick={() => galleryInput.current?.click()} disabled={!draft.ready || analyzing || publishing} className="rounded-[2rem] border border-white/10 bg-white/[.04] p-8 text-left disabled:opacity-50"><div className="text-4xl">🖼️</div><p className="mt-6 text-xs font-black uppercase tracking-[.2em] text-slate-500">Selección múltiple</p><h2 className="mt-2 text-3xl font-black">{physical ? 'Elegir etiquetas' : 'Elegir facturas'}</h2><p className="mt-3 text-slate-400">Procesa varias imágenes seguidas.</p></button>
           <input ref={cameraInput} type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif" capture="environment" className="hidden" onChange={(e) => { addFiles(e.target.files, 'camera'); e.currentTarget.value = ''; }} />
           <input ref={galleryInput} type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif" multiple className="hidden" onChange={(e) => { addFiles(e.target.files, 'gallery'); e.currentTarget.value = ''; }} />
         </section>
@@ -376,8 +406,8 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
         {captureMessage ? <p aria-live="polite" className={`mx-auto mt-4 max-w-5xl rounded-2xl border px-4 py-3 text-sm font-bold ${captureMessage.startsWith('✓') ? 'border-emerald-400/20 bg-emerald-400/[.06] text-emerald-200' : 'border-amber-400/20 bg-amber-400/[.06] text-amber-100'}`}>{captureMessage}</p> : null}
 
         <section className="mx-auto mt-8 max-w-5xl rounded-[2rem] border border-white/10 bg-white/[.035] p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.2em] text-orange-400">Paso 1</p><h2 className="mt-2 text-2xl font-black">{photos.length ? `${photos.length} ${photos.length === 1 ? 'factura' : 'facturas'} seleccionadas` : 'Añade facturas para empezar'}</h2>{photos.length ? <p className="mt-2 text-sm text-slate-500">{(totalSize / 1024 / 1024).toFixed(1)} MB originales</p> : null}</div>{photos.length && !analyzing ? <button onClick={clearAll} className="rounded-full border border-white/10 px-4 py-2 text-sm font-black text-slate-400">Quitar todas</button> : null}</div>
-          {photos.length ? <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{photos.map((photo, index) => <div key={photo.id} className="overflow-hidden rounded-2xl border border-white/10 bg-black/20"><img src={photo.url} alt={`Factura ${index + 1}`} className="aspect-[4/3] w-full object-cover"/><div className="p-3"><p className="truncate text-sm font-bold">Factura {index + 1} · {photo.file.name || 'foto'}</p>{photoStates[photo.id] ? <p className="mt-1 text-xs font-black text-orange-300">{photoStates[photo.id].message || (photoStates[photo.id].state === 'analyzing' ? 'Guardando foto…' : 'En cola')}</p> : null}</div></div>)}</div> : null}
+          <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.2em] text-orange-400">Paso 1</p><h2 className="mt-2 text-2xl font-black">{photos.length ? `${photos.length} ${physical ? (photos.length === 1 ? 'foto seleccionada' : 'fotos seleccionadas') : (photos.length === 1 ? 'factura seleccionada' : 'facturas seleccionadas')}` : physical ? 'Añade etiquetas para empezar' : 'Añade facturas para empezar'}</h2>{photos.length ? <p className="mt-2 text-sm text-slate-500">{(totalSize / 1024 / 1024).toFixed(1)} MB originales</p> : null}</div>{photos.length && !analyzing && !publishing ? <button onClick={clearAll} className="rounded-full border border-white/10 px-4 py-2 text-sm font-black text-slate-400">Quitar todas</button> : null}</div>
+          {photos.length ? <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{photos.map((photo, index) => <div key={photo.id} className="overflow-hidden rounded-2xl border border-white/10 bg-black/20"><img src={photo.url} alt={`${documentName} ${index + 1}`} className="aspect-[4/3] w-full object-cover"/><div className="p-3"><p className="truncate text-sm font-bold">{documentName} {index + 1} · {photo.file.name || 'foto'}</p>{photoStates[photo.id] ? <p className="mt-1 text-xs font-black text-orange-300">{photoStates[photo.id].message || (photoStates[photo.id].state === 'analyzing' ? 'Guardando foto…' : 'En cola')}</p> : null}</div></div>)}</div> : null}
           <button onClick={() => void analyzePhotos()} disabled={!draft.ready || !photos.length || analyzing || publishing} className="mt-6 w-full rounded-2xl bg-orange-500 px-6 py-4 text-lg font-black text-[#111416] disabled:bg-slate-800 disabled:text-slate-600">{analyzing ? 'Procesando fotos…' : `Analizar y separar etiquetas (${photos.length})`}</button>
           {analyzing ? <p role="status" className="mt-3 text-sm text-slate-400">Puedes salir cuando todas las fotos indiquen «Foto recibida». Si sales durante el envío, se retomará al volver.</p> : null}
           {analysisErrors.length ? <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-500/[.07] p-4 text-sm text-rose-200">{analysisErrors.map((item) => <p key={item}>• {item}</p>)}</div> : null}
@@ -386,14 +416,16 @@ export default function InvoiceLabelCreator({ employeeMode = false }: { employee
         {results.length ? <section className="mx-auto mt-8 max-w-6xl space-y-6">
           <div className="rounded-[2rem] border border-orange-400/20 bg-orange-500/[.06] p-6"><p className="text-xs font-black uppercase tracking-[.2em] text-orange-400">Paso 2 · Revisión</p><h2 className="mt-2 text-3xl font-black">{totalLabels} {totalLabels === 1 ? 'etiqueta' : 'etiquetas'} generadas</h2><p className="mt-2 text-slate-400">Especie, lote y procedencia deben estar correctos antes de publicar.</p></div>
           {results.map((invoice, invoiceIndex) => <article key={invoice.photoId} className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[.035]">
-            <header className="border-b border-white/10 bg-black/20 p-5"><p className="text-xs font-black uppercase tracking-[.18em] text-orange-400">{invoice.fileName}</p><div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{INVOICE_FIELDS.map((field) => <label key={field.key} className={field.wide ? 'sm:col-span-2' : ''}><span className="mb-2 block text-[10px] font-black uppercase tracking-[.14em] text-slate-500">{field.label}</span><input value={invoice[field.key]} onChange={(e) => updateInvoiceField(invoiceIndex, field.key, e.target.value)} className={inputClass}/></label>)}</div></header>
+            <header className="border-b border-white/10 bg-black/20 p-5"><p className="text-xs font-black uppercase tracking-[.18em] text-orange-400">{invoice.fileName}</p><div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{(physical ? [] : INVOICE_FIELDS).map((field) => <label key={field.key} className={field.wide ? 'sm:col-span-2' : ''}><span className="mb-2 block text-[10px] font-black uppercase tracking-[.14em] text-slate-500">{field.label}</span><input value={invoice[field.key]} onChange={(e) => updateInvoiceField(invoiceIndex, field.key, e.target.value)} className={inputClass}/></label>)}</div></header>
+            {invoice.warnings.length ? <div className="px-5 pt-4 text-sm text-slate-400">{invoice.warnings.map((warning, index) => <p key={index}>{warning}</p>)}</div> : null}
             <div className="space-y-5 p-5">{invoice.labels.map((label, labelIndex) => <div key={`${invoice.photoId}-${labelIndex}`} className={`rounded-2xl border p-5 ${label.needs_review ? 'border-amber-400/25 bg-amber-400/[.035]' : 'border-white/10 bg-black/20'}`}>
               <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-2xl font-black">{label.description || `Etiqueta ${labelIndex + 1}`}</h3><span className={`rounded-full px-3 py-1 text-xs font-black ${label.needs_review ? 'bg-amber-400/10 text-amber-300' : 'bg-emerald-400/10 text-emerald-300'}`}>{label.needs_review ? '⚠ Revisar' : '✓ Lista'}</span></div>
               <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{LABEL_FIELDS.map((field) => { const flagged = label.review_fields.includes(field.key); return <label key={field.key} className={field.wide ? 'sm:col-span-2' : ''}><span className={`mb-2 block text-[10px] font-black uppercase tracking-[.14em] ${flagged || field.important ? 'text-amber-300' : 'text-slate-500'}`}>{field.label}{flagged ? ' · revisar' : ''}</span><input value={label[field.key] || ''} onChange={(e) => updateLabelField(invoiceIndex, labelIndex, field.key, e.target.value)} className={inputClass}/></label>; })}</div>
+              {label.extra_fields.length ? <div className="mt-4 flex flex-wrap gap-2">{label.extra_fields.map((item, index) => <span key={index} className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-300">{item.label}: {item.value}</span>)}</div> : null}
               {label.needs_review ? <button onClick={() => confirmLabelReview(invoiceIndex, labelIndex)} disabled={!label.description.trim() || !label.lote.trim() || !label.procedencia.trim()} className="mt-5 rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm font-black text-amber-200 disabled:opacity-30">✓ Confirmar revisión</button> : null}
             </div>)}</div>
           </article>)}
-          <div className="rounded-[2rem] border border-white/10 bg-white/[.035] p-6 sm:flex sm:items-center sm:justify-between sm:gap-6"><div><p className="text-xs font-black uppercase tracking-[.2em] text-orange-400">Paso 3</p><h3 className="mt-2 text-2xl font-black">Publicar · 72 horas</h3>{!allReviewed ? <p className="mt-2 text-sm font-bold text-amber-300">{blockingLabels} {blockingLabels === 1 ? 'etiqueta necesita' : 'etiquetas necesitan'} revisión.</p> : <p className="mt-2 text-sm font-bold text-emerald-300">✓ Listo para publicar en tu empresa.</p>}{publishError ? <p className="mt-2 text-sm font-bold text-rose-300">{publishError}</p> : null}</div><button onClick={publishLabels} disabled={!allReviewed || publishing || analyzing} className="mt-5 w-full rounded-2xl bg-orange-500 px-6 py-4 font-black text-[#111416] disabled:bg-slate-800 disabled:text-slate-600 sm:mt-0 sm:w-auto">{publishing ? 'Publicando…' : `Publicar ${totalLabels}`}</button></div>
+          <div className="rounded-[2rem] border border-white/10 bg-white/[.035] p-6 sm:flex sm:items-center sm:justify-between sm:gap-6"><div><p className="text-xs font-black uppercase tracking-[.2em] text-orange-400">Paso 3</p><h3 className="mt-2 text-2xl font-black">Publicar · {validHours} horas</h3>{!allReviewed ? <p className="mt-2 text-sm font-bold text-amber-300">{unfinishedPhotos ? `${unfinishedPhotos} fotos pendientes de lectura. ` : ''}{blockingLabels ? `${blockingLabels} ${blockingLabels === 1 ? 'etiqueta necesita' : 'etiquetas necesitan'} revisión.` : ''}</p> : <p className="mt-2 text-sm font-bold text-emerald-300">✓ Listo para publicar en tu empresa.</p>}{publishError ? <p className="mt-2 text-sm font-bold text-rose-300">{publishError}</p> : null}</div><button onClick={publishLabels} disabled={!allReviewed || publishing || analyzing} className="mt-5 w-full rounded-2xl bg-orange-500 px-6 py-4 font-black text-[#111416] disabled:bg-slate-800 disabled:text-slate-600 sm:mt-0 sm:w-auto">{publishing ? 'Publicando…' : `Publicar ${totalLabels}`}</button></div>
         </section> : null}
       </main>
     </div>
