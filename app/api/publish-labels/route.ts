@@ -12,6 +12,8 @@ type ExtraField = { label?: string; value?: string };
 type SourceMode = 'invoice' | 'physical_label';
 
 type LabelDraft = {
+  excluded?: boolean;
+  draft_key?: string;
   description?: string;
   scientific_name?: string;
   lote?: string;
@@ -128,13 +130,15 @@ export async function POST(request: Request) {
       );
     }
     const sourceMode: SourceMode = requestedSourceMode;
+    const dryRun = body?.dryRun === true;
     const invoices: InvoiceDraft[] = Array.isArray(body?.invoices) ? body.invoices : [];
 
     const flattened = invoices.flatMap((invoice) =>
-      (Array.isArray(invoice.labels) ? invoice.labels : []).map((label) => ({ invoice, label })),
+      (Array.isArray(invoice.labels) ? invoice.labels : []).filter((label) => !label.excluded).map((label) => ({ invoice, label })),
     );
 
     if (flattened.length === 0) {
+      if (dryRun) return NextResponse.json({ conflicts: [], canAnnul: false }, { headers: { 'Cache-Control': 'no-store' } });
       return NextResponse.json({ error: 'No hay etiquetas para publicar.' }, { status: 400 });
     }
 
@@ -192,7 +196,7 @@ export async function POST(request: Request) {
       return !clean(label.description) || !clean(label.lote) || !clean(label.procedencia) || criticalReviewPending;
     });
 
-    if (invalid) {
+    if (invalid && !dryRun) {
       return NextResponse.json(
         {
           error: 'Hay etiquetas con datos esenciales pendientes. Revisa especie, lote y procedencia antes de publicar.',
@@ -266,7 +270,7 @@ export async function POST(request: Request) {
     const ids = records.map((record) => record.drive_file_id);
     const { data: existing, error: duplicateError } = await supabaseAdmin
       .from('digital_tags')
-      .select('drive_file_id, product_name, expires_at, source, status')
+      .select('id, drive_file_id, product_name, expires_at, source, status')
       .eq('company_id', tenant.context.companyId)
       .eq('is_active', true)
       .gt('expires_at', now.toISOString())
@@ -277,17 +281,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No se pudo comprobar si estas etiquetas ya existen.' }, { status: 500 });
     }
 
-    if (existing && existing.length > 0) {
-      return NextResponse.json(
-        {
-          error: sourceMode === 'physical_label'
-            ? 'CA46 ha detectado que esta etiqueta provisional ya está publicada y activa en tu empresa.'
-            : 'CA46 ha detectado etiquetas activas de esta misma factura que ya fueron publicadas por tu empresa.',
-          code: 'DUPLICATE_LABELS',
-          ...(tenant.context.role === 'empleado' ? {} : { duplicates: existing }),
-        },
-        { status: 409 },
-      );
+    const canAnnul = ['admin_empresa', 'encargado', 'superadmin'].includes(tenant.context.role);
+    const seen = new Set<string>();
+    const conflicts = records.flatMap((record, index) => {
+      const match = existing?.find((item) => item.drive_file_id === record.drive_file_id);
+      const repeated = seen.has(record.drive_file_id);
+      seen.add(record.drive_file_id);
+      if (!match && !repeated) return [];
+      return [{
+        draft_key: clean(flattened[index].label.draft_key),
+        kind: match ? 'published' : 'batch',
+        product_name: record.product_name,
+        ...(match && canAnnul ? { published_id: match.id, expires_at: match.expires_at } : {}),
+      }];
+    });
+    // A preflight uses the same fingerprints and tenant scope but never inserts.
+    if (dryRun) return NextResponse.json({ conflicts, canAnnul }, { headers: { 'Cache-Control': 'no-store' } });
+    if (conflicts.length) {
+      return NextResponse.json({
+        error: 'Hay etiquetas duplicadas. Exclúyelas del grupo para publicar las restantes.',
+        code: 'DUPLICATE_LABELS', conflicts, canAnnul,
+      }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
     }
 
     const { data, error } = await supabaseAdmin

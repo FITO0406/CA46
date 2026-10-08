@@ -20,7 +20,7 @@ function compiledModule(path, imports, globals = {}) {
   return module.exports;
 }
 
-function harness(mode, saved, publishResponse) {
+function harness(mode, saved, publishResponse, duplicateReply = () => ({ conflicts: [], canAnnul: false })) {
   const storage=new Map();
   let scope={ companyId:'company-A',userId:'user-A' };
   const auth={ tenantAuthorizationHeader:async()=>({ Authorization:'Bearer test-token' }) };
@@ -35,6 +35,7 @@ function harness(mode, saved, publishResponse) {
   const invocations=[];
   const waiters = new Map();
   const publications = [];
+  const annulments = [];
   const Shared=compiledModule('../components/InvoiceLabelCreator.tsx',{
     'next/image':{ __esModule:true,default:props=>React.createElement('img',{ alt:props.alt }) },
     'next/link':{ __esModule:true,default:props=>React.createElement('a',props) },
@@ -45,12 +46,12 @@ function harness(mode, saved, publishResponse) {
       analyzeSavedPhoto:async(id,kind,file,retry,scope,progress)=>{invocations.push({id,kind,file,retry,progress});return new Promise((resolve, reject) => waiters.set(id, { resolve, reject }));},
       discardAnalysisJobs:async()=>{},
     },
-  }, { fetch: async (url, init) => { assert.equal(url, '/api/publish-labels'); publications.push(JSON.parse(init.body)); const labels = publications.at(-1).invoices.flatMap(i => i.labels).map(() => ({ id: randomUUID() })); return Response.json(publishResponse ?? { published: labels.length, labels, company_id: scope.companyId, expires_at: '2026-10-08T18:00:00Z' }); } }).default;
+  }, { fetch: async (url, init) => { if (url === '/api/manage-labels') { annulments.push(JSON.parse(init.body)); return Response.json({ ok: true }); } assert.equal(url, '/api/publish-labels'); const body = JSON.parse(init.body); if (body.dryRun) return Response.json(duplicateReply(body)); publications.push(body); const labels = publications.at(-1).invoices.flatMap(i => i.labels).map(() => ({ id: randomUUID() })); return Response.json(publishResponse ?? { published: labels.length, labels, company_id: scope.companyId, expires_at: '2026-10-08T18:00:00Z' }); } }).default;
   const Component = mode === 'invoice' ? Shared : props => React.createElement(Shared, { ...props, sourceMode: 'physical_label' });
   const key=`company-A:user-A:${mode}`;
   if(saved)storage.set(key,saved);
   let renderer;
-  return { storage,key,invocations,publications,finish(id, value){waiters.get(id).resolve(value);},fail(id){waiters.get(id).reject(new Error('Foto ilegible'));},progress(stage){ invocations.at(-1).progress(stage); },scope(value){scope=value;},complete(value){for (const waiter of waiters.values()) waiter.resolve(value);},
+  return { storage,key,invocations,publications,annulments,finish(id, value){waiters.get(id).resolve(value);},fail(id){waiters.get(id).reject(new Error('Foto ilegible'));},progress(stage){ invocations.at(-1).progress(stage); },scope(value){scope=value;},complete(value){for (const waiter of waiters.values()) waiter.resolve(value);},
     async mount(){await act(async()=>{renderer=create(React.createElement(Component));});return renderer;},
     async unmount(){await act(async()=>renderer.unmount());},
     text(){return JSON.stringify(renderer.toJSON());},get renderer(){return renderer;},
@@ -243,4 +244,47 @@ test('incomplete publication acknowledgement preserves review and shows no succe
   assert.match(h.text(), /No se ha recibido una confirmación completa/);
   assert.doesNotMatch(h.text(), /Publicación completada/);
   assert.equal(h.storage.get(h.key).photos.length, 1); await h.unmount();
+});
+
+
+for (const mode of ['invoice', 'physical_label']) {
+  test(`${mode}: excludes duplicate and unwanted labels, restores selection and publishes only remaining labels`, async () => {
+    const id = randomUUID();
+    const h = harness(mode, { photos: [{ id, file }], photoStates: { [id]: { state: 'done' } }, results: [invoice(id, { labels: [label({ lote: 'DUP' }), label({ lote: 'KEEP' }), label({ lote: 'UNWANTED' })] })], analysisErrors: [], analyzing: false, publishedCount: null, publishedExpiresAt: '' }, undefined,
+      body => ({ conflicts: body.invoices.flatMap(i => i.labels.filter(l => l.lote === 'DUP').map(l => ({ draft_key: l.draft_key, kind: 'published', product_name: 'Merluza', published_id: 'existing' }))), canAnnul: true }));
+    await h.mount();
+    assert.match(h.text(), /Duplicada: ya publicada/);
+    let publish = h.renderer.root.findAllByType('button').find(b => b.children.join('').startsWith('Publicar '));
+    assert.equal(publish.props.disabled, true);
+    await act(async () => h.renderer.root.findAllByType('button').find(b => b.children.join('') === 'Excluir todas las duplicadas').props.onClick());
+    const exclusions = h.renderer.root.findAllByType('button').filter(b => b.children.join('') === 'Excluir de esta publicación');
+    await act(async () => exclusions.at(-1).props.onClick());
+    assert.match(h.text(), /1.*seleccionadas.*2.*excluidas/);
+    await h.unmount(); await h.mount();
+    assert.equal(h.storage.get(h.key).results[0].labels[0].excluded, true);
+    assert.equal(h.storage.get(h.key).results[0].labels[2].excluded, true);
+    const recover = h.renderer.root.findAllByType('button').filter(b => b.children.join('') === 'Recuperar para publicar').at(-1);
+    await act(async () => recover.props.onClick());
+    assert.match(h.text(), /2.*seleccionadas.*1.*excluidas/);
+    publish = h.renderer.root.findAllByType('button').find(b => b.children.join('') === 'Publicar 2');
+    assert.equal(publish.props.disabled, false);
+    await act(async () => publish.props.onClick());
+    assert.deepEqual(h.publications[0].invoices[0].labels.map(l => l.lote), ['KEEP', 'UNWANTED']);
+    await h.unmount();
+  });
+}
+
+test('published annulment requires explicit confirmation and checks duplicates again', async () => {
+  const id = randomUUID(); let checks = 0;
+  const h = harness('physical_label', { photos: [{ id, file }], photoStates: { [id]: { state: 'done' } }, results: [invoice(id)], analysisErrors: [], analyzing: false, publishedCount: null, publishedExpiresAt: '' }, undefined,
+    body => ({ conflicts: checks++ === 0 ? [{ draft_key: body.invoices[0].labels[0].draft_key, kind: 'published', product_name: 'Merluza', published_id: 'existing' }] : [], canAnnul: true }));
+  await h.mount();
+  await act(async () => h.renderer.root.findAllByType('button').find(b => b.children.join('') === 'Anular etiqueta publicada').props.onClick());
+  assert.equal(h.renderer.root.findAllByProps({ role: 'dialog' }).length, 1);
+  assert.match(h.text(), /Se retirará/); assert.equal(h.annulments.length, 0);
+  await act(async () => h.renderer.root.findAllByType('button').find(b => b.children.join('') === 'Confirmar anulación').props.onClick());
+  assert.equal(h.annulments.length, 1); assert.equal(h.annulments[0].id, 'existing'); assert.equal(h.annulments[0].reason, 'duplicate');
+  assert.equal(checks, 2); assert.equal(h.publications.length, 0);
+  assert.equal(h.renderer.root.findAllByType('button').find(b => b.children.join('') === 'Publicar 1').props.disabled, false);
+  await h.unmount();
 });

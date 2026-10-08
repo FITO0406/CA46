@@ -11,7 +11,10 @@ type ExtraField = { label: string; value: string };
 type SelectedPhoto = { id: string; file: File; url: string };
 type PhotoState = { state: 'pending' | 'analyzing' | 'done' | 'error'; message?: string };
 
+type DuplicateConflict = { draft_key: string; kind: 'published' | 'batch'; product_name: string; published_id?: string };
+
 type LabelDraft = {
+  excluded?: boolean;
   description: string;
   scientific_name: string;
   lote: string;
@@ -62,7 +65,7 @@ type InvoiceWork = {
   publishedExpiresAt: string;
 };
 
-type LabelStringKey = Exclude<keyof LabelDraft, 'extra_fields' | 'confidence' | 'needs_review' | 'review_fields'>;
+type LabelStringKey = Exclude<keyof LabelDraft, 'extra_fields' | 'confidence' | 'needs_review' | 'review_fields' | 'excluded'>;
 type InvoiceStringKey = Exclude<keyof InvoiceResult, 'photoId' | 'fileName' | 'invoice_extra_fields' | 'warnings' | 'labels'>;
 
 const LABEL_FIELDS: Array<{ key: LabelStringKey; label: string; wide?: boolean; important?: boolean }> = [
@@ -172,6 +175,13 @@ export default function InvoiceLabelCreator({ employeeMode = false, sourceMode =
   const [analyzing, setAnalyzing] = useState(false);
   const [results, setResults] = useState<InvoiceResult[]>([]);
   const [analysisErrors, setAnalysisErrors] = useState<string[]>([]);
+  const [conflicts, setConflicts] = useState<DuplicateConflict[]>([]);
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+  const [duplicateCheckError, setDuplicateCheckError] = useState('');
+  const [canAnnul, setCanAnnul] = useState(false);
+  const [annulTarget, setAnnulTarget] = useState<DuplicateConflict | null>(null);
+  const [annulling, setAnnulling] = useState(false);
+  const [checkRevision, setCheckRevision] = useState(0);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState('');
   const [publishedCount, setPublishedCount] = useState<number | null>(null);
@@ -220,10 +230,39 @@ export default function InvoiceLabelCreator({ employeeMode = false, sourceMode =
   }, [draft.ready, resumeRequested]);
 
   const totalSize = useMemo(() => photos.reduce((sum, photo) => sum + photo.file.size, 0), [photos]);
-  const totalLabels = useMemo(() => results.reduce((sum, invoice) => sum + invoice.labels.length, 0), [results]);
-  const blockingLabels = useMemo(() => results.reduce((sum, invoice) => sum + invoice.labels.filter((label) => !labelReadyToPublish(label)).length, 0), [results]);
+  const selectedInvoices = useMemo(() => results.map((invoice) => ({ ...invoice,
+    labels: invoice.labels.map((label, index) => ({ ...label, draft_key: `${invoice.photoId}:${index}` }))
+      .filter((label) => !label.excluded),
+  })).filter((invoice) => invoice.labels.length > 0), [results]);
+  const generatedLabels = results.reduce((sum, invoice) => sum + invoice.labels.length, 0);
+  const totalLabels = selectedInvoices.reduce((sum, invoice) => sum + invoice.labels.length, 0);
+  const excludedCount = generatedLabels - totalLabels;
+
+  useEffect(() => {
+    if (!draft.ready || !selectedInvoices.length || analyzing) {
+      setConflicts([]); setCheckingDuplicates(false); setDuplicateCheckError(''); return;
+    }
+    let active = true;
+    const controller = new AbortController();
+    setCheckingDuplicates(true); setDuplicateCheckError('');
+    void (async () => {
+      try {
+        const response = await fetch('/api/publish-labels', { method: 'POST', signal: controller.signal,
+          headers: { 'Content-Type': 'application/json', ...(await tenantAuthorizationHeader()) },
+          body: JSON.stringify({ sourceMode, invoices: selectedInvoices, dryRun: true }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !Array.isArray(payload.conflicts)) throw new Error(payload.error || 'No se pudieron comprobar las duplicadas.');
+        if (active) { setConflicts(payload.conflicts); setCanAnnul(Boolean(payload.canAnnul)); }
+      } catch (error) {
+        if (active) setDuplicateCheckError(error instanceof Error ? error.message : 'No se pudieron comprobar las duplicadas.');
+      } finally { if (active) setCheckingDuplicates(false); }
+    })();
+    return () => { active = false; controller.abort(); };
+  }, [draft.ready, selectedInvoices, sourceMode, analyzing, checkRevision]);
+  const blockingLabels = useMemo(() => results.reduce((sum, invoice) => sum + invoice.labels.filter((label) => !label.excluded && !labelReadyToPublish(label)).length, 0), [results]);
   const unfinishedPhotos = photos.filter((photo) => !results.some((result) => result.photoId === photo.id)).length;
-  const allReviewed = totalLabels > 0 && !analyzing && blockingLabels === 0 && unfinishedPhotos === 0;
+  const allReviewed = totalLabels > 0 && !analyzing && blockingLabels === 0 && unfinishedPhotos === 0 && !checkingDuplicates && !duplicateCheckError && conflicts.length === 0 && !annulling;
 
   function resetAnalysis() {
     setResults([]);
@@ -317,6 +356,7 @@ export default function InvoiceLabelCreator({ employeeMode = false, sourceMode =
   }
 
   function updateLabelField(invoiceIndex: number, labelIndex: number, field: LabelStringKey, value: string) {
+    setPublishError('');
     setResults((current) => current.map((invoice, ii) => ii !== invoiceIndex ? invoice : {
       ...invoice,
       labels: invoice.labels.map((label, li) => {
@@ -328,6 +368,7 @@ export default function InvoiceLabelCreator({ employeeMode = false, sourceMode =
   }
 
   function updateInvoiceField(invoiceIndex: number, field: InvoiceStringKey, value: string) {
+    setPublishError('');
     setResults((current) => current.map((invoice, index) => index === invoiceIndex ? { ...invoice, [field]: value } : invoice));
   }
 
@@ -340,6 +381,36 @@ export default function InvoiceLabelCreator({ employeeMode = false, sourceMode =
     }));
   }
 
+  function setLabelExcluded(photoId: string, labelIndex: number, excluded: boolean) {
+    setPublishError('');
+    setResults((current) => current.map((invoice) => invoice.photoId !== photoId ? invoice : {
+      ...invoice, labels: invoice.labels.map((label, index) => index === labelIndex ? { ...label, excluded } : label),
+    }));
+  }
+
+  function excludeDuplicates() {
+    const keys = new Set(conflicts.map((item) => item.draft_key));
+    setPublishError('');
+    setResults((current) => current.map((invoice) => ({ ...invoice,
+      labels: invoice.labels.map((label, index) => keys.has(`${invoice.photoId}:${index}`) ? { ...label, excluded: true } : label),
+    })));
+  }
+
+  async function annulPublishedLabel() {
+    if (!annulTarget?.published_id || annulling) return;
+    setAnnulling(true); setPublishError('');
+    try {
+      const response = await fetch('/api/manage-labels', { method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await tenantAuthorizationHeader()) },
+        body: JSON.stringify({ id: annulTarget.published_id, reason: 'duplicate' }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error(payload.error || 'No se pudo anular la etiqueta.');
+      setAnnulTarget(null); setCheckRevision((value) => value + 1);
+    } catch (error) { setPublishError(error instanceof Error ? error.message : 'No se pudo anular la etiqueta.'); }
+    finally { setAnnulling(false); }
+  }
+
   async function publishLabels() {
     if (!allReviewed || publishing) return;
     setPublishing(true);
@@ -348,10 +419,13 @@ export default function InvoiceLabelCreator({ employeeMode = false, sourceMode =
       const response = await fetch('/api/publish-labels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(await tenantAuthorizationHeader()) },
-        body: JSON.stringify({ sourceMode, invoices: results }),
+        body: JSON.stringify({ sourceMode, invoices: selectedInvoices }),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload?.error || 'No se pudieron publicar las etiquetas.');
+      if (!response.ok) {
+        if (payload.code === 'DUPLICATE_LABELS' && Array.isArray(payload.conflicts)) { setConflicts(payload.conflicts); setCanAnnul(Boolean(payload.canAnnul)); }
+        throw new Error(payload?.error || 'No se pudieron publicar las etiquetas.');
+      }
       if (payload?.published !== totalLabels || !Array.isArray(payload?.labels)
         || payload.labels.length !== totalLabels || payload.labels.some((label: any) => !label?.id)
         || payload.company_id !== draft.scope?.companyId || !payload.expires_at) {
@@ -432,20 +506,38 @@ export default function InvoiceLabelCreator({ employeeMode = false, sourceMode =
         </section>
 
         {results.length ? <section className="mx-auto mt-8 max-w-6xl space-y-6">
-          <div className="rounded-[2rem] border border-orange-400/20 bg-orange-500/[.06] p-6"><p className="text-xs font-black uppercase tracking-[.2em] text-orange-400">Paso 2 · Revisión</p><h2 className="mt-2 text-3xl font-black">{totalLabels} {totalLabels === 1 ? 'etiqueta' : 'etiquetas'} generadas</h2><p className="mt-2 text-slate-400">Especie, lote y procedencia deben estar correctos antes de publicar.</p></div>
+          <div className="rounded-[2rem] border border-orange-400/20 bg-orange-500/[.06] p-6"><p className="text-xs font-black uppercase tracking-[.2em] text-orange-400">Paso 2 · Revisión</p><h2 className="mt-2 text-3xl font-black">{generatedLabels} {generatedLabels === 1 ? 'etiqueta' : 'etiquetas'} generadas</h2><p className="mt-2 text-slate-400">Especie, lote y procedencia deben estar correctos antes de publicar.</p></div>
           {results.map((invoice, invoiceIndex) => <article key={invoice.photoId} className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[.035]">
-            <header className="border-b border-white/10 bg-black/20 p-5"><p className="text-xs font-black uppercase tracking-[.18em] text-orange-400">{invoice.fileName}</p><div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{(physical ? [] : INVOICE_FIELDS).map((field) => <label key={field.key} className={field.wide ? 'sm:col-span-2' : ''}><span className="mb-2 block text-[10px] font-black uppercase tracking-[.14em] text-slate-500">{field.label}</span><input value={invoice[field.key]} onChange={(e) => updateInvoiceField(invoiceIndex, field.key, e.target.value)} className={inputClass}/></label>)}</div></header>
+            <header className="border-b border-white/10 bg-black/20 p-5"><p className="text-xs font-black uppercase tracking-[.18em] text-orange-400">{invoice.fileName}</p><div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{(physical ? [] : INVOICE_FIELDS).map((field) => <label key={field.key} className={field.wide ? 'sm:col-span-2' : ''}><span className="mb-2 block text-[10px] font-black uppercase tracking-[.14em] text-slate-500">{field.label}</span><input disabled={publishing || annulling} value={invoice[field.key]} onChange={(e) => updateInvoiceField(invoiceIndex, field.key, e.target.value)} className={inputClass}/></label>)}</div></header>
             {invoice.warnings.length ? <div className="px-5 pt-4 text-sm text-slate-400">{invoice.warnings.map((warning, index) => <p key={index}>{warning}</p>)}</div> : null}
             <div className="space-y-5 p-5">{invoice.labels.map((label, labelIndex) => <div key={`${invoice.photoId}-${labelIndex}`} className={`rounded-2xl border p-5 ${label.needs_review ? 'border-amber-400/25 bg-amber-400/[.035]' : 'border-white/10 bg-black/20'}`}>
-              <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-2xl font-black">{label.description || `Etiqueta ${labelIndex + 1}`}</h3><span className={`rounded-full px-3 py-1 text-xs font-black ${label.needs_review ? 'bg-amber-400/10 text-amber-300' : 'bg-emerald-400/10 text-emerald-300'}`}>{label.needs_review ? '⚠ Revisar' : '✓ Lista'}</span></div>
-              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{LABEL_FIELDS.map((field) => { const flagged = label.review_fields.includes(field.key); return <label key={field.key} className={field.wide ? 'sm:col-span-2' : ''}><span className={`mb-2 block text-[10px] font-black uppercase tracking-[.14em] ${flagged || field.important ? 'text-amber-300' : 'text-slate-500'}`}>{field.label}{flagged ? ' · revisar' : ''}</span><input value={label[field.key] || ''} onChange={(e) => updateLabelField(invoiceIndex, labelIndex, field.key, e.target.value)} className={inputClass}/></label>; })}</div>
+              <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-2xl font-black">{label.description || `Etiqueta ${labelIndex + 1}`}</h3><span className={`rounded-full px-3 py-1 text-xs font-black ${label.needs_review ? 'bg-amber-400/10 text-amber-300' : 'bg-emerald-400/10 text-emerald-300'}`}>{label.excluded ? 'Excluida' : label.needs_review ? '⚠ Revisar' : '✓ Lista'}</span></div>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <button type="button" disabled={publishing || annulling} onClick={() => setLabelExcluded(invoice.photoId, labelIndex, !label.excluded)} className="rounded-xl border border-white/20 px-4 py-3 text-sm font-black text-slate-200">{label.excluded ? 'Recuperar para publicar' : 'Excluir de esta publicación'}</button>
+                {conflicts.filter((item) => item.draft_key === `${invoice.photoId}:${labelIndex}`).map((item) => <div key={item.draft_key} className="text-sm font-bold text-amber-300">
+                  <p>{item.kind === 'published' ? 'Duplicada: ya publicada y activa.' : 'Duplicada: repetida en este grupo.'}</p>
+                  {canAnnul && item.published_id ? <button type="button" disabled={publishing || annulling} onClick={() => setAnnulTarget(item)} className="mt-2 rounded-xl border border-rose-400/30 px-4 py-3 text-rose-200">Anular etiqueta publicada</button> : null}
+                </div>)}
+              </div>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{LABEL_FIELDS.map((field) => { const flagged = label.review_fields.includes(field.key); return <label key={field.key} className={field.wide ? 'sm:col-span-2' : ''}><span className={`mb-2 block text-[10px] font-black uppercase tracking-[.14em] ${flagged || field.important ? 'text-amber-300' : 'text-slate-500'}`}>{field.label}{flagged ? ' · revisar' : ''}</span><input disabled={publishing || annulling} value={label[field.key] || ''} onChange={(e) => updateLabelField(invoiceIndex, labelIndex, field.key, e.target.value)} className={inputClass}/></label>; })}</div>
               {label.extra_fields.length ? <div className="mt-4 flex flex-wrap gap-2">{label.extra_fields.map((item, index) => <span key={index} className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-300">{item.label}: {item.value}</span>)}</div> : null}
-              {label.needs_review ? <button onClick={() => confirmLabelReview(invoiceIndex, labelIndex)} disabled={!label.description.trim() || !label.lote.trim() || !label.procedencia.trim()} className="mt-5 rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm font-black text-amber-200 disabled:opacity-30">✓ Confirmar revisión</button> : null}
+              {label.needs_review ? <button onClick={() => confirmLabelReview(invoiceIndex, labelIndex)} disabled={publishing || annulling || !label.description.trim() || !label.lote.trim() || !label.procedencia.trim()} className="mt-5 rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm font-black text-amber-200 disabled:opacity-30">✓ Confirmar revisión</button> : null}
             </div>)}</div>
           </article>)}
-          <div className="rounded-[2rem] border border-white/10 bg-white/[.035] p-6 sm:flex sm:items-center sm:justify-between sm:gap-6"><div><p className="text-xs font-black uppercase tracking-[.2em] text-orange-400">Paso 3</p><h3 className="mt-2 text-2xl font-black">Publicar · {validHours} horas</h3>{!allReviewed ? <p className="mt-2 text-sm font-bold text-amber-300">{unfinishedPhotos ? `${unfinishedPhotos} fotos pendientes de lectura. ` : ''}{blockingLabels ? `${blockingLabels} ${blockingLabels === 1 ? 'etiqueta necesita' : 'etiquetas necesitan'} revisión.` : ''}</p> : <p className="mt-2 text-sm font-bold text-emerald-300">✓ Listo para publicar en tu empresa.</p>}{publishError ? <p className="mt-2 text-sm font-bold text-rose-300">{publishError}</p> : null}</div><button onClick={publishLabels} disabled={!allReviewed || publishing || analyzing} className="mt-5 w-full rounded-2xl bg-orange-500 px-6 py-4 font-black text-[#111416] disabled:bg-slate-800 disabled:text-slate-600 sm:mt-0 sm:w-auto">{publishing ? 'Publicando…' : `Publicar ${totalLabels}`}</button></div>
+          <div className="rounded-[2rem] border border-white/10 bg-white/[.035] p-6 sm:flex sm:items-center sm:justify-between sm:gap-6"><div><p className="text-xs font-black uppercase tracking-[.2em] text-orange-400">Paso 3</p><h3 className="mt-2 text-2xl font-black">Publicar · {validHours} horas</h3><p className="mt-2 text-sm text-slate-300">{totalLabels} seleccionadas · {excludedCount} excluidas</p>
+            {checkingDuplicates ? <p role="status" className="mt-2 text-sm text-slate-400">Comprobando duplicadas…</p> : null}
+            {duplicateCheckError ? <div className="mt-2 text-sm text-rose-300"><p>{duplicateCheckError}</p><button type="button" onClick={() => setCheckRevision((value) => value + 1)} className="mt-2 rounded-xl border px-4 py-3">Reintentar comprobación</button></div> : null}
+            {conflicts.length ? <div className="mt-3 text-sm font-bold text-amber-300"><p>{conflicts.length} duplicadas seleccionadas. Exclúyelas para continuar.</p><button type="button" disabled={checkingDuplicates || publishing || annulling} onClick={excludeDuplicates} className="mt-2 rounded-xl border border-amber-300/30 px-4 py-3">Excluir todas las duplicadas</button></div> : null}{!totalLabels ? <p className="mt-2 text-sm text-slate-400">No hay etiquetas seleccionadas para publicar.</p> : null}{!allReviewed ? <p className="mt-2 text-sm font-bold text-amber-300">{unfinishedPhotos ? `${unfinishedPhotos} fotos pendientes de lectura. ` : ''}{blockingLabels ? `${blockingLabels} ${blockingLabels === 1 ? 'etiqueta necesita' : 'etiquetas necesitan'} revisión.` : ''}</p> : <p className="mt-2 text-sm font-bold text-emerald-300">✓ Listo para publicar en tu empresa.</p>}{publishError ? <p className="mt-2 text-sm font-bold text-rose-300">{publishError}</p> : null}</div><button onClick={publishLabels} disabled={!allReviewed || publishing || analyzing} className="mt-5 w-full rounded-2xl bg-orange-500 px-6 py-4 font-black text-[#111416] disabled:bg-slate-800 disabled:text-slate-600 sm:mt-0 sm:w-auto">{publishing ? 'Publicando…' : `Publicar ${totalLabels}`}</button></div>
         </section> : null}
       </main>
+      {annulTarget ? <section role="dialog" aria-modal="true" aria-labelledby="annul-title" className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4">
+        <div className="w-full max-w-lg rounded-2xl border border-white/20 bg-[#111416] p-6">
+          <h2 id="annul-title" className="text-xl font-black">Anular etiqueta publicada</h2>
+          <p className="mt-3 text-slate-300">Se retirará «{annulTarget.product_name}» del visor de tu empresa y se conservará en el historial. La etiqueta de este grupo seguirá pendiente de publicación.</p>
+          {publishError ? <p role="alert" className="mt-3 text-rose-300">{publishError}</p> : null}
+          <div className="mt-5 flex flex-wrap gap-3"><button type="button" disabled={annulling} onClick={() => setAnnulTarget(null)} className="rounded-xl border px-4 py-3">Cancelar</button><button type="button" disabled={annulling} onClick={() => void annulPublishedLabel()} className="rounded-xl bg-rose-600 px-4 py-3 font-bold">{annulling ? 'Anulando…' : 'Confirmar anulación'}</button></div>
+        </div>
+      </section> : null}
     </div>
   );
 }
