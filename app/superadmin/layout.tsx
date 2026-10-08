@@ -53,7 +53,7 @@ export default function SuperAdminLayout({ children }: { children: ReactNode }) 
 
       <Link
         href="/superadmin-recuperar"
-        className="fixed bottom-4 left-4 z-[60] rounded-full border border-orange-400/20 bg-[#0c1013]/95 px-4 py-2 text-xs font-black text-orange-300 shadow-xl backdrop-blur-xl"
+        className="relative mx-4 my-4 inline-block rounded-full border border-orange-400/20 bg-[#0c1013]/95 px-4 py-2 text-xs font-black text-orange-300 lg:fixed lg:bottom-4 lg:left-4 lg:z-[60] lg:m-0 lg:shadow-xl lg:backdrop-blur-xl"
       >
         ¿Olvidaste la contraseña?
       </Link>

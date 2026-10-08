@@ -279,12 +279,12 @@ export default function SuperAdminGate({ children }: Props) {
 
   return (
     <>
-      {children}
-      <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-full border border-orange-400/20 bg-[#0c1013]/95 p-2 pl-4 shadow-2xl backdrop-blur-xl">
+      <div className="relative flex items-center justify-end gap-3 border-b border-orange-400/20 bg-[#0c1013]/95 px-4 py-2 lg:fixed lg:bottom-4 lg:right-4 lg:z-50 lg:rounded-full lg:border lg:p-2 lg:pl-4 lg:shadow-2xl lg:backdrop-blur-xl">
         <span className="hidden text-xs font-black text-orange-300 sm:block">{admin?.displayName || 'SuperAdmin'}</span>
         <span className="hidden max-w-48 truncate text-xs font-bold text-slate-500 md:block">{admin?.email}</span>
         <button type="button" onClick={logout} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-black text-slate-300">Cerrar sesión</button>
       </div>
+      {children}
     </>
   );
 }

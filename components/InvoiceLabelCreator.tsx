@@ -182,14 +182,14 @@ export default function InvoiceLabelCreator({ employeeMode = false, sourceMode =
   useEffect(() => () => { analysisController.current?.abort(); }, []);
   const snapshot = useMemo<InvoiceWork>(() => ({
     photos: photos.map(({ id, file }) => ({ id, file })), photoStates, results, analysisErrors,
-    analyzing, publishedCount, publishedExpiresAt,
-  }), [photos, photoStates, results, analysisErrors, analyzing, publishedCount, publishedExpiresAt]);
+    analyzing, publishedCount: null, publishedExpiresAt: '',
+  }), [photos, photoStates, results, analysisErrors, analyzing]);
   const draft = useCreatorDraft<InvoiceWork | LegacyPhysicalWork>(sourceMode, snapshot, (stored) => {
     // Migrate existing single-photo drafts in place without losing job IDs or edits.
     let saved: InvoiceWork;
     if ('photos' in stored) saved = stored;
     else {
-      const photo = stored.file && !stored.publishedExpiresAt ? { id: stored.jobId || crypto.randomUUID(), file: stored.file, url: '' } : null;
+      const photo = stored.file ? { id: stored.jobId || crypto.randomUUID(), file: stored.file, url: '' } : null;
       const completed = !stored.analyzing && Boolean(stored.label.description || stored.label.lote || stored.label.procedencia || stored.label.review_fields.length);
       saved = {
         photos: photo ? [{ id: photo.id, file: photo.file }] : [],
@@ -197,15 +197,16 @@ export default function InvoiceLabelCreator({ employeeMode = false, sourceMode =
           ? { [photo.id]: { state: completed ? 'done' : stored.error ? 'error' : 'analyzing' } } : {},
         results: photo && completed ? [normalizeInvoice(photo, { labels: [stored.label], warnings: stored.warnings })] : [],
         analysisErrors: stored.error ? [stored.error] : [], analyzing: stored.analyzing,
-        publishedCount: stored.publishedExpiresAt ? 1 : null, publishedExpiresAt: stored.publishedExpiresAt,
+        publishedCount: null, publishedExpiresAt: '',
       };
     }
     setPhotos(saved.photos.map((photo) => ({ ...photo, url: URL.createObjectURL(photo.file) })));
     setPhotoStates(saved.photoStates);
     setResults(saved.results);
     setAnalysisErrors(saved.analysisErrors);
-    setPublishedCount(saved.publishedCount);
-    setPublishedExpiresAt(saved.publishedExpiresAt);
+    // Publication banners are session receipts, never proof from a local draft.
+    setPublishedCount(null);
+    setPublishedExpiresAt('');
     setResumeRequested(saved.analyzing || saved.photos.some((photo) => saved.photoStates[photo.id]
       && saved.photoStates[photo.id].state !== 'done' && !saved.results.some((result) => result.photoId === photo.id)));
   });
@@ -252,6 +253,7 @@ export default function InvoiceLabelCreator({ employeeMode = false, sourceMode =
       ? '✓ Foto recibida. Ya puedes pulsar “Analizar y separar etiquetas”.'
       : `✓ ${incoming.length} ${incoming.length === 1 ? 'imagen recibida' : 'imágenes recibidas'}.`);
     setPublishedCount(null);
+    setPublishedExpiresAt('');
     setAnalysisErrors([]);
     setPublishError('');
     setPhotos((current) => [...current, ...incoming]);
@@ -285,7 +287,8 @@ export default function InvoiceLabelCreator({ employeeMode = false, sourceMode =
       await draft.flush({ ...snapshot, analyzing: true, photoStates: states });
       // Upload all selected photos independently; OCR continues on the server
       // after each upload is acknowledged, even when the browser is suspended.
-      await Promise.all(pending.map(async (photo) => {
+      let cursor = 0;
+      async function processPhoto(photo: SelectedPhoto) {
         setPhotoStates((current) => ({ ...current, [photo.id]: { state: 'analyzing' } }));
         try {
           const payload = await analyzeSavedPhoto(photo.id, sourceMode, () => compressForUpload(photo.file), !resuming, draft.scope,
@@ -296,14 +299,21 @@ export default function InvoiceLabelCreator({ employeeMode = false, sourceMode =
             .sort((a, b) => photos.findIndex((item) => item.id === a.photoId) - photos.findIndex((item) => item.id === b.photoId)));
           setPhotoStates((current) => ({ ...current, [photo.id]: { state: 'done', message: `${invoice.labels.length} ${invoice.labels.length === 1 ? 'etiqueta' : 'etiquetas'}` } }));
         } catch (error: any) {
+          if (controller.signal.aborted) return;
           const message = `${documentName} ${photos.findIndex((item) => item.id === photo.id) + 1}: ${error?.message || 'error de lectura'}`;
           setAnalysisErrors((current) => [...current, message]);
           setPhotoStates((current) => ({ ...current, [photo.id]: { state: 'error', message } }));
         }
+      }
+      // No photo-count limit: bound simultaneous OCR/compression, not the batch.
+      await Promise.all(Array.from({ length: Math.min(3, pending.length) }, async () => {
+        while (cursor < pending.length && !controller.signal.aborted) {
+          await processPhoto(pending[cursor++]);
+        }
       }));
     } catch (error: any) {
       setAnalysisErrors([error?.message || 'No se pudo guardar el trabajo antes de analizarlo.']);
-    } finally { setAnalyzing(false); }
+    } finally { if (!controller.signal.aborted) setAnalyzing(false); }
   }
 
   function updateLabelField(invoiceIndex: number, labelIndex: number, field: LabelStringKey, value: string) {
@@ -342,9 +352,17 @@ export default function InvoiceLabelCreator({ employeeMode = false, sourceMode =
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload?.error || 'No se pudieron publicar las etiquetas.');
+      if (payload?.published !== totalLabels || !Array.isArray(payload?.labels)
+        || payload.labels.length !== totalLabels || payload.labels.some((label: any) => !label?.id)
+        || payload.company_id !== draft.scope?.companyId || !payload.expires_at) {
+        throw new Error('No se ha recibido una confirmación completa. Comprueba el visor antes de volver a publicar.');
+      }
+      // Persist the cleared batch before deleting jobs or displaying success.
+      await draft.flush({ photos: [], photoStates: {}, results: [], analysisErrors: [],
+        analyzing: false, publishedCount: null, publishedExpiresAt: '' });
       void discardAnalysisJobs(photos.map((photo) => photo.id), draft.scope).catch(() => {});
       photos.forEach((photo) => URL.revokeObjectURL(photo.url));
-      setPublishedCount(payload?.published || totalLabels);
+      setPublishedCount(payload.published);
       setPublishedExpiresAt(payload?.expires_at || '');
       setPhotos([]);
       setCaptureMessage('');
@@ -367,7 +385,7 @@ export default function InvoiceLabelCreator({ employeeMode = false, sourceMode =
           <h1 className="mt-2 text-4xl font-black">{publishedCount} {publishedCount === 1 ? 'etiqueta publicada' : 'etiquetas publicadas'}</h1>
           <p className="mt-4 text-slate-400">Vigencia de {validHours} horas desde la publicación.</p>
           {publishedExpiresAt ? <p className="mt-2 text-sm font-bold text-slate-500">Hasta {new Date(publishedExpiresAt).toLocaleString('es-ES')}</p> : null}
-          <button onClick={() => setPublishedCount(null)} className="mt-7 rounded-2xl bg-orange-500 px-6 py-4 font-black text-[#111416]">{physical ? '📷 Analizar otras etiquetas' : '📷 Analizar otra factura'}</button>
+          <button onClick={() => { setPublishedCount(null); setPublishedExpiresAt(''); }} className="mt-7 rounded-2xl bg-orange-500 px-6 py-4 font-black text-[#111416]">{physical ? '📷 Analizar otras etiquetas' : '📷 Analizar otra factura'}</button>
         </section>
       </div>
     );

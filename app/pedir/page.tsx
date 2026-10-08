@@ -189,7 +189,7 @@ export default function PedirPage() {
 
   return (
     <div className="min-h-screen bg-[#ece5dd] pb-20 text-slate-900">
-      <header className="sticky top-0 z-50 bg-[#075e54] p-4 text-white shadow-lg">
+      <header className="relative lg:sticky lg:top-0 lg:z-50 bg-[#075e54] p-4 text-white shadow-lg">
         <h1 className="text-xl font-bold">Pescaderia R. Vicente</h1>
         <p className="text-xs opacity-80">Asistente de pedidos realtime</p>
       </header>
@@ -482,7 +482,7 @@ export default function PedirPage() {
 
       </main>
 
-      <footer className="fixed bottom-0 left-0 z-[100] w-full border-t border-slate-200 bg-white/80 p-4 backdrop-blur-md">
+      <footer className="relative w-full lg:fixed lg:bottom-0 lg:left-0 lg:z-[100] border-t border-slate-200 bg-white/80 p-4 backdrop-blur-md">
         <button
           onClick={enviarPedido}
           disabled={!puedePedir || enviando}

@@ -106,10 +106,11 @@ export async function analyzeSavedPhoto(
 }
 
 export async function discardAnalysisJobs(ids: string[], scope: AnalysisScope | null = null) {
-  if (!ids.length) return;
-  await fetch('/api/label-jobs', {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json', ...(await tenantAuthorizationHeader()), ...scopeHeaders(scope) },
-    body: JSON.stringify({ ids }),
-  });
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    await fetch('/api/label-jobs', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', ...(await tenantAuthorizationHeader()), ...scopeHeaders(scope) },
+      body: JSON.stringify({ ids: ids.slice(offset, offset + 100) }),
+    });
+  }
 }

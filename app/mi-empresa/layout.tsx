@@ -12,7 +12,7 @@ export default function MiEmpresaLayout({ children }: { children: ReactNode }) {
       {children}
       <Link
         href="/crear"
-        className="fixed bottom-20 right-4 z-40 rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-[#111416] shadow-2xl shadow-black/50 sm:bottom-6 sm:right-6"
+        className="relative mx-4 my-4 inline-block rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-[#111416] lg:fixed lg:bottom-6 lg:right-6 lg:z-40 lg:m-0 lg:shadow-2xl lg:shadow-black/50"
       >
         🏷️ Crear etiquetas
       </Link>

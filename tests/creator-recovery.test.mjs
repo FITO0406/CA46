@@ -20,7 +20,7 @@ function compiledModule(path, imports, globals = {}) {
   return module.exports;
 }
 
-function harness(mode, saved) {
+function harness(mode, saved, publishResponse) {
   const storage=new Map();
   let scope={ companyId:'company-A',userId:'user-A' };
   const auth={ tenantAuthorizationHeader:async()=>({ Authorization:'Bearer test-token' }) };
@@ -45,7 +45,7 @@ function harness(mode, saved) {
       analyzeSavedPhoto:async(id,kind,file,retry,scope,progress)=>{invocations.push({id,kind,file,retry,progress});return new Promise((resolve, reject) => waiters.set(id, { resolve, reject }));},
       discardAnalysisJobs:async()=>{},
     },
-  }, { fetch: async (url, init) => { assert.equal(url, '/api/publish-labels'); publications.push(JSON.parse(init.body)); return Response.json({ published: publications.at(-1).invoices.reduce((n, i) => n + i.labels.length, 0), expires_at: '2026-10-08T18:00:00Z' }); } }).default;
+  }, { fetch: async (url, init) => { assert.equal(url, '/api/publish-labels'); publications.push(JSON.parse(init.body)); const labels = publications.at(-1).invoices.flatMap(i => i.labels).map(() => ({ id: randomUUID() })); return Response.json(publishResponse ?? { published: labels.length, labels, company_id: scope.companyId, expires_at: '2026-10-08T18:00:00Z' }); } }).default;
   const Component = mode === 'invoice' ? Shared : props => React.createElement(Shared, { ...props, sourceMode: 'physical_label' });
   const key=`company-A:user-A:${mode}`;
   if(saved)storage.set(key,saved);
@@ -194,4 +194,53 @@ test('24-hour batch resumes only unfinished jobs without overwriting completed m
   assert.match(h.text(), /MANUAL-CAJA/);
   await h.unmount(); await h.mount(); assert.equal(h.invocations.length, 1);
   await h.unmount();
+});
+
+
+test('stale publication banner cannot hide a pending 24h batch or trigger publication', async () => {
+  const ids = Array.from({ length: 5 }, () => randomUUID());
+  const h = harness('physical_label', { photos: ids.map(id => ({ id, file })), photoStates: {}, results: [], analysisErrors: [], analyzing: false, publishedCount: 3, publishedExpiresAt: '2026-10-01T00:00:00Z' });
+  await h.mount();
+  assert.match(h.text(), /5 fotos seleccionadas/);
+  assert.doesNotMatch(h.text(), /Publicación completada/);
+  assert.equal(h.publications.length, 0); assert.equal(h.invocations.length, 0);
+  assert.equal(h.storage.get(h.key).publishedExpiresAt, '');
+  const picker = h.renderer.root.findAllByType('input').find(i => i.props.multiple);
+  await act(async () => picker.props.onChange({ target: { files: [file, file] }, currentTarget: { value: '' } }));
+  await h.unmount(); await h.mount();
+  assert.match(h.text(), /7 fotos seleccionadas/);
+  assert.equal(h.invocations.length, 0);
+  await act(async () => { void h.renderer.root.findAllByType('button').find(b => b.children.join('').startsWith('Analizar y separar')).props.onClick(); });
+  assert.equal(h.invocations.length, 3);
+  for (let i = 0; i < 7; i++) {
+    await act(async () => h.finish(h.invocations[i].id, { analysis: { labels: [label({ lote: `BATCH-${i}` })] } }));
+  }
+  assert.equal(h.invocations.length, 7); assert.equal(h.publications.length, 0);
+  const publish = h.renderer.root.findAllByType('button').find(b => b.children.join('').startsWith('Publicar '));
+  assert.equal(publish.props.disabled, false);
+  await act(async () => publish.props.onClick());
+  assert.equal(h.publications[0].invoices.length, 7);
+  assert.match(h.text(), /7.*etiquetas publicadas/);
+  assert.equal(h.storage.get(h.key).photos.length, 0);
+  await h.unmount(); await h.mount();
+  assert.doesNotMatch(h.text(), /Publicación completada/);
+  await h.unmount();
+});
+
+test('legacy expiry never discards an unpublished photo or its manual edits', async () => {
+  const h = harness('physical_label', { file, jobId: randomUUID(), label: label({ lote: 'CONSERVAR' }), warnings: [], analyzing: false, error: '', publishedExpiresAt: '2026-10-01T00:00:00Z' });
+  await h.mount(); assert.match(h.text(), /CONSERVAR/);
+  assert.match(h.text(), /1 foto seleccionada/);
+  assert.doesNotMatch(h.text(), /Publicación completada/);
+  assert.equal(h.publications.length, 0); await h.unmount();
+});
+
+test('incomplete publication acknowledgement preserves review and shows no success', async () => {
+  const id = randomUUID();
+  const h = harness('physical_label', { photos: [{ id, file }], photoStates: { [id]: { state: 'done' } }, results: [invoice(id)], analysisErrors: [], analyzing: false, publishedCount: null, publishedExpiresAt: '' }, { published: 1 });
+  await h.mount();
+  await act(async () => h.renderer.root.findAllByType('button').find(b => b.children.join('').startsWith('Publicar ')).props.onClick());
+  assert.match(h.text(), /No se ha recibido una confirmación completa/);
+  assert.doesNotMatch(h.text(), /Publicación completada/);
+  assert.equal(h.storage.get(h.key).photos.length, 1); await h.unmount();
 });

@@ -374,9 +374,7 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
 
   return (
     <>
-      <div className={mobileAccountInHeader
-        ? 'relative flex items-center justify-end gap-2 border-b border-white/10 bg-[#0c1013] px-4 py-2 lg:fixed lg:bottom-4 lg:right-4 lg:z-50 lg:rounded-full lg:border lg:p-2 lg:pl-4 lg:shadow-xl'
-        : 'fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full border border-white/10 bg-[#0c1013]/95 p-2 pl-4 shadow-xl backdrop-blur-xl'}>
+      <div className={`relative flex items-center justify-end gap-2 border-b border-white/10 bg-[#0c1013]/95 px-4 py-2 lg:fixed lg:bottom-4 lg:right-4 lg:z-50 lg:rounded-full lg:border lg:p-2 lg:pl-4 lg:shadow-xl ${mobileAccountInHeader ? '' : 'lg:backdrop-blur-xl'}`}>
         {tenant?.company?.name ? <span className="hidden max-w-40 truncate text-xs font-black text-orange-300 md:block">{tenant.company.name}</span> : null}
         <span className="max-w-32 truncate text-xs font-bold text-slate-400 sm:max-w-48" title={userEmail}>{userEmail}</span>
         <button type="button" onClick={handleLogout} disabled={signingOut} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-black text-slate-300">{signingOut ? 'Cerrando…' : 'Cerrar sesión'}</button>
