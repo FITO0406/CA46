@@ -66,6 +66,10 @@ export default function EtiquetasPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [query, setQuery] = useState('');
   const [selectedTagId, setSelectedTagId] = useState('');
+  const [homePinOpen, setHomePinOpen] = useState(false);
+  const [homePin, setHomePin] = useState('');
+  const [homePinError, setHomePinError] = useState('');
+  const homePinDialogRef = useRef<HTMLDialogElement>(null);
   const deferredQuery = useDeferredValue(query);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const ignoreShowcaseTapUntilRef = useRef(0);
@@ -162,6 +166,9 @@ export default function EtiquetasPage() {
   }, [mode, tags.length]);
 
   const returnToShowcase = useCallback(() => {
+    setHomePinOpen(false);
+    setHomePin('');
+    setHomePinError('');
     ignoreShowcaseTapUntilRef.current = Date.now() + 700;
     setMode('showcase');
     setQuery('');
@@ -172,6 +179,31 @@ export default function EtiquetasPage() {
     if (Date.now() < ignoreShowcaseTapUntilRef.current) return;
     setMode('search');
   }, []);
+
+  const closeHomePin = useCallback(() => {
+    setHomePinOpen(false);
+    setHomePin('');
+    setHomePinError('');
+  }, []);
+
+  useEffect(() => {
+    const dialog = homePinDialogRef.current;
+    if (!dialog) return;
+    if (homePinOpen && mode === 'search') {
+      if (!dialog.open) dialog.showModal();
+    } else if (dialog.open) {
+      dialog.close();
+    }
+  }, [homePinOpen, mode]);
+
+  const enterHome = () => {
+    if (homePin !== '1234') {
+      setHomePinError('PIN incorrecto. Inténtalo de nuevo.');
+      setHomePin('');
+      return;
+    }
+    window.location.assign('/');
+  };
 
   useEffect(() => {
     if (mode !== 'search') return;
@@ -263,19 +295,28 @@ export default function EtiquetasPage() {
   return (
     <div className="min-h-screen bg-[#080b0d] text-white">
       <header className="border-b border-white/10 bg-[#0c1013] px-5 py-4 sm:px-8">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
+        <div className="mx-auto max-w-6xl">
           <div>
             <p className="text-xs font-black uppercase tracking-[.18em] text-orange-400">Buscar etiqueta</p>
             <h1 className="mt-1 text-2xl font-black">Escribe el producto o lote</h1>
           </div>
-          <button
-            type="button"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={returnToShowcase}
-            className="rounded-xl bg-orange-500 px-4 py-3 text-sm font-black text-black"
-          >
-            Volver
-          </button>
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={returnToShowcase}
+              className="rounded-xl bg-orange-500 px-4 py-3 text-sm font-black text-black"
+            >
+              Volver
+            </button>
+            <button
+              type="button"
+              onClick={() => { setHomePin(''); setHomePinError(''); setHomePinOpen(true); }}
+              className="rounded-xl border border-orange-400/35 bg-orange-500/10 px-4 py-3 text-sm font-black text-orange-300"
+            >
+              Pantalla de inicio
+            </button>
+          </div>
         </div>
       </header>
 
@@ -319,6 +360,51 @@ export default function EtiquetasPage() {
           <div className="mt-10 rounded-2xl border border-dashed border-white/15 p-8 text-center text-slate-400">No encontramos ninguna etiqueta activa con esa búsqueda.</div>
         ) : null}
       </main>
+      <dialog
+        ref={homePinDialogRef}
+        onCancel={(event) => { event.preventDefault(); closeHomePin(); }}
+        aria-labelledby="home-pin-title"
+        aria-describedby="home-pin-description"
+        className="m-auto w-[calc(100%_-_2rem)] max-w-sm rounded-2xl border border-white/15 bg-[#0c1013] p-6 text-white backdrop:bg-black/80"
+      >
+        <form onSubmit={(event) => { event.preventDefault(); enterHome(); }}>
+          <h2 id="home-pin-title" className="text-xl font-black">Pantalla de inicio</h2>
+          <p id="home-pin-description" className="mt-2 text-sm text-slate-400">Introduce el PIN para salir del visor de etiquetas.</p>
+          <label htmlFor="home-pin" className="mt-5 block text-sm font-bold">PIN</label>
+          <input
+            id="home-pin"
+            type="password"
+            inputMode="numeric"
+            autoComplete="off"
+            autoFocus
+            maxLength={4}
+            value={homePin}
+            onChange={(event) => { setHomePin(event.target.value.replace(/\D/g, '').slice(0, 4)); setHomePinError(''); }}
+            aria-invalid={Boolean(homePinError)}
+            aria-describedby={homePinError ? 'home-pin-error' : undefined}
+            className="mt-2 w-full rounded-xl border border-orange-400/35 bg-white/[.06] px-4 py-3 text-center text-2xl tracking-[.5em] outline-none focus:border-orange-400"
+          />
+          <div className="mt-4 grid grid-cols-3 gap-2" aria-label="Teclado numérico">
+            {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Borrar', '0', '⌫'].map((key) => (
+              <button
+                key={key}
+                type="button"
+                aria-label={key === '⌫' ? 'Borrar último dígito' : key}
+                onClick={() => {
+                  setHomePin((value) => key === 'Borrar' ? '' : key === '⌫' ? value.slice(0, -1) : (value + key).slice(0, 4));
+                  setHomePinError('');
+                }}
+                className="min-h-12 rounded-xl border border-white/10 bg-white/[.06] text-lg font-bold"
+              >{key}</button>
+            ))}
+          </div>
+          {homePinError ? <p id="home-pin-error" role="alert" className="mt-3 text-sm text-red-300">{homePinError}</p> : null}
+          <div className="mt-5 flex justify-between gap-3">
+            <button type="button" onClick={closeHomePin} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-black">Cancelar</button>
+            <button type="submit" disabled={homePin.length !== 4} className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-black text-black disabled:opacity-40">Entrar</button>
+          </div>
+        </form>
+      </dialog>
     </div>
   );
 }
