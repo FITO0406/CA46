@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   if (error) return NextResponse.json({ error: 'No se pudo consultar las etiquetas.' }, { status: 500 });
   const result = (tags || []).map(tag => {
     let lot = '';
-    try { lot = String(decodeTraceability(tag.category || '').lot || ''); } catch { /* optional metadata */ }
+    try { lot = String(decodeTraceability(tag.category || '')?.lot || ''); } catch { /* optional metadata */ }
     const expired = Boolean(tag.expires_at && new Date(tag.expires_at).getTime() <= Date.now());
     return {
       id: tag.id,
