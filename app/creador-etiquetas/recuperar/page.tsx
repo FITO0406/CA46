@@ -11,7 +11,7 @@ type Label = ComponentProps<typeof TagCard>['tag'] & {
 };
 const dateText = (value: string) => new Date(value).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
 function state(label: Label) {
-  return label.annulled_at ? 'Anulada' : new Date(label.expires_at).getTime() <= Date.now() ? 'Caducada' : label.is_active ? 'Vigente' : 'Inactiva';
+  return label.annulled_at ? 'Anulada' : new Date(label.expires_at).getTime() <= Date.now() ? 'Exposición finalizada' : label.is_active ? 'Vigente' : 'Inactiva';
 }
 
 export default function RecuperarEtiquetasPage() {
@@ -25,6 +25,10 @@ export default function RecuperarEtiquetasPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [downloading, setDownloading] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [duration, setDuration] = useState('72');
+  const [until, setUntil] = useState('');
+  const [message, setMessage] = useState('');
   const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
@@ -63,6 +67,26 @@ export default function RecuperarEtiquetasPage() {
     finally { setDownloading(false); }
   }
 
+  async function restore(label: Label) {
+    setRestoring(true);
+    setError('');
+    setMessage('');
+    try {
+      const chosen = new Date(until);
+      if (duration === 'date' && (!Number.isFinite(chosen.getTime()) || chosen.getTime() <= Date.now())) throw new Error('Elige una fecha y hora futuras.');
+      const response = await fetch('/api/label-history', {
+        method: 'POST', headers: { ...await tenantAuthorizationHeader(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: label.id, duration, ...(duration === 'date' ? { until: chosen.toISOString() } : {}) }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error);
+      setSelected(payload.label);
+      setLabels(current => current.map(item => item.id === label.id ? payload.label : item));
+      setMessage(`Etiqueta devuelta al visor hasta ${dateText(payload.label.expires_at)}. Aparecerá en su próximo refresco.`);
+    } catch (failure) { setError(failure instanceof Error ? failure.message : 'No se pudo devolver la etiqueta al visor.'); }
+    finally { setRestoring(false); }
+  }
+
   return (
     <main className="min-h-screen bg-[#080b0d] px-5 py-8 text-white sm:px-8">
       <div className="mx-auto max-w-6xl">
@@ -80,18 +104,30 @@ export default function RecuperarEtiquetasPage() {
             <button onClick={() => setSelected(null)} className="mb-4 rounded-xl border border-white/15 px-4 py-3">← Resultados</button>
             <div className="mb-4 rounded-xl border border-amber-400/25 bg-amber-400/10 p-4">
               <strong>{state(selected)} · Copia del historial</strong>
-              <p className="mt-2 text-sm">Creada: {dateText(selected.created_at)} · Fin original: {dateText(selected.expires_at)}</p>
+              <p className="mt-2 text-sm">Creada: {dateText(selected.created_at)} · Fin de exposición actual: {dateText(selected.expires_at)}</p>
               {selected.annulled_reason ? <p className="mt-2 text-sm">Motivo de anulación: {selected.annulled_reason}</p> : null}
-              <p className="mt-2 text-sm">La recuperación no reinicia la vigencia ni publica la etiqueta en el visor.</p>
+              <p className="mt-2 text-sm">Volver a mostrar amplía solo la exposición en el visor. No cambia el lote, la fecha de creación ni las fechas de consumo o conservación del producto.</p>
             </div>
             <div className="[&_article_footer]:hidden"><TagCard tag={selected} /></div>
+            <section className="mt-5 rounded-2xl border border-emerald-400/25 bg-emerald-400/5 p-5">
+              <h2 className="text-xl font-black">Volver a mostrar en el visor</h2>
+              <label className="mt-4 block text-sm font-bold">Tiempo en pantalla
+                <select value={duration} disabled={restoring} onChange={event => setDuration(event.target.value)} className="mt-2 w-full rounded-xl border border-white/15 bg-[#12171a] p-3">
+                  <option value="24">Otras 24 horas</option><option value="72">Otras 72 horas</option><option value="date">Hasta una fecha y hora</option>
+                </select>
+              </label>
+              {duration === 'date' ? <label className="mt-3 block text-sm font-bold">Fecha y hora (hora de este dispositivo)<input type="datetime-local" value={until} disabled={restoring} onChange={event => setUntil(event.target.value)} className="mt-2 w-full rounded-xl border border-white/15 bg-[#12171a] p-3" /></label> : null}
+              <button disabled={restoring || Boolean(selected.annulled_at)} onClick={() => void restore(selected)} className="mt-4 rounded-xl bg-emerald-400 px-5 py-3 font-black text-black disabled:opacity-50">{restoring ? 'Devolviendo al visor…' : 'Volver a mostrar'}</button>
+              {selected.annulled_at ? <p className="mt-3 text-sm text-amber-200">Las etiquetas anuladas no se pueden volver a mostrar.</p> : null}
+              {message ? <p role="status" className="mt-3 text-sm text-emerald-200">{message}</p> : null}
+            </section>
             <button disabled={downloading} onClick={() => void download(selected)} className="mt-5 rounded-xl bg-orange-500 px-5 py-3 font-black text-black disabled:opacity-50">{downloading ? 'Preparando…' : 'Descargar etiqueta PDF'}</button>
             <p className="mt-3 text-sm text-slate-400">Abre el PDF descargado para imprimirlo.</p>
           </section>
         ) : loading ? <p role="status" className="mt-8 text-slate-400">Cargando historial…</p> : (
           <>
             <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {labels.map(label => <button key={label.id} onClick={() => setSelected(label)} className="rounded-2xl border border-white/15 bg-[#12171a] p-5 text-left">
+              {labels.map(label => <button key={label.id} onClick={() => { setSelected(label); setMessage(''); }} className="rounded-2xl border border-white/15 bg-[#12171a] p-5 text-left">
                 <p className="text-xs font-bold text-amber-300">{state(label)} · {label.source === 'physical_label' ? '24 h' : '72 h'}</p>
                 <h2 className="mt-2 text-2xl font-black">{label.product_name}</h2>
                 <p className="mt-3 text-sm text-slate-300">Lote: {decodeTraceability(label.category)?.lot || '—'}</p>

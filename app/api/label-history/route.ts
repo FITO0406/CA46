@@ -54,3 +54,32 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'No se pudo cargar el historial. Vuelve a intentarlo.' }, { status: 500, headers });
   }
 }
+
+// expires_at controls exposure only. Product dates and traceability stay untouched.
+export async function POST(request: Request) {
+  try {
+    const tenant = await tenantContextForRequest(request);
+    if (!tenant.ok) return NextResponse.json({ error: tenant.error }, { status: tenant.status, headers });
+    let input;
+    try { input = await request.json(); } catch { return NextResponse.json({ error: 'Solicitud incorrecta.' }, { status: 400, headers }); }
+    if (!input || typeof input.id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.id)) {
+      return NextResponse.json({ error: 'Identificador incorrecto.' }, { status: 400, headers });
+    }
+    const now = Date.now();
+    const until = input.duration === '24' || input.duration === '72'
+      ? now + Number(input.duration) * 3600000
+      : input.duration === 'date' && typeof input.until === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(input.until) ? Date.parse(input.until) : NaN;
+    if (!Number.isFinite(until) || until <= now) return NextResponse.json({ error: 'Elige 24 horas, 72 horas o una fecha futura.' }, { status: 400, headers });
+    const { data, error } = await supabaseAdmin.from('digital_tags')
+      .update({ is_active: true, expires_at: new Date(until).toISOString() })
+      .eq('company_id', tenant.context.companyId).eq('id', input.id)
+      .in('source', ['invoice', 'physical_label']).is('annulled_at', null)
+      .gte('created_at', new Date(now - 15 * 86400000).toISOString())
+      .select(FIELDS).maybeSingle();
+    if (error) throw error;
+    if (!data) return NextResponse.json({ error: 'No se puede mostrar esta etiqueta: está anulada o fuera del historial de tu empresa.' }, { status: 404, headers });
+    return NextResponse.json({ label: data }, { headers });
+  } catch {
+    return NextResponse.json({ error: 'No se pudo devolver la etiqueta al visor. Vuelve a intentarlo.' }, { status: 500, headers });
+  }
+}
