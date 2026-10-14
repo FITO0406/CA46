@@ -36,6 +36,27 @@ export default function MiBalanzaPage() {
       filter === 'activas' ? tag.state === 'Sin sincronizar' : tag.state !== 'Sin sincronizar')) &&
     (tag.name + ' ' + tag.lot).toLowerCase().includes(query.toLowerCase())
   ), [items, filter, query]);
+  const exportPreview = () => {
+    const safeCell = (value: string) => {
+      // Spreadsheet injection protection for externally-sourced product names.
+      const escaped = /^[=+@\-\t\r]/.test(value) ? "'" + value : value;
+      return '"' + escaped.replace(/"/g, '""') + '"';
+    };
+    const rows = [
+      ['CA46_ID', 'PRODUCTO', 'LOTE', 'TIPO', 'ESTADO', 'CADUCIDAD', 'ETIQUETA_PADRE'],
+      ...visible.map(t => [t.id, t.name, t.lot, t.type, t.state, t.expiresAt || '', t.parentTagId || '']),
+    ];
+    const csv = '\\uFEFF' + rows.map(row => row.map(safeCell).join(';')).join('\\r\\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'CA46-mi-balanza-vista-previa.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
   const totalActive = items.filter(tag => tag.state === 'Sin sincronizar').length;
   const kitchen = items.filter(tag => tag.source === 'kitchen').length;
   return (
@@ -71,10 +92,17 @@ export default function MiBalanzaPage() {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div><h2 className="text-xl font-black">Artículos candidatos a sincronización</h2>
               <p className="mt-1 text-sm text-slate-400">Vista informativa, sin escritura en ETPOS</p></div>
+            <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={exportPreview} disabled={loading || !!error || !visible.length}
+              className="rounded-xl border border-white/20 px-4 py-2 font-bold disabled:opacity-40">
+              Exportar CSV de prueba
+            </button>
             <button type="button" onClick={() => void load()} disabled={loading} className="rounded-xl bg-orange-500 px-4 py-2 font-bold text-black disabled:opacity-50">
               {loading ? 'Actualizando…' : 'Actualizar lista'}
             </button>
+            </div>
           </div>
+          <p className="text-xs text-slate-400">El CSV es únicamente una vista previa interna de CA46: NO es un fichero de importación ETPOS y no transmite nada a la balanza.</p>
           <div className="flex flex-wrap gap-3">
             <input aria-label="Buscar producto o lote" value={query} onChange={e => setQuery(e.target.value)}
               placeholder="Buscar producto o lote" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#161c24] px-4 py-3 outline-none focus:border-orange-500"/>
