@@ -220,26 +220,6 @@ export async function POST(request: Request) {
       throw transformationError;
     }
 
-    // Best-effort staging only. Kitchen creation must never depend on a
-    // configured scale or on the proposed outbox migration being deployed.
-    // Until the migration is installed this is logged as pending setup.
-    try {
-      const { stageEtposLabelSync } = await import('@/lib/etpos/stage-sync');
-      await stageEtposLabelSync({
-        companyId: access.context.companyId,
-        labelId: child.id,
-        source: 'cocina_hija',
-        productName: outputProductName,
-        lotCode: outputLot,
-        expiresAt: expiresAt.toISOString(),
-        // Staging is not approval: a mapped family, verified shelf life
-        // and explicit authorization are still required before sale.
-        approvedForSale: false,
-      });
-    } catch (syncError) {
-      console.warn('ETPOS staging unavailable; kitchen transformation preserved:', syncError);
-    }
-
     return NextResponse.json({
       ok: true,
       child,
