@@ -66,6 +66,13 @@ export default function CrearEtiquetasInicioPage() {
             <span className="mt-6 inline-flex rounded-xl border border-rose-300/30 bg-rose-300/10 px-4 py-3 text-sm font-black text-rose-200">Gestionar →</span>
           </Link>
 
+          <Link href="/creador-etiquetas/recuperar" className="rounded-[2rem] border border-amber-400/25 bg-amber-400/[.05] p-7 transition active:scale-[.99]">
+            <div className="text-5xl">🗂️</div>
+            <h2 className="mt-5 text-3xl font-black">Recuperar etiquetas</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-400">Busca y descarga etiquetas de 24 y 72 horas creadas en los últimos 15 días, con sus fechas y lotes originales.</p>
+            <span className="mt-6 inline-flex rounded-xl border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm font-black text-amber-200">Abrir historial →</span>
+          </Link>
+
           <Link href="/cocina" className="rounded-[2rem] border border-fuchsia-400/25 bg-fuchsia-400/[.05] p-7 transition active:scale-[.99]">
             <div className="text-5xl">🍲</div>
             <p className="mt-5 text-xs font-black uppercase tracking-[.18em] text-fuchsia-300">Transformación</p>
