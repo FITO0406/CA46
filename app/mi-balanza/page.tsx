@@ -46,7 +46,7 @@ export default function MiBalanzaPage() {
       ['CA46_ID', 'PRODUCTO', 'LOTE', 'TIPO', 'ESTADO', 'CADUCIDAD', 'ETIQUETA_PADRE'],
       ...visible.map(t => [t.id, t.name, t.lot, t.type, t.state, t.expiresAt || '', t.parentTagId || '']),
     ];
-    const csv = '\\uFEFF' + rows.map(row => row.map(safeCell).join(';')).join('\\r\\n');
+    const csv = '\uFEFF' + rows.map(row => row.map(safeCell).join(';')).join('\r\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
