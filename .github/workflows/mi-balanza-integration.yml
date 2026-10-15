@@ -1,0 +1,23 @@
+name: Mi balanza integration checks
+on:
+  pull_request:
+    paths:
+      - "app/mi-balanza/**"
+      - "components/CompanyAreaNav.tsx"
+      - ".github/workflows/mi-balanza-integration.yml"
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/mi-balanza-catalog.test.mjs
+      - run: npx tsc --noEmit
+      - run: npm run build
