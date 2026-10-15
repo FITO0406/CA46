@@ -1,0 +1,550 @@
+{
+  "source": "Catálogo original del usuario - PLU balanza. Códigos de referencia, no lectura de ETPOS.",
+  "items": [
+    {
+      "plu": 2,
+      "name": "ACEDIAS",
+      "unweighed": false
+    },
+    {
+      "plu": 49,
+      "name": "CAMARON",
+      "unweighed": false
+    },
+    {
+      "plu": 16,
+      "name": "CALAMAR",
+      "unweighed": false
+    },
+    {
+      "plu": 249,
+      "name": "CAMARON CAJA",
+      "unweighed": true
+    },
+    {
+      "plu": 52,
+      "name": "ACEDIAS GG",
+      "unweighed": false
+    },
+    {
+      "plu": 48,
+      "name": "CANGREJO",
+      "unweighed": false
+    },
+    {
+      "plu": 70,
+      "name": "ACHOVA",
+      "unweighed": false
+    },
+    {
+      "plu": 43,
+      "name": "CAÑAILLAS",
+      "unweighed": false
+    },
+    {
+      "plu": 68,
+      "name": "ADOBO CASERO",
+      "unweighed": false
+    },
+    {
+      "plu": 39,
+      "name": "CAZON",
+      "unweighed": false
+    },
+    {
+      "plu": 44,
+      "name": "ALMEJAS MARINERAS",
+      "unweighed": false
+    },
+    {
+      "plu": 19,
+      "name": "CHIPIRON PATAGONICO",
+      "unweighed": false
+    },
+    {
+      "plu": 29,
+      "name": "ANCHOAS",
+      "unweighed": false
+    },
+    {
+      "plu": 219,
+      "name": "CHIPIRON PATAG BANDEJA",
+      "unweighed": true
+    },
+    {
+      "plu": 4,
+      "name": "ANILLAS DE POTON",
+      "unweighed": false
+    },
+    {
+      "plu": 10,
+      "name": "CHIRLA",
+      "unweighed": false
+    },
+    {
+      "plu": 14,
+      "name": "ATUN",
+      "unweighed": false
+    },
+    {
+      "plu": 6,
+      "name": "CHOCO LIMPIO",
+      "unweighed": false
+    },
+    {
+      "plu": 201,
+      "name": "ACEDIA CAJA",
+      "unweighed": true
+    },
+    {
+      "plu": 53,
+      "name": "CHOCO PP",
+      "unweighed": false
+    },
+    {
+      "plu": 309,
+      "name": "ALBONDIGAS CHO/GAM",
+      "unweighed": true
+    },
+    {
+      "plu": 33,
+      "name": "CHOCO SUCIO",
+      "unweighed": false
+    },
+    {
+      "plu": 78,
+      "name": "CIGALA Nº1",
+      "unweighed": true
+    },
+    {
+      "plu": 79,
+      "name": "CIGALA Nº2",
+      "unweighed": true
+    },
+    {
+      "plu": 45,
+      "name": "CONCHA FINA",
+      "unweighed": false
+    },
+    {
+      "plu": 35,
+      "name": "BACALADILLAS",
+      "unweighed": false
+    },
+    {
+      "plu": 42,
+      "name": "COQUINA",
+      "unweighed": false
+    },
+    {
+      "plu": 62,
+      "name": "BERBERECHO",
+      "unweighed": false
+    },
+    {
+      "plu": 41,
+      "name": "CORVINA",
+      "unweighed": false
+    },
+    {
+      "plu": 65,
+      "name": "BIGARO",
+      "unweighed": false
+    },
+    {
+      "plu": 221,
+      "name": "CABALLA AHUMADA",
+      "unweighed": true
+    },
+    {
+      "plu": 67,
+      "name": "BONITO",
+      "unweighed": false
+    },
+    {
+      "plu": 243,
+      "name": "CAÑAILLAS MALLA",
+      "unweighed": true
+    },
+    {
+      "plu": 3,
+      "name": "BOQUERON",
+      "unweighed": false
+    },
+    {
+      "plu": 242,
+      "name": "COQUINA MALLA",
+      "unweighed": true
+    },
+    {
+      "plu": 32,
+      "name": "BRECAS",
+      "unweighed": false
+    },
+    {
+      "plu": 306,
+      "name": "CROQUETAS MER/GAM",
+      "unweighed": true
+    },
+    {
+      "plu": 203,
+      "name": "BOQUERON CAJA",
+      "unweighed": true
+    },
+    {
+      "plu": 310,
+      "name": "CROQUETAS POLL/BAC/JAM",
+      "unweighed": true
+    },
+    {
+      "plu": 21,
+      "name": "CABALLAS",
+      "unweighed": false
+    },
+    {
+      "plu": 7,
+      "name": "DORADA",
+      "unweighed": false
+    },
+    {
+      "plu": 15,
+      "name": "CAELLA",
+      "unweighed": false
+    },
+    {
+      "plu": 37,
+      "name": "ESCOLAR NEGRO",
+      "unweighed": false
+    },
+    {
+      "plu": 34,
+      "name": "FANECAS",
+      "unweighed": false
+    },
+    {
+      "plu": 27,
+      "name": "HUEVAS COCIDAS",
+      "unweighed": false
+    },
+    {
+      "plu": 17,
+      "name": "FILETE DE BACALAO",
+      "unweighed": false
+    },
+    {
+      "plu": 20,
+      "name": "HUEVAS FRESCAS",
+      "unweighed": false
+    },
+    {
+      "plu": 301,
+      "name": "FILETE DE MERLUZA",
+      "unweighed": false
+    },
+    {
+      "plu": 50,
+      "name": "HUEVOS DE CHOCOS",
+      "unweighed": false
+    },
+    {
+      "plu": 30,
+      "name": "FILETE DE ROSADA",
+      "unweighed": false
+    },
+    {
+      "plu": 36,
+      "name": "FILETE PERCA",
+      "unweighed": false
+    },
+    {
+      "plu": 24,
+      "name": "JUREL",
+      "unweighed": false
+    },
+    {
+      "plu": 57,
+      "name": "GALERAS",
+      "unweighed": false
+    },
+    {
+      "plu": 58,
+      "name": "GALERAS DE CORAL",
+      "unweighed": false
+    },
+    {
+      "plu": 209,
+      "name": "GAMBA CAJA OFERTA",
+      "unweighed": true
+    },
+    {
+      "plu": 26,
+      "name": "LANGOSTINOS COCIDOS",
+      "unweighed": false
+    },
+    {
+      "plu": 200,
+      "name": "GAMBA DE COCER",
+      "unweighed": true
+    },
+    {
+      "plu": 326,
+      "name": "LANGOSTINOS CRUDOS",
+      "unweighed": true
+    },
+    {
+      "plu": 9,
+      "name": "GAMBA FRESCA",
+      "unweighed": false
+    },
+    {
+      "plu": 75,
+      "name": "LANGOSTINOS TIGRE Nº1",
+      "unweighed": true
+    },
+    {
+      "plu": 59,
+      "name": "GAMBA GORDA",
+      "unweighed": false
+    },
+    {
+      "plu": 76,
+      "name": "LANGOSTINOS TIGRE Nº2",
+      "unweighed": true
+    },
+    {
+      "plu": 71,
+      "name": "GAMBA Nº1",
+      "unweighed": true
+    },
+    {
+      "plu": 77,
+      "name": "LANGOSTINOS TIGRE Nº3",
+      "unweighed": true
+    },
+    {
+      "plu": 72,
+      "name": "GAMBA Nº2",
+      "unweighed": true
+    },
+    {
+      "plu": 12,
+      "name": "LENGUAO",
+      "unweighed": false
+    },
+    {
+      "plu": 73,
+      "name": "GAMBA Nº3",
+      "unweighed": true
+    },
+    {
+      "plu": 307,
+      "name": "LOMO BACALAO ISLANDIA",
+      "unweighed": false
+    },
+    {
+      "plu": 74,
+      "name": "GAMBA Nº4",
+      "unweighed": true
+    },
+    {
+      "plu": 51,
+      "name": "LOMO DE BACALAO",
+      "unweighed": false
+    },
+    {
+      "plu": 304,
+      "name": "GAMBA REBOZADA",
+      "unweighed": true
+    },
+    {
+      "plu": 300,
+      "name": "LOMO DE MERLUZA",
+      "unweighed": false
+    },
+    {
+      "plu": 47,
+      "name": "GAMBON",
+      "unweighed": false
+    },
+    {
+      "plu": 8,
+      "name": "LUBINA",
+      "unweighed": false
+    },
+    {
+      "plu": 247,
+      "name": "GAMBON CAJA",
+      "unweighed": true
+    },
+    {
+      "plu": 40,
+      "name": "MARRAJO",
+      "unweighed": false
+    },
+    {
+      "plu": 31,
+      "name": "MEJILLON BOUCHOT",
+      "unweighed": false
+    },
+    {
+      "plu": 28,
+      "name": "MEJILLON GALLEGO",
+      "unweighed": false
+    },
+    {
+      "plu": 228,
+      "name": "MEJILLON TARRINA",
+      "unweighed": true
+    },
+    {
+      "plu": 38,
+      "name": "MELVA",
+      "unweighed": false
+    },
+    {
+      "plu": 308,
+      "name": "MIGA BACALAO ISLANDIA",
+      "unweighed": true
+    },
+    {
+      "plu": 61,
+      "name": "MORRILLO",
+      "unweighed": false
+    },
+    {
+      "plu": 254,
+      "name": "NAVAJA MALLA",
+      "unweighed": true
+    },
+    {
+      "plu": 64,
+      "name": "RAPE ENTERO",
+      "unweighed": false
+    },
+    {
+      "plu": 54,
+      "name": "NAVAJAS",
+      "unweighed": false
+    },
+    {
+      "plu": 80,
+      "name": "RAPE COLA",
+      "unweighed": false
+    },
+    {
+      "plu": 66,
+      "name": "NECORA",
+      "unweighed": false
+    },
+    {
+      "plu": 400,
+      "name": "OFERTA FIN DE SEMANA",
+      "unweighed": true
+    },
+    {
+      "plu": 13,
+      "name": "SALMON",
+      "unweighed": false
+    },
+    {
+      "plu": 69,
+      "name": "ORTIGILLAS",
+      "unweighed": true
+    },
+    {
+      "plu": 18,
+      "name": "SALMONETE",
+      "unweighed": false
+    },
+    {
+      "plu": 23,
+      "name": "SARDINAS CORTAS",
+      "unweighed": false
+    },
+    {
+      "plu": 22,
+      "name": "SARDINAS DE ASAR",
+      "unweighed": false
+    },
+    {
+      "plu": 229,
+      "name": "PANDERETA ANCHOA",
+      "unweighed": true
+    },
+    {
+      "plu": 46,
+      "name": "PATAS CON BOCA",
+      "unweighed": false
+    },
+    {
+      "plu": 302,
+      "name": "PAVIAS DE BACALAO",
+      "unweighed": true
+    },
+    {
+      "plu": 25,
+      "name": "TIRAS DE POTA",
+      "unweighed": false
+    },
+    {
+      "plu": 303,
+      "name": "PAVIAS DE MERLUZA",
+      "unweighed": true
+    },
+    {
+      "plu": 305,
+      "name": "TORTILLITAS DE CAMARON",
+      "unweighed": true
+    },
+    {
+      "plu": 1,
+      "name": "PESCADA",
+      "unweighed": false
+    },
+    {
+      "plu": 55,
+      "name": "PESCADA MULATA",
+      "unweighed": false
+    },
+    {
+      "plu": 100,
+      "name": "PESCAITO FRITO ( HARINA )",
+      "unweighed": true
+    },
+    {
+      "plu": 11,
+      "name": "PEZ ESPADA",
+      "unweighed": false
+    },
+    {
+      "plu": 5,
+      "name": "PIJOTAS",
+      "unweighed": false
+    },
+    {
+      "plu": 60,
+      "name": "POTA FRESCA",
+      "unweighed": false
+    },
+    {
+      "plu": 56,
+      "name": "PULPO COCIDO",
+      "unweighed": false
+    },
+    {
+      "plu": 256,
+      "name": "PULPO COCIDO PAQUETE",
+      "unweighed": true
+    },
+    {
+      "plu": 63,
+      "name": "PUNTILLITAS",
+      "unweighed": false
+    },
+    {
+      "plu": 81,
+      "name": "PATA C/B ESPECIAL",
+      "unweighed": false
+    }
+  ]
+}
