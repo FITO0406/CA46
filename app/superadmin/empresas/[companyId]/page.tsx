@@ -130,6 +130,7 @@ export default function SuperAdminCompanyDetailPage() {
   const [changingStatus, setChangingStatus] = useState<Company['status'] | null>(null);
   const [savingGrant, setSavingGrant] = useState(false);
   const [grantPlan, setGrantPlan] = useState<PlanId>('gratis');
+  const [grantTrial15, setGrantTrial15] = useState(false);
   const [grantIndefinite, setGrantIndefinite] = useState(true);
   const [grantEndsAt, setGrantEndsAt] = useState('');
   const [grantNotes, setGrantNotes] = useState('');
@@ -284,6 +285,7 @@ export default function SuperAdminCompanyDetailPage() {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           active: true,
+          trialDays: grantTrial15 ? 15 : undefined,
           plan: grantPlan,
           indefinite: grantIndefinite,
           endsAt: grantIndefinite ? null : grantEndsAt,
@@ -442,15 +444,16 @@ export default function SuperAdminCompanyDetailPage() {
                 <div>
                   <span className="mb-2 block text-[11px] font-black uppercase tracking-[.14em] text-slate-500">Duración</span>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    <button type="button" onClick={() => setGrantIndefinite(true)} className={`rounded-xl border px-4 py-3 text-sm font-black ${grantIndefinite ? 'border-sky-400/35 bg-sky-400/10 text-sky-300' : 'border-white/10 bg-black/20 text-slate-400'}`}>Indefinida · de por vida</button>
-                    <button type="button" onClick={() => setGrantIndefinite(false)} className={`rounded-xl border px-4 py-3 text-sm font-black ${!grantIndefinite ? 'border-sky-400/35 bg-sky-400/10 text-sky-300' : 'border-white/10 bg-black/20 text-slate-400'}`}>Hasta una fecha</button>
+                    <button type="button" onClick={() => { setGrantTrial15(true); setGrantIndefinite(false); setGrantEndsAt(new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10)); }} className="rounded-xl border border-sky-400/30 px-4 py-3 text-sm font-black text-sky-300">Preparar prueba de 15 días</button>
+                    <button type="button" onClick={() => { setGrantTrial15(false); setGrantIndefinite(true); }} className={`rounded-xl border px-4 py-3 text-sm font-black ${grantIndefinite ? 'border-sky-400/35 bg-sky-400/10 text-sky-300' : 'border-white/10 bg-black/20 text-slate-400'}`}>Indefinida · hasta retirarla</button>
+                    <button type="button" onClick={() => { setGrantTrial15(false); setGrantIndefinite(false); }} className={`rounded-xl border px-4 py-3 text-sm font-black ${!grantIndefinite ? 'border-sky-400/35 bg-sky-400/10 text-sky-300' : 'border-white/10 bg-black/20 text-slate-400'}`}>Hasta una fecha</button>
                   </div>
                 </div>
 
                 {!grantIndefinite ? (
                   <label>
                     <span className="mb-2 block text-[11px] font-black uppercase tracking-[.14em] text-slate-500">Fecha de fin</span>
-                    <input type="date" value={grantEndsAt} onChange={(e) => setGrantEndsAt(e.target.value)} className={inputClass} />
+                    <input type="date" value={grantEndsAt} onChange={(e) => { setGrantTrial15(false); setGrantEndsAt(e.target.value); }} className={inputClass} />
                   </label>
                 ) : null}
 

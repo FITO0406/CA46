@@ -27,6 +27,10 @@ export function normalizeAccessFeatures(value: unknown): Record<AccessFeatureKey
 
 export function accessOverrideIsEffective(row: any, now = Date.now()) {
   if (!row?.is_active) return false;
+  if (row.starts_at) {
+    const start = new Date(row.starts_at).getTime();
+    if (!Number.isFinite(start) || start > now) return false;
+  }
   if (!row?.ends_at) return true;
   const end = new Date(row.ends_at).getTime();
   return Number.isFinite(end) && end > now;

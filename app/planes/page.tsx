@@ -67,6 +67,7 @@ export default function PlanesPage() {
       <main className="relative mx-auto max-w-7xl px-5 pb-16 pt-10 sm:px-8 sm:pt-14">
         <section className="mx-auto max-w-4xl text-center">
           <span className="inline-flex rounded-full border border-orange-400/20 bg-orange-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[.22em] text-orange-300">CA46 · SaaS para trazabilidad alimentaria</span>
+          <p className="mt-6 rounded-xl border border-orange-400/30 p-4 text-orange-200">Piloto gratuito: aún no se contratan planes de pago. Solicita una demostración de 15 días o una cortesía; los precios mostrados son orientativos para la futura fase comercial.</p>
           <h1 className="mt-6 text-balance text-4xl font-black tracking-[-.05em] sm:text-6xl lg:text-7xl">Un plan para cada etapa de tu negocio</h1>
           <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg">Desde una prueba gratuita hasta una implantación para varios centros. Los cuatro planes comparten la misma base CA46 y crecen contigo.</p>
         </section>

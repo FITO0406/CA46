@@ -7,17 +7,10 @@ export const dynamic = 'force-dynamic';
 
 type PlanId = 'gratis' | 'autonomo' | 'empresa' | 'personalizado';
 
-const VALID_PLANS = new Set<PlanId>(['gratis', 'autonomo', 'empresa', 'personalizado']);
-
 function bearerToken(request: Request) {
   const authorization = request.headers.get('authorization') || '';
   const match = authorization.match(/^Bearer\s+(.+)$/i);
   return match?.[1]?.trim() || '';
-}
-
-function cleanPlan(value: unknown): PlanId {
-  const candidate = String(value || '').toLowerCase() as PlanId;
-  return VALID_PLANS.has(candidate) ? candidate : 'gratis';
 }
 
 function slugify(value: string) {
@@ -113,8 +106,17 @@ export async function GET(request: Request) {
     if (error) return NextResponse.json({ error: 'No se pudo consultar el tipo de cuenta.' }, { status: 503 });
     accountKind = admin?.is_active ? 'superadmin' : 'unlinked';
   }
+  let legalRequired = false;
+  if (result.tenant && process.env.CA46_REQUIRE_LEGAL_ACCEPTANCE === 'true') {
+    try {
+      const { companyContractAccepted } = await import('@/lib/legal-contract-server');
+      legalRequired = !await companyContractAccepted(result.tenant.company.id);
+    } catch {
+      return NextResponse.json({ error: 'No se pudo verificar el contrato. Puedes acceder a soporte y derechos.' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+    }
+  }
   return NextResponse.json(
-    { ok: true, userId: auth.user.id, email: auth.user.email, accountKind, tenant: result.tenant },
+    { ok: true, userId: auth.user.id, email: auth.user.email, accountKind, tenant: result.tenant, legalRequired },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }
@@ -149,7 +151,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const plan = cleanPlan(body?.plan || metadata.plan);
+  const plan = 'gratis'; // Trials and gifts are granted only by SuperAdmin.
 
   const { data: ownedCompany, error: ownedError } = await supabaseAdmin
     .from('companies')

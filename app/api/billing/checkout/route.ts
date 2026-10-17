@@ -16,6 +16,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: access.error }, { status: access.status, headers: { 'Cache-Control': 'no-store' } });
     }
 
+    if (process.env.CA46_BILLING_ENABLED !== 'true') return NextResponse.json({ error: 'CA46 está en piloto gratuito. No hay contratación de pago activada.', code: 'BILLING_DISABLED' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+
     const complimentary = await getCompanyAccessOverride(access.context.companyId);
     if (complimentary?.effective) {
       return NextResponse.json(

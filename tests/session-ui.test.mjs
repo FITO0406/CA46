@@ -9,11 +9,11 @@ import ts from 'typescript';
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 function componentAt(path, imports, globals = {}) {
-  const module = { exports: {} };
+  const loadedModule = { exports: {} };
   const compiled = ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
   }).outputText;
-  runInNewContext(compiled, { module, exports: module.exports, console, AbortController,
+  runInNewContext(compiled, { module: loadedModule, exports: loadedModule.exports, console, AbortController,
     window: { setTimeout, clearTimeout, location: { replace() {} } }, ...globals,
     require: name => {
       if (name === 'react') return React;
@@ -22,7 +22,7 @@ function componentAt(path, imports, globals = {}) {
       assert.ok(imports[name], name); return imports[name];
     },
   });
-  return module.exports.default;
+  return loadedModule.exports.default;
 }
 const jsx = await import('react/jsx-runtime');
 const session = { user: { id: 'user-A', email: 'admin@example.com', user_metadata: {} }, access_token: 'test' };

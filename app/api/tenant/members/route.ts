@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { appOrigin } from '@/lib/app-origin';
 import { supabaseAdmin } from '@/lib/supabase';
 import { tenantContextForRequest } from '@/lib/tenant-auth-server';
 
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
     // The URL carries a one-use Auth invitation token, never a company ID supplied by the employee.
     let userId = identities?.[0]?.user_id as string | undefined;
     let invitationUrl: string | null = null;
-    const origin = process.env.NEXT_PUBLIC_SITE_URL || 'https://ca-46.vercel.app';
+    const origin = appOrigin();
     if (!userId || !identities?.[0]?.confirmed) {
       const { data, error } = await supabaseAdmin.auth.admin.generateLink({ type: 'invite', email, options: { data: { signup_source: 'ca46_employee' } } });
       if (error || !data.user || !data.properties?.hashed_token) return reply({ error: 'No se pudo generar la invitación. Si el correo ya está registrado, entra con su contraseña.' }, 409);

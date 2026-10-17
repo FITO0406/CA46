@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { syncCompanyDrive } from '@/lib/company-drive-sync';
 import { tenantContextForRequest } from '@/lib/tenant-auth-server';
+import { publicScreenTag } from '@/lib/public-screen-tag';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -74,7 +75,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from('digital_tags')
-      .select('id, drive_file_id, product_name, origin, category, is_active, created_at, expires_at, source, status')
+      .select('id, product_name, origin, category, is_active, created_at, expires_at, source, status')
       .eq('company_id', companyId)
       .eq('is_active', true)
       .gte('expires_at', nowIso)
@@ -82,7 +83,7 @@ export async function GET(request: Request) {
 
     if (error) throw error;
 
-    return NextResponse.json(data || [], {
+    return NextResponse.json((data || []).map(publicScreenTag), {
       status: 200,
       headers: { 'Cache-Control': 'no-store' },
     });

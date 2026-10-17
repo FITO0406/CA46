@@ -5,13 +5,13 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 
 function moduleAt(path, imports, globals = {}) {
-  const module = { exports: {} };
+  const loadedModule = { exports: {} };
   const source = ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  runInNewContext(source, { module, exports: module.exports, console, ...globals,
+  runInNewContext(source, { module: loadedModule, exports: loadedModule.exports, console, process: { env: {} }, ...globals,
     require: name => { assert.ok(imports[name], name); return imports[name]; } });
-  return module.exports;
+  return loadedModule.exports;
 }
 
 const fixtures = {

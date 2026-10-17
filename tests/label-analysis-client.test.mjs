@@ -5,7 +5,7 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 
 function harness(fetch) {
-  const module = { exports: {} }, stages = [], waits = [];
+  const loadedModule = { exports: {} }, stages = [], waits = [];
   const window = new EventTarget(), document = new EventTarget();
   document.visibilityState = 'visible';
   const navigator = { onLine: true };
@@ -14,14 +14,14 @@ function harness(fetch) {
   const source = ts.transpileModule(readFileSync(new URL('../lib/label-analysis-client.ts', import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  runInNewContext(source, { module, exports: module.exports, File, FormData, AbortSignal, Error, window, document, navigator,
+  runInNewContext(source, { module: loadedModule, exports: loadedModule.exports, File, FormData, AbortSignal, Error, window, document, navigator,
     fetch, setTimeout(cb,delay) { const id=++timerId; waits.push(delay); timers.set(id,cb); return id; },
     clearTimeout(id) { timers.delete(id); },
     require(name) { assert.equal(name,'@/lib/tenant-company-config'); return { tenantAuthorizationHeader:async()=>({ Authorization:'Bearer synthetic-token' }) }; },
   });
   return { stages, waits, timers, window, document, navigator,
     run(file = new File(['photo'],'photo.jpg'), retry = false, signal) {
-      return module.exports.analyzeSavedPhoto('photo-id','invoice',file,retry,{ companyId:'A',userId:'U' },stage=>stages.push(stage),signal);
+      return loadedModule.exports.analyzeSavedPhoto('photo-id','invoice',file,retry,{ companyId:'A',userId:'U' },stage=>stages.push(stage),signal);
     },
     async tick() { await new Promise(r=>setImmediate(r)); },
     wake() { window.dispatchEvent(new Event('online')); },

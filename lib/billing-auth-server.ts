@@ -39,6 +39,10 @@ export async function billingAdminContextForRequest(request: Request): Promise<
   if (!company) return { ok: false, status: 404, error: 'Empresa no encontrada.' };
   if (company.status === 'cancelled') return { ok: false, status: 403, error: 'La empresa está cancelada.' };
 
+  if (process.env.CA46_REQUIRE_LEGAL_ACCEPTANCE === 'true') {
+    const { companyContractAccepted } = await import('@/lib/legal-contract-server');
+    if (!await companyContractAccepted(company.id)) return { ok: false, status: 428, error: 'El administrador debe aceptar el contrato en /aceptar-condiciones.' };
+  }
   return {
     ok: true,
     context: {

@@ -10,14 +10,14 @@ const jsx = await import('react/jsx-runtime');
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 
 function compiledModule(path, imports, globals = {}) {
-  const module={ exports:{} };
+  const loadedModule ={ exports:{} };
   const compiled=ts.transpileModule(readFileSync(new URL(path,import.meta.url),'utf8'),{ compilerOptions:{ module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true } }).outputText;
-  runInNewContext(compiled,{ module,exports:module.exports,console,crypto:{ randomUUID },File,AbortController,
+  runInNewContext(compiled,{ module: loadedModule,exports:loadedModule.exports,console,crypto:{ randomUUID },File,AbortController,
     URL:{ createObjectURL:()=>`blob:${randomUUID()}`,revokeObjectURL(){} },
     window:{ scrollTo(){} },...globals,
     require:name=>{ if(name==='react')return React; if(name==='react/jsx-runtime')return jsx; assert.ok(imports[name],name); return imports[name]; },
   });
-  return module.exports;
+  return loadedModule.exports;
 }
 
 function harness(mode, saved, publishResponse, duplicateReply = () => ({ conflicts: [], canAnnul: false })) {
