@@ -9,7 +9,7 @@
 - Keep existing users and businesses in the same Supabase project when connecting the future domain.
 
 ## Confirmed pilot policy
-Initial free pilot, permanent free base plan, standard 15-day trial and fixed-term or indefinite courtesies granted by SuperAdmin. No automatic charging when Stripe is enabled. Demo request -> contact with Fito -> customer creates/confirms own account -> SuperAdmin grants the trial. The demo page prepares an email; the customer must send it. Provider identity remains undecided, as confirmed on 17 October 2026.
+Initial free pilot, permanent free base plan, standard 15-day trial and fixed-term or indefinite courtesies granted by SuperAdmin. No automatic charging when Stripe is enabled. Demo request -> contact with Fito -> customer creates/confirms own account -> SuperAdmin grants the trial. The demo page prepares an email; the customer must send it. Updated owner decision on 17 October 2026: domain registration and pilot provider preparation under Felipe Sánchez Romero as a self-employed person. Fiscal ID/address and final legal approval remain pending; future incorporation does not automatically transfer the domain, contracts or intellectual property.
 
 ## Implementation
 See `2026-10-17-launch-runbook.md` for the new pages, additive migration, acceptance evidence, request queue, bounded export, testing, activation sequence and unresolved launch blockers. This is a review implementation, not a production compliance certification.

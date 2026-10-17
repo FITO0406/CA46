@@ -5,7 +5,8 @@ Estado: versión de revisión. No equivale a autorización de publicación ni a 
 ## Decisiones confirmadas
 
 - Marca CA46; titulares indicados: Felipe Sánchez Romero y María Rosario Vicente Galán.
-- El prestador fiscal del SaaS se decidirá después (confirmado por el propietario el 17 de octubre de 2026). No confundir titularidad intelectual, titular del dominio y prestador del servicio.
+- Actualización del propietario, 17 de octubre de 2026: dominio a nombre de Felipe Sánchez Romero y preparación del piloto a su nombre como autónomo. NIF, domicilio y demás datos definitivos siguen pendientes. La titularidad intelectual indicada de Felipe Sánchez Romero y María Rosario Vicente Galán se conserva.
+- La futura sociedad requerirá una revisión documentada de titular del dominio, contratos y funciones en protección de datos; no se produce una transmisión automática por constituirla o participar en ella. El piloto gratuito no elimina las obligaciones aplicables al tratamiento de datos o al prestador.
 - Piloto gratuito. Plan base gratuito y cortesías superiores gestionadas por SuperAdmin, por 15 días, hasta una fecha o indefinidamente hasta retirarlas. Al vencer, vuelve el plan base; no empieza un cargo ni se borran datos por este cambio.
 - Demo: solicitud por correo → contacto con Fito → alta y confirmación del cliente → concesión manual. La página prepara el correo; el usuario debe enviarlo. No es un sistema de recepción automática.
 - Stripe y balanza quedan fuera de activación inicial. La tienda, pedidos y recogida permanecen conservados en componentes; sus rutas se redirigen temporalmente al inicio antes de montar los layouts.

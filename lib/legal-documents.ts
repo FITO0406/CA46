@@ -1,9 +1,9 @@
-export const LEGAL_VERSION = '2026-10-17-pilot-v1';
+export const LEGAL_VERSION = '2026-10-17-pilot-v2';
 export type LegalSection = { title: string; paragraphs: string[] };
 export type LegalDocument = { slug: string; title: string; sections: LegalSection[] };
 export function legalProfile() {
   const provider = {
-    name: (process.env.CA46_LEGAL_NAME || '').trim(),
+    name: (process.env.CA46_LEGAL_NAME || 'Felipe Sánchez Romero').trim(),
     taxId: (process.env.CA46_LEGAL_TAX_ID || '').trim(),
     address: (process.env.CA46_LEGAL_ADDRESS || '').trim(),
     registry: (process.env.CA46_LEGAL_REGISTRY || '').trim(),
@@ -16,7 +16,9 @@ export function legalProfile() {
 }
 export function legalDocuments(): LegalDocument[] {
   const p = legalProfile();
-  const identity = p.name ? p.name + ', NIF ' + p.taxId + ', domicilio: ' + p.address : 'La identidad del prestador y sus datos fiscales están pendientes de confirmar. Este borrador no debe utilizarse como documentación contractual definitiva.';
+  const identity = p.name && p.taxId && p.address
+    ? p.name + ', NIF ' + p.taxId + ', domicilio: ' + p.address
+    : 'Prestador previsto para el piloto: ' + (p.name || 'pendiente de confirmar') + '. Faltan datos fiscales o domicilio por completar. Este documento sigue siendo un borrador y no debe utilizarse como documentación contractual definitiva.';
   return [
     { slug: 'aviso-legal', title: 'Aviso legal', sections: [
       { title: 'Prestador y contacto', paragraphs: [identity, 'Contacto del servicio: ' + p.email, p.registry ? 'Datos registrales: ' + p.registry : 'Los datos de inscripción registral se incorporarán cuando sean aplicables a la forma jurídica elegida.'] },
