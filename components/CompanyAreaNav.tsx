@@ -11,6 +11,7 @@ const items = [
   { href: '/facturacion', label: 'Facturación', matches: ['/facturacion'] },
   { href: '/mi-merca', label: 'Mi Merca', matches: ['/mi-merca', '/gesico'] },
   { href: '/bancos', label: 'Bancos', matches: ['/bancos'] },
+  { href: '/datos-y-solicitudes', label: 'Datos y soporte', matches: ['/datos-y-solicitudes'] },
   { href: '/seguridad', label: 'Seguridad', matches: ['/seguridad'] },
 ] as const;
 

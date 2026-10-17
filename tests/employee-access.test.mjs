@@ -4,10 +4,10 @@ import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 function moduleAt(path, imports = {}) {
-  const module = { exports: {} };
+  const loadedModule = { exports: {} };
   const compiled = ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-  runInNewContext(compiled, { module, exports: module.exports, URL, process: { env: {} }, require: name => { assert.ok(imports[name], name); return imports[name]; } });
-  return module.exports;
+  runInNewContext(compiled, { module: loadedModule, exports: loadedModule.exports, URL, process: { env: {} }, require: name => { assert.ok(imports[name], name); return imports[name]; } });
+  return loadedModule.exports;
 }
 const permissions = moduleAt('../lib/employee-access.ts');
 async function access(path, method, role = 'empleado', active = true, confirmed = true, companyStatus = 'active') {
@@ -46,6 +46,7 @@ test('administrator keeps configuration access', async () => assert.equal((await
 async function membersRoute(method, body, role = 'admin_empresa', identities = [], rpcResult = true) {
   const calls = [];
   const route = moduleAt('../app/api/tenant/members/route.ts', {
+    '@/lib/app-origin': { appOrigin: () => 'https://ca46.test' },
     'next/server': { NextResponse: { json: (body, init) => Response.json(body, init) } },
     '@/lib/tenant-auth-server': { tenantContextForRequest: async () => ({ ok: true, context: { companyId: 'company-A', userId: 'admin-A', role } }) },
     '@/lib/supabase': { supabaseAdmin: {

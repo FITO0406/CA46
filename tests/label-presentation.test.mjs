@@ -8,15 +8,15 @@ import ts from 'typescript';
 const jsx = await import('react/jsx-runtime');
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const trace = { description: 'Merluza', lot: 'L-1', origin: 'Atlántico', extraFields: [], consumerNotice: 'Etiqueta provisional · factura pendiente · Consumir preferentemente en 3 días' };
-const module = { exports: {} };
+const loadedModule = { exports: {} };
 const compiled = ts.transpileModule(readFileSync(new URL('../components/TagCard.tsx', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
-runInNewContext(compiled, { module, exports: module.exports, Date, window: { setInterval, clearInterval }, require: name => {
+runInNewContext(compiled, { module: loadedModule, exports: loadedModule.exports, Date, window: { setInterval, clearInterval }, require: name => {
   if (name === 'react') return React;
   if (name === 'react/jsx-runtime') return jsx;
   if (name === '@/lib/traceability') return { decodeTraceability: () => trace };
   throw new Error(name);
 } });
-const TagCard = module.exports.default;
+const TagCard = loadedModule.exports.default;
 
 test('24 and 72 hour labels share visual styling and preserve food notices with discreet source and duration', async () => {
   const common = { id: 'label', product_name: 'Merluza', origin: 'Atlántico', category: 'test', is_active: true, expires_at: '2026-10-08T18:00:00Z' };

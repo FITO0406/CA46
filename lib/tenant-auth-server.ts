@@ -50,6 +50,11 @@ export async function tenantContextForRequest(request: Request): Promise<
     return { ok: false, status: 403, error: 'La empresa no está activa.' };
   }
 
+  if (process.env.CA46_REQUIRE_LEGAL_ACCEPTANCE === 'true' && new URL(request.url).pathname !== '/api/tenant/settings') {
+    const { companyContractAccepted } = await import('@/lib/legal-contract-server');
+    if (!await companyContractAccepted(company.id)) return { ok: false, status: 428, error: 'El administrador debe revisar y aceptar el contrato en /aceptar-condiciones.' };
+  }
+
   return {
     ok: true,
     context: {

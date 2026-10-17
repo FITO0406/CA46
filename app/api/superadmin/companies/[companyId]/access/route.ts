@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { superAdminContextForRequest } from '@/lib/superadmin-auth-server';
-import { ACCESS_FEATURE_KEYS, normalizeAccessFeatures, type AccessPlan } from '@/lib/company-access-server';
+import { ACCESS_FEATURE_KEYS, accessOverrideIsEffective, normalizeAccessFeatures, type AccessPlan } from '@/lib/company-access-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,7 +47,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const indefinite = body?.indefinite !== false;
-    const endsAt = indefinite ? null : isoOrNull(body?.endsAt);
+    const trial15 = body?.trialDays === 15;
+    const endsAt = trial15 ? new Date(Date.now() + 15 * 86400000).toISOString() : indefinite ? null : isoOrNull(body?.endsAt);
     if (active && !indefinite && !endsAt) {
       return NextResponse.json({ ok: false, error: 'Indica la fecha de fin de la cortesía.' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
     }
@@ -69,7 +70,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (existingError) throw existingError;
 
     const nowIso = new Date().toISOString();
-    const startsAt = existing?.is_active && (!existing.ends_at || new Date(existing.ends_at).getTime() > Date.now())
+    const startsAt = !trial15 && existing?.is_active && (!existing.ends_at || new Date(existing.ends_at).getTime() > Date.now())
       ? existing.starts_at
       : nowIso;
 
@@ -105,7 +106,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       ok: true,
       grant: {
         active: Boolean(saved.is_active),
-        effective: Boolean(saved.is_active) && (!saved.ends_at || new Date(saved.ends_at).getTime() > Date.now()),
+        effective: accessOverrideIsEffective(saved),
         plan: saved.granted_plan,
         features: normalizeAccessFeatures(saved.features),
         startsAt: saved.starts_at,

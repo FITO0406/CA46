@@ -11,6 +11,7 @@ const navItems = [
   { href: '/superadmin/empresas', label: 'Empresas' },
   { href: '/superadmin/planes', label: 'Suscripciones y cobros' },
   { href: '/superadmin/facturas', label: 'Facturas' },
+  { href: '/superadmin/solicitudes', label: 'Solicitudes de clientes' },
   { href: '/superadmin/incidencias', label: 'Incidencias' },
   { href: '/superadmin/sistema', label: 'Sistema' },
   { href: '/superadmin/seguridad', label: 'Seguridad' },

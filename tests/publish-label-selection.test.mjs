@@ -21,7 +21,7 @@ function harness(role = 'admin_empresa') {
       }).then(resolve, reject); },
     }; return query;
   }};
-  const module = { exports: {} };
+  const loadedModule = { exports: {} };
   const compiled = ts.transpileModule(readFileSync(new URL('../app/api/publish-labels/route.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const imports = {
     'node:crypto': { createHash }, 'next/server': { after: cb => callbacks.push(cb), NextResponse: { json: (data, options) => Response.json(data, options) } },
@@ -29,9 +29,9 @@ function harness(role = 'admin_empresa') {
     '@/lib/tenant-auth-server': { tenantContextForRequest: async request => request.headers.has('authorization') ? { ok: true, context: { companyId: 'A', userId: 'U', role, companyName: 'Company A' } } : { ok: false, status: 401, error: 'Unauthorized' } },
     '@/lib/traceability': { encodeTraceability: value => JSON.stringify(value) },
   };
-  runInNewContext(compiled, { module, exports: module.exports, require: name => { assert.ok(imports[name], name); return imports[name]; }, console, Date, Set });
+  runInNewContext(compiled, { module: loadedModule, exports: loadedModule.exports, require: name => { assert.ok(imports[name], name); return imports[name]; }, console, Date, Set });
   return { rows, callbacks, async request(labels, { dryRun = false, sourceMode = 'physical_label', authorized = true } = {}) {
-    const response = await module.exports.POST(new Request('https://test/api/publish-labels', { method: 'POST', headers: authorized ? { Authorization: 'Bearer test' } : {}, body: JSON.stringify({ sourceMode, dryRun, invoices: [{ invoice_number: '123', buyer_number: '46', labels }] }) }));
+    const response = await loadedModule.exports.POST(new Request('https://test/api/publish-labels', { method: 'POST', headers: authorized ? { Authorization: 'Bearer test' } : {}, body: JSON.stringify({ sourceMode, dryRun, invoices: [{ invoice_number: '123', buyer_number: '46', labels }] }) }));
     return { status: response.status, body: await response.json() };
   }};
 }

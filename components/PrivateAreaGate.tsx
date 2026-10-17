@@ -71,6 +71,7 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
   const [userEmail, setUserEmail] = useState('');
   const [superAdminAccount, setSuperAdminAccount] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [legalPending, setLegalPending] = useState(false);
   const validatedUserId = useRef<string | null>(null);
   const validationSequence = useRef(0);
 
@@ -86,6 +87,7 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
       setTenant(null);
       setUserEmail('');
       setSuperAdminAccount(false);
+      setLegalPending(false);
       setAccessError('');
       setLoading(false);
     }
@@ -181,6 +183,12 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
 
         if (!response.ok) {
           throw new Error(payload?.error || 'No se pudo validar la empresa de esta cuenta.');
+        }
+
+        setLegalPending(Boolean(payload.legalRequired));
+        if (payload.legalRequired && window.location.pathname !== '/mi-empresa') {
+          window.location.replace('/aceptar-condiciones');
+          return;
         }
 
         let nextTenant = (payload?.tenant || null) as TenantPayload | null;
@@ -363,6 +371,7 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
           <h1 className="mt-2 text-3xl font-black">{superAdminAccount ? 'Estás usando SuperAdmin' : 'Acceso pendiente'}</h1>
           <p className="mt-3 break-all text-sm font-bold text-orange-300">Cuenta: {userEmail}</p>
           <p className="mt-4 text-sm leading-6 text-slate-400">{accessError || 'No se pudo validar la empresa asociada a este usuario.'}</p>
+          <a href="/datos-y-solicitudes" className="mt-5 block text-orange-300 underline">Datos, derechos, baja y soporte</a>
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             {superAdminAccount ? <a href="/superadmin" className="rounded-xl bg-orange-500 px-5 py-3 font-black text-[#111416]">Abrir SuperAdmin</a> : !employeeArea ? <a href="/mi-empresa" className="rounded-xl bg-orange-500 px-5 py-3 font-black text-[#111416]">Ir a Mi empresa</a> : null}
             <button type="button" onClick={handleLogout} disabled={signingOut} className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-black text-slate-300">{signingOut ? 'Cerrando sesión…' : 'Cambiar de cuenta'}</button>
@@ -374,6 +383,7 @@ export default function PrivateAreaGate({ children, areaName = 'Zona privada', r
 
   return (
     <>
+      {legalPending && <p className="border-b border-amber-400/30 bg-amber-400/10 p-4 text-center text-amber-200">Completa los datos fiscales y <a href="/aceptar-condiciones" className="underline">acepta el contrato</a> para continuar trabajando.</p>}
       <div className={`relative flex items-center justify-end gap-2 border-b border-white/10 bg-[#0c1013]/95 px-4 py-2 lg:fixed lg:bottom-4 lg:right-4 lg:z-50 lg:rounded-full lg:border lg:p-2 lg:pl-4 lg:shadow-xl ${mobileAccountInHeader ? '' : 'lg:backdrop-blur-xl'}`}>
         {tenant?.company?.name ? <span className="hidden max-w-40 truncate text-xs font-black text-orange-300 md:block">{tenant.company.name}</span> : null}
         <span className="max-w-32 truncate text-xs font-bold text-slate-400 sm:max-w-48" title={userEmail}>{userEmail}</span>

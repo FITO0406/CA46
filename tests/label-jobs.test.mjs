@@ -47,7 +47,7 @@ function harness() {
     };
     return builder;
   } };
-  const module = { exports: {} };
+  const loadedModule = { exports: {} };
   const source = ts.transpileModule(readFileSync(new URL('../app/api/label-jobs/route.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const ocr = mode => async request => {
     calls.push({ mode, token: request.headers.get('authorization'), photo: (await request.formData()).get('image').name });
@@ -63,7 +63,7 @@ function harness() {
     '@/app/api/analyze-invoice/route': { POST: ocr('invoice') },
     '@/app/api/analyze-physical-label/route': { POST: ocr('physical_label') },
   };
-  runInNewContext(source, { module, exports: module.exports, require: name => { assert.ok(imports[name],name); return imports[name]; }, Buffer, File, FormData, Request, URL, Date, console, setTimeout: cb => setImmediate(cb) });
+  runInNewContext(source, { module: loadedModule, exports: loadedModule.exports, require: name => { assert.ok(imports[name],name); return imports[name]; }, Buffer, File, FormData, Request, URL, Date, console, setTimeout: cb => setImmediate(cb) });
   async function request(method, id, mode = 'invoice', retry = false, authorized = true, expected = {}) {
     let body;
     if (method === 'POST') {
@@ -71,7 +71,7 @@ function harness() {
       body.append('image', new File(['test-photo'],'foto.jpg',{ type:'image/jpeg' }));
       if (retry) body.append('retry','true');
     } else if (method === 'DELETE') body = JSON.stringify({ ids:[id] });
-    const response = await module.exports[method](new Request(`https://ca46.test/api/label-jobs${method === 'GET' && id ? `?id=${id}` : ''}`, { method, headers: authorized ? { Authorization:'Bearer test-user-token', ...expected } : {}, body }));
+    const response = await loadedModule.exports[method](new Request(`https://ca46.test/api/label-jobs${method === 'GET' && id ? `?id=${id}` : ''}`, { method, headers: authorized ? { Authorization:'Bearer test-user-token', ...expected } : {}, body }));
     return { status:response.status, body:await response.json() };
   }
   return { rows, callbacks, calls, request, actor(value) { actor=value; }, fail(value) { failure=value; }, transient(value) { temporaryFailures=value; }, pause() { barrier=new Promise(r => { release=r; }); }, release() { release(); } };

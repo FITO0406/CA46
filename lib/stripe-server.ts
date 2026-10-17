@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { appOrigin } from './app-origin';
 
 export type StripePlanId = 'autonomo' | 'empresa';
 
@@ -18,7 +19,7 @@ export function stripePublicStatus() {
       autonomo: Boolean(PRICE_IDS.autonomo),
       empresa: Boolean(PRICE_IDS.empresa),
     },
-    ready: Boolean(SECRET_KEY && WEBHOOK_SECRET && PRICE_IDS.autonomo && PRICE_IDS.empresa),
+    ready: Boolean(process.env.CA46_BILLING_ENABLED === 'true' && SECRET_KEY && WEBHOOK_SECRET && PRICE_IDS.autonomo && PRICE_IDS.empresa),
   };
 }
 
@@ -33,13 +34,7 @@ export function stripePlanFromPriceId(priceId: string): StripePlanId | null {
 }
 
 export function stripeAppBaseUrl() {
-  const explicit = (process.env.NEXT_PUBLIC_APP_URL || '').trim().replace(/\/$/, '');
-  if (explicit) return explicit;
-
-  const production = (process.env.VERCEL_PROJECT_PRODUCTION_URL || '').trim().replace(/\/$/, '');
-  if (production) return production.startsWith('http') ? production : `https://${production}`;
-
-  return 'https://ca-46.vercel.app';
+  return appOrigin();
 }
 
 export async function stripeRequest<T = any>(path: string, params: URLSearchParams) {
